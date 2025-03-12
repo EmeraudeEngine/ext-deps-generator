@@ -1,0 +1,96 @@
+# Stop the script when a cmdlet or a native command fails
+$ErrorActionPreference = 'Stop'
+$PSNativeCommandUseErrorActionPreference = $true
+
+if ($args.Count -lt 2 -or [string]::IsNullOrEmpty($args[0]) -or [string]::IsNullOrEmpty($args[1])) {
+	Write-Host "Bad call : BuildScript {x86_64|arm} {Release|Debug}`n"
+	exit 1
+}
+
+$LIB_NAME = "openal-soft"
+$PLATFORM = "windows." + $args[0]
+$BUILD_TYPE = $args[1]
+
+$SOURCE_DIR = "./repositories/$LIB_NAME"
+$BUILD_DIR = "./builds/$PLATFORM-$BUILD_TYPE/$LIB_NAME"
+$INSTALL_DIR = "./output/$PLATFORM-$BUILD_TYPE"
+
+if ($BUILD_TYPE -eq "Debug") {
+	$MSVC_RUNTIME = "MultiThreadedDebug"
+} else {
+	$MSVC_RUNTIME = "MultiThreaded"
+}
+
+Write-Host "`n======================== Configuring '$LIB_NAME' for '$PLATFORM-$BUILD_TYPE' ... ========================`n"
+
+cmake -S $SOURCE_DIR -B $BUILD_DIR -G "Visual Studio 17 2022" -A x64 `
+-DCMAKE_BUILD_TYPE="$BUILD_TYPE" `
+-DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" `
+-DCMAKE_MSVC_RUNTIME_LIBRARY="$MSVC_RUNTIME" `
+-DLIBTYPE=STATIC `
+-DALSOFT_DLOPENL=On `
+-DALSOFT_WERROR=Off `
+-DALSOFT_UTILS=On `
+-DALSOFT_NO_CONFIG_UTIL=Off `
+-DALSOFT_EXAMPLES=Off `
+-DALSOFT_TESTS=Off `
+-DALSOFT_INSTALL=On `
+-DALSOFT_INSTALL_CONFIG=On `
+-DALSOFT_INSTALL_HRTF_DATA=On `
+-DALSOFT_INSTALL_AMBDEC_PRESETS=On `
+-DALSOFT_INSTALL_EXAMPLES=Off `
+-DALSOFT_INSTALL_UTILS=Off `
+-DALSOFT_UPDATE_BUILD_VERSION=Off `
+-DALSOFT_EAX=On `
+-DALSOFT_SEARCH_INSTALL_DATADIR=Off `
+-DFORCE_STATIC_VCRT=On `
+-DALSOFT_BUILD_ROUTER=Off `
+-DALSOFT_STATIC_WINPTHREAD=Off `
+-DALSOFT_CPUEXT_SSE=On `
+-DALSOFT_REQUIRE_SSE=Off `
+-DALSOFT_CPUEXT_SSE2=On `
+-DALSOFT_REQUIRE_SSE2=Off `
+-DALSOFT_CPUEXT_SSE3=On `
+-DALSOFT_REQUIRE_SSE3=Off `
+-DALSOFT_CPUEXT_SSE4_1=On `
+-DALSOFT_REQUIRE_SSE4_1=Off `
+-DALSOFT_CPUEXT_NEON=On `
+-DALSOFT_REQUIRE_NEON=Off `
+-DALSOFT_ENABLE_SSE2_CODEGEN=On `
+-DALSOFT_BACKEND_PIPEWIRE=On `
+-DALSOFT_REQUIRE_PIPEWIRE=Off `
+-DALSOFT_BACKEND_PULSEAUDIO=On `
+-DALSOFT_REQUIRE_PULSEAUDIO=Off `
+-DALSOFT_BACKEND_WINMM=On `
+-DALSOFT_REQUIRE_WINMM=Off `
+-DALSOFT_BACKEND_DSOUND=On `
+-DALSOFT_REQUIRE_DSOUND=Off `
+-DALSOFT_BACKEND_WASAPI=On `
+-DALSOFT_REQUIRE_WASAPI=Off `
+-DALSOFT_BACKEND_OTHERIO=Off `
+-DALSOFT_REQUIRE_OTHERIO=Off `
+-DALSOFT_BACKEND_JACK=On `
+-DALSOFT_REQUIRE_JACK=Off `
+-DALSOFT_BACKEND_COREAUDIO=Off `
+-DALSOFT_REQUIRE_COREAUDIO=Off `
+-DALSOFT_BACKEND_OBOE=Off `
+-DALSOFT_REQUIRE_OBOE=Off `
+-DALSOFT_BACKEND_OPENSL=Off `
+-DALSOFT_REQUIRE_OPENSL=Off `
+-DALSOFT_BACKEND_PORTAUDIO=On `
+-DALSOFT_REQUIRE_PORTAUDIO=Off `
+-DALSOFT_BACKEND_SDL2=Off `
+-DALSOFT_REQUIRE_SDL2=Off `
+-DALSOFT_BACKEND_WAVE=On `
+-DALSOFT_EMBED_HRTF_DATA=On `
+-DALSOFT_NO_UID_DEFS=Off
+
+Write-Host "`n======================== Building ... ========================`n"
+
+cmake --build $BUILD_DIR --config $BUILD_TYPE
+
+Write-Host "`n======================== Installing ... ========================`n"
+
+cmake --install $BUILD_DIR --config $BUILD_TYPE
+
+Write-Host "`n======================== Success ! ========================`n"

@@ -1,0 +1,66 @@
+[submodule "repositories/brotli"]
+	path = repositories/brotli
+	url = https://github.com/google/brotli.git
+[submodule "repositories/bzip2"]
+	path = repositories/bzip2
+	url = https://github.com/libarchive/bzip2.git
+[submodule "repositories/cpu_features"]
+	path = repositories/cpu_features
+	url = https://github.com/google/cpu_features.git
+[submodule "repositories/cryptopp-cmake"]
+	path = repositories/cryptopp-cmake
+	url = https://github.com/abdes/cryptopp-cmake
+[submodule "repositories/freetype"]
+	path = repositories/freetype
+	url = https://gitlab.freedesktop.org/freetype/freetype.git
+[submodule "repositories/harfbuzz"]
+	path = repositories/harfbuzz
+	url = https://github.com/harfbuzz/harfbuzz.git
+[submodule "repositories/hwloc"]
+	path = repositories/hwloc
+	url = https://github.com/open-mpi/hwloc
+[submodule "repositories/lib3mf"]
+	path = repositories/lib3mf
+	url = https://github.com/3MFConsortium/lib3mf.git
+[submodule "repositories/libjpeg-turbo"]
+	path = repositories/libjpeg-turbo
+	url = https://github.com/libjpeg-turbo/libjpeg-turbo.git
+[submodule "repositories/libpng"]
+	path = repositories/libpng
+	url = https://github.com/glennrp/libpng.git
+[submodule "repositories/libsamplerate"]
+	path = repositories/libsamplerate
+	url = https://github.com/libsndfile/libsamplerate.git
+[submodule "repositories/libwebp"]
+    path = repositories/libwebp
+    url = https://github.com/webmproject/libwebp.git
+[submodule "repositories/libzip"]
+	path = repositories/libzip
+	url = https://github.com/nih-at/libzip.git
+[submodule "repositories/libzmq"]
+    path = repositories/libzmq
+    url = https://github.com/zeromq/libzmq.git
+[submodule "repositories/openal-soft"]
+    path = repositories/openal-soft
+    url = https://github.com/kcat/openal-soft.git
+[submodule "repositories/taglib"]
+	path = repositories/taglib
+	url = https://github.com/taglib/taglib.git
+[submodule "repositories/xz"]
+	path = repositories/xz
+	url = https://github.com/tukaani-project/xz.git
+[submodule "repositories/zlib"]
+	path = repositories/zlib
+	url = https://github.com/madler/zlib.git
+[submodule "repositories/zstd"]
+    path = repositories/zstd
+    url = https://github.com/facebook/zstd.git
+[submodule "repositories/clipper2"]
+	path = repositories/clipper2
+	url = https://github.com/AngusJohnson/clipper2
+[submodule "repositories/cppzmq"]
+	path = repositories/cppzmq
+	url = https://github.com/zeromq/cppzmq.git
+[submodule "repositories/pthread-win32"]
+	path = repositories/pthread-win32
+	url = https://github.com/GerHobbelt/pthread-win32.git
