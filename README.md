@@ -80,7 +80,7 @@ When a dependency is updated, do not forget to report in 'Available libraries' t
 - Notes : Linux and macOS versions are using autotools instead of cmake.
 
 ## lib3mf 
-[release/2.4.1, 20c335489c69d15c64f3eaf1e15143b8176901f5]
+[3dJan/LinuxConfigAndBuildFixes, d65f4195fbc8ea5fc9f1ede5b00e30165ee56a2d]
 
 - URL : https://github.com/3MFConsortium/lib3mf.git
 - Version : 2.4.1
@@ -105,7 +105,7 @@ When a dependency is updated, do not forget to report in 'Available libraries' t
 - Usage : Image format library.
 
 ## libsamplerate 
-[master, 4858fb016550d677de2356486bcceda5aed85a72]
+[master, 15c392d47e71b9395a759544b3818a1235fe1a1d]
 
 - URL : https://github.com/libsndfile/libsamplerate.git
 - Version : 0.2.2~
@@ -132,10 +132,10 @@ When a dependency is updated, do not forget to report in 'Available libraries' t
 
 
 ## libzmq (ZeroMQ) 
-[master, 622fc6dde99ee172ebaa9c8628d85a7a1995a21d]
+[master, aaf88cdfd8286a81e569ac9d3e106df22a77a412]
 
 - URL : https://github.com/zeromq/libzmq.git
-- Version : 4.3.5
+- Version : 4.3.6
 - Dependencies : None
 - Usage : Common IPC library.
 
@@ -149,10 +149,10 @@ When a dependency is updated, do not forget to report in 'Available libraries' t
 - Notes : There is no compilation here, this is just some headers for libzmq.
 
 ## openal-soft 
-[master, 90191edd20bb877c5cbddfdac7ec0fe49ad93727]
+[master, dc7d7054a5b4f3bec1dc23a42fd616a0847af948]
 
 - URL : https://github.com/kcat/openal-soft.git
-- Version : 1.24.1
+- Version : 1.24.3
 - Dependencies : None
 - Usage : Audio API.
 
@@ -252,7 +252,8 @@ NOTE: The minimum SDK is set to 12.0 here, but can be changed.
 
 ## Windows
 
-Compilations needs a Visual Studio 2022.
+Compilations needs a Visual Studio 2022 and NASM from :
+https://www.nasm.us/pub/nasm/releasebuilds/?C=M;O=D
 
 ```powershell
 Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
