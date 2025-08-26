@@ -2,23 +2,36 @@
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 
-if ($args.Count -lt 2 -or [string]::IsNullOrEmpty($args[0]) -or [string]::IsNullOrEmpty($args[1])) {
-	Write-Host "Bad call : BuildScript {x86_64|arm} {Release|Debug}`n"
+if ($args.Count -lt 3 -or [string]::IsNullOrEmpty($args[0]) -or [string]::IsNullOrEmpty($args[1]) -or [string]::IsNullOrEmpty($args[2])) {
+	Write-Host "Bad call : BuildScript {x86_64|arm} {Release|Debug} {MD|MT}`n"
 	exit 1
 }
 
 $LIB_NAME = "zstd"
 $PLATFORM = "windows." + $args[0]
 $BUILD_TYPE = $args[1]
+$RUNTIME_LIB = $args[2]
 
 $SOURCE_DIR = "./repositories/$LIB_NAME/build/cmake"
-$BUILD_DIR = "./builds/$PLATFORM-$BUILD_TYPE/$LIB_NAME"
-$INSTALL_DIR = "./output/$PLATFORM-$BUILD_TYPE"
+$BUILD_DIR = "./builds/$PLATFORM-$BUILD_TYPE-$RUNTIME_LIB/$LIB_NAME"
+$INSTALL_DIR = "./output/$PLATFORM-$BUILD_TYPE-$RUNTIME_LIB"
 
-if ($BUILD_TYPE -eq "Debug") {
-	$MSVC_RUNTIME = "MultiThreadedDebug"
+if ( $RUNTIME_LIB -eq "MT" ) {
+	if ($BUILD_TYPE -eq "Debug") {
+		$MSVC_RUNTIME = "MultiThreadedDebug"
+	} else {
+		$MSVC_RUNTIME = "MultiThreaded"
+	}
+
+	$SPECIAL_OPTION = "On"
 } else {
-	$MSVC_RUNTIME = "MultiThreaded"
+	if ($BUILD_TYPE -eq "Debug") {
+		$MSVC_RUNTIME = "MultiThreadedDebugDLL"
+	} else {
+		$MSVC_RUNTIME = "MultiThreadedDLL"
+	}
+
+	$SPECIAL_OPTION = "Off"
 }
 
 Write-Host "`n======================== Configuring '$LIB_NAME' for '$PLATFORM-$BUILD_TYPE' ... ========================`n"
@@ -27,13 +40,18 @@ cmake -S $SOURCE_DIR -B $BUILD_DIR -G "Visual Studio 17 2022" -A x64 `
 -DCMAKE_BUILD_TYPE="$BUILD_TYPE" `
 -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" `
 -DCMAKE_MSVC_RUNTIME_LIBRARY="$MSVC_RUNTIME" `
--DLIBS_ROOT="./output/${PLATFORM}-${BUILD_TYPE}" `
+-DCMAKE_C_FLAGS_RELEASE="/$RUNTIME_LIB" `
+-DCMAKE_C_FLAGS_DEBUG="/$RUNTIME_LIBd" `
+-DCMAKE_CXX_FLAGS_RELEASE="/$RUNTIME_LIB" `
+-DCMAKE_CXX_FLAGS_DEBUG="/$RUNTIME_LIBd" `
+-DCMAKE_PREFIX_PATH="$INSTALL_DIR" `
+-DLIBS_ROOT="./output/${PLATFORM}-${BUILD_TYPE}-${RUNTIME_LIB}" `
 -DZSTD_LEGACY_SUPPORT=On `
 -DZSTD_MULTITHREAD_SUPPORT=On `
 -DZSTD_BUILD_PROGRAMS=On `
--DZSTD_BUILD_CONTRIB=On `
+-DZSTD_BUILD_CONTRIB=Off `
 -DZSTD_BUILD_TESTS=Off `
--DZSTD_USE_STATIC_RUNTIME=On `
+-DZSTD_USE_STATIC_RUNTIME="${SPECIAL_OPTION}" `
 -DZSTD_PROGRAMS_LINK_SHARED=Off
 
 Write-Host "`n======================== Building ... ========================`n"

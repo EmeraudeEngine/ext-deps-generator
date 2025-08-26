@@ -93,7 +93,7 @@ When a dependency is updated, do not forget to report in 'Available libraries' t
 
 - URL : https://github.com/libjpeg-turbo/libjpeg-turbo.git
 - Version : 3.1.0~
-- Dependencies : None
+- Dependencies : NASM compiler (optional, but slower lib)
 - Usage : Image format library.
 
 ## libpng 
@@ -109,7 +109,7 @@ When a dependency is updated, do not forget to report in 'Available libraries' t
 
 - URL : https://github.com/libsndfile/libsamplerate.git
 - Version : 0.2.2~
-- Dependencies : None
+- Dependencies : FFTW3 library (optional, but slower lib)
 - Usage : Audio resampler library.
 
 ## libwebp 
@@ -129,7 +129,6 @@ When a dependency is updated, do not forget to report in 'Available libraries' t
 - Usage : Compressed archive management library.
 - Notes : On Windows, you need to add "PATHS LIBS_ROOT" inside find_package() functions in the CMakeLists.txt before compiling.
 - Warning : On Windows, zstd support has been disabled.
-
 
 ## libzmq (ZeroMQ) 
 [master, aaf88cdfd8286a81e569ac9d3e106df22a77a412]
@@ -181,16 +180,24 @@ When a dependency is updated, do not forget to report in 'Available libraries' t
 - Usage : Compression library.
 - Notes : This version build the static and the shared libraries, beware when linking. An upcoming release will fix this with cmake options.
 
+## pthread-win32
+[master, 3309f4d6e7538f349ae450347b02132ecb0606a7]
+
+- URL : https://github.com/GerHobbelt/pthread-win32.git
+- Version : 3.0.3.1
+- Dependencies : None
+- Usage : Thread library.
+- Notes : Only for Windows.
+
 ## zstd (Zstandard)
 [release, f8745da6ff1ad1e7bab384bd1f9d742439278e99]
 
 - URL : https://github.com/facebook/zstd.git
 - Version : 1.5.7
-- Dependencies : None
+- Dependencies : pthread-win32 on Windows
 - Usage : Compression library.
 - Notes : This version build the static and the shared libraries, beware when linking.
-- Warning : On Windows, this lib is disabled.
-- 
+
 # Upcoming libraries
 
 - libsvg (https://github.com/ravhed/libsvg.git)
