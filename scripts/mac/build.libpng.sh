@@ -30,9 +30,11 @@ cmake -S ${SOURCE_DIR} -B ${BUILD_DIR} -G "Ninja" \
 -DPNG_STATIC=On \
 -DPNG_FRAMEWORK=Off \
 -DPNG_TESTS=Off \
--DPNG_TOOLS=On \
+-DPNG_EXECUTABLES=Off \
+-DPNG_TOOLS=Off \
 -DPNG_DEBUG=Off \
--DPNG_HARDWARE_OPTIMIZATIONS=On
+-DPNG_HARDWARE_OPTIMIZATIONS=On \
+-DPNG_BUILD_ZLIB=Off
 
 echo "\n======================== Building ... ========================\n"
 

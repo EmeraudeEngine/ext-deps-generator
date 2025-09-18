@@ -25,6 +25,9 @@ cmake -S ${SOURCE_DIR} -B ${BUILD_DIR} -G "Ninja" \
 -DCMAKE_OSX_DEPLOYMENT_TARGET=${1} \
 -DCMAKE_C_FLAGS="-mmacosx-version-min=${1} -fPIC" \
 -DCMAKE_CXX_FLAGS="-mmacosx-version-min=${1} -fPIC" \
+-DUTF8_TESTS=Off \
+-DUTF8_INSTALL=Off \
+-DUTF8_SAMPLES=Off \
 -DBUILD_SHARED_LIBS=Off \
 -DBUILD_FRAMEWORK=Off \
 -DENABLE_STATIC_RUNTIME=On \

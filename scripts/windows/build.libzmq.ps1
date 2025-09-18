@@ -16,69 +16,104 @@ $SOURCE_DIR = "./repositories/$LIB_NAME"
 $BUILD_DIR = "./builds/$PLATFORM-$BUILD_TYPE-$RUNTIME_LIB/$LIB_NAME"
 $INSTALL_DIR = "./output/$PLATFORM-$BUILD_TYPE-$RUNTIME_LIB"
 
-if ( $RUNTIME_LIB -eq "MT" ) {
-	if ($BUILD_TYPE -eq "Debug") {
-		$MSVC_RUNTIME = "MultiThreadedDebug"
-	} else {
-		$MSVC_RUNTIME = "MultiThreaded"
+$MSVC_ARCH = if ($args[0] -eq "arm") { "arm" } else { "x64" }
+$RUNTIME = "MultiThreaded"
+if ($BUILD_TYPE -eq "Debug") { $RUNTIME += "Debug" }
+if ($RUNTIME_LIB -eq "MD") { $RUNTIME += "DLL" }
+
+$RUNTIME = "MultiThreaded"
+if ($BUILD_TYPE -eq "Debug") {
+	$RUNTIME += "Debug"
+}
+if ($RUNTIME_LIB -eq "MD") {
+	$RUNTIME += "DLL"
+}
+
+if ($BUILD_TYPE -eq "Debug") {
+	$CMAKE_OPTIONS = @{
+		"CMAKE_MSVC_RUNTIME_LIBRARY" = "$RUNTIME"
+		"CMAKE_C_FLAGS" = "/${RUNTIME_LIB}d /Od /Zi /D_DEBUG /EHsc"
+		"CMAKE_C_FLAGS_DEBUG" = "/${RUNTIME_LIB}d /Od /Zi /D_DEBUG /EHsc"
+		"CMAKE_CXX_FLAGS" = "/${RUNTIME_LIB}d /Od /Zi /D_DEBUG /EHsc"
+		"CMAKE_CXX_FLAGS_DEBUG" = "/${RUNTIME_LIB}d /Od /Zi /D_DEBUG /EHsc"
 	}
-} else {
-	if ($BUILD_TYPE -eq "Debug") {
-		$MSVC_RUNTIME = "MultiThreadedDebugDLL"
-	} else {
-		$MSVC_RUNTIME = "MultiThreadedDLL"
+}
+else {
+	$CMAKE_OPTIONS = @{
+		"CMAKE_MSVC_RUNTIME_LIBRARY" = "$RUNTIME"
+		"CMAKE_C_FLAGS" = "/$RUNTIME_LIB /O2 /DNDEBUG /EHsc"
+		"CMAKE_C_FLAGS_RELEASE" = "/$RUNTIME_LIB /O2 /DNDEBUG /EHsc"
+		"CMAKE_CXX_FLAGS" = "/$RUNTIME_LIB /O2 /DNDEBUG /EHsc"
+		"CMAKE_CXX_FLAGS_RELEASE" = "/$RUNTIME_LIB /O2 /DNDEBUG /EHsc"
 	}
+}
+
+$CMAKE_OPTIONS += @{
+	"CMAKE_INSTALL_PREFIX" = "$INSTALL_DIR"
+	"CMAKE_PREFIX_PATH" = "$INSTALL_DIR"
+	"ENABLE_ASAN" = "Off"
+	"ENABLE_TSAN"  ="Off"
+	"ENABLE_UBSAN" = "Off"
+	"ENABLE_INTRINSICS" = "Off"
+	"WITH_OPENPGM" = "Off"
+	"WITH_NORM" = "Off"
+	"WITH_VMCI" = "Off"
+	"ENABLE_DRAFTS" = "Off"
+	"ENABLE_WS" = "Off"
+	"ENABLE_RADIX_TREE" = "Off"
+	#"WITH_TLS" = "Off" # Unix only
+	"WITH_NSS" = "Off"
+	"WITH_LIBSODIUM" = "Off"
+	"WITH_LIBSODIUM_STATIC" = "Off"
+	"ENABLE_LIBSODIUM_RANDOMBYTES_CLOSE" = "Off"
+	"ENABLE_CURVE" = "Off"
+	"WITH_GSSAPI_KRB5" = "Off"
+	"WITH_MILITANT" = "Off"
+	"ENABLE_EVENTFD" = "Off"
+	"ENABLE_ANALYSIS" = "Off"
+	"LIBZMQ_PEDANTIC" = "On"
+	"LIBZMQ_WERROR" = "Off"
+	"WITH_DOCS" = "Off"
+	"ENABLE_PRECOMPILED" = "On"
+	"BUILD_SHARED" = "On"
+	"BUILD_STATIC" = "On"
+	#"WITH_PERF_TOOL" = "On" # Unix only
+	"BUILD_TESTS" = "Off"
+	"ENABLE_CPACK" = "On"
+	"ENABLE_CLANG" = "On"
+	"ENABLE_NO_EXPORT" = "Off"
+}
+
+$CMAKE_DEFS = @()
+$CMAKE_OPTIONS.GetEnumerator() | ForEach-Object {
+	$CMAKE_DEFS += "-D$($_.Name)=$($_.Value)"
 }
 
 Write-Host "`n======================== Configuring '$LIB_NAME' for '$PLATFORM-$BUILD_TYPE' ... ========================`n"
 
-cmake -S $SOURCE_DIR -B $BUILD_DIR -G "Visual Studio 17 2022" -A x64 `
--DCMAKE_BUILD_TYPE="$BUILD_TYPE" `
--DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" `
--DCMAKE_MSVC_RUNTIME_LIBRARY="$MSVC_RUNTIME" `
--DCMAKE_C_FLAGS_RELEASE="/$RUNTIME_LIB" `
--DCMAKE_C_FLAGS_DEBUG="/$RUNTIME_LIBd" `
--DCMAKE_CXX_FLAGS_RELEASE="/$RUNTIME_LIB" `
--DCMAKE_CXX_FLAGS_DEBUG="/$RUNTIME_LIBd" `
--DCMAKE_PREFIX_PATH="$INSTALL_DIR" `
--DENABLE_ASAN=Off `
--DENABLE_TSAN=Off `
--DENABLE_UBSAN=Off `
--DENABLE_INTRINSICS=Off `
--DWITH_OPENPGM=Off `
--DWITH_NORM=Off `
--DWITH_VMCI=Off `
--DENABLE_DRAFTS=Off `
--DENABLE_WS=Off `
--DENABLE_RADIX_TREE=Off `
--DWITH_TLS=On `
--DWITH_NSS=Off `
--DWITH_LIBSODIUM=Off `
--DWITH_LIBSODIUM_STATIC=Off `
--DENABLE_LIBSODIUM_RANDOMBYTES_CLOSE=Off `
--DENABLE_CURVE=Off `
--DWITH_GSSAPI_KRB5=Off `
--DWITH_MILITANT=Off `
--DENABLE_EVENTFD=Off `
--DENABLE_ANALYSIS=Off `
--DLIBZMQ_PEDANTIC=On `
--DLIBZMQ_WERROR=Off `
--DWITH_DOCS=Off `
--DENABLE_PRECOMPILED=On `
--DBUILD_SHARED=On `
--DBUILD_STATIC=On `
--DWITH_PERF_TOOL=On `
--DBUILD_TESTS=Off `
--DENABLE_CPACK=On `
--DENABLE_CLANG=On `
--DENABLE_NO_EXPORT=Off
+cmake -S $SOURCE_DIR -B $BUILD_DIR -G "Visual Studio 17 2022" -A $MSVC_ARCH $CMAKE_DEFS
 
 Write-Host "`n======================== Building ... ========================`n"
 
 cmake --build $BUILD_DIR --config $BUILD_TYPE
 
+# This lib install .dll from MSVC
 Write-Host "`n======================== Installing ... ========================`n"
 
 cmake --install $BUILD_DIR --config $BUILD_TYPE
+
+$pdbSourceDir = "$BUILD_DIR/lib/$BUILD_TYPE"
+$pdbDestinationDir = "$INSTALL_DIR/lib"
+
+if ($BUILD_TYPE -eq "Debug") {
+	if ( Test-Path $pdbSourceDir ) {
+		Get-ChildItem -Path $pdbSourceDir -Filter *.pdb | ForEach-Object {
+			Write-Host "Copying $($_.Name) to $pdbDestinationDir"
+			Copy-Item -Path $_.FullName -Destination $pdbDestinationDir
+		}
+	} else {
+		Write-Host "PDB source directory not found: $pdbSourceDir. Skipping PDB copy." -ForegroundColor Yellow
+	}
+}
 
 Write-Host "`n======================== Success ! ========================`n"

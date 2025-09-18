@@ -41,30 +41,28 @@ Write-Host "RUNTIME_LIB: $RUNTIME_LIB"
 
 Write-Host "\n======================== Building dependencies for 'windows.$ARCH-$BUILD_TYPE-$RUNTIME_LIB' ... ========================\n"
 
+& ./scripts/windows/build.pthread-win32.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
 & ./scripts/windows/build.zlib.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
 & ./scripts/windows/build.bzip2.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
 & ./scripts/windows/build.xz.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
-& ./scripts/windows/build.pthread-win32.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
 & ./scripts/windows/build.zstd.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
 & ./scripts/windows/build.brotli.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
 & ./scripts/windows/build.harfbuzz.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
 & ./scripts/windows/build.libjpeg-turbo.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
 & ./scripts/windows/build.cpu_features.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
 & ./scripts/windows/build.hwloc.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
-& ./scripts/windows/build.openal-soft.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
 & ./scripts/windows/build.libsamplerate.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
 & ./scripts/windows/build.libzmq.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
-& ./scripts/windows/build.libwebp.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
+& ./scripts/windows/build.cppzmq.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
 & ./scripts/windows/build.cryptopp-cmake.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
 & ./scripts/windows/build.clipper2.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
-
-# Below are the projects that require the above to be compiled.
-
-& ./scripts/windows/build.taglib.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
-& ./scripts/windows/build.cppzmq.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
+& ./scripts/windows/build.openal-soft.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
+# Here are the projects that require at least one lib above.
 & ./scripts/windows/build.libpng.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
-& ./scripts/windows/build.libzip.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
-& ./scripts/windows/build.lib3mf.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
+& ./scripts/windows/build.libwebp.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
 & ./scripts/windows/build.freetype.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
+& ./scripts/windows/build.libzip.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
+& ./scripts/windows/build.taglib.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
+& ./scripts/windows/build.lib3mf.ps1 ${ARCH} ${BUILD_TYPE} ${RUNTIME_LIB}
 
 Write-Host "\n======================== Finished ! ========================\n"

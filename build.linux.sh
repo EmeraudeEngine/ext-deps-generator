@@ -45,14 +45,12 @@ echo "\n======================== Building dependencies for 'linux.${ARCH}-${BUIL
 ./scripts/linux/build.libwebp.sh "${ARCH}" "${BUILD_TYPE}"
 ./scripts/linux/build.cryptopp-cmake.sh "${ARCH}" "${BUILD_TYPE}"
 ./scripts/linux/build.clipper2.sh "${ARCH}" "${BUILD_TYPE}"
-
 # Below are the projects that require the above to be compiled.
-
 ./scripts/linux/build.taglib.sh "${ARCH}" "${BUILD_TYPE}"
-./scripts/linux/build.cppzmq.sh "${ARCH}" "${BUILD_TYPE}"
 ./scripts/linux/build.libpng.sh "${ARCH}" "${BUILD_TYPE}"
 ./scripts/linux/build.libzip.sh "${ARCH}" "${BUILD_TYPE}"
 ./scripts/linux/build.lib3mf.sh "${ARCH}" "${BUILD_TYPE}"
 ./scripts/linux/build.freetype.sh "${ARCH}" "${BUILD_TYPE}"
+./scripts/linux/build.cppzmq.sh "${ARCH}" "${BUILD_TYPE}"
 
 echo "\n======================== Finished ! ========================\n"

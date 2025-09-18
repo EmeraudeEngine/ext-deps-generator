@@ -16,56 +16,75 @@ $SOURCE_DIR = "./repositories/$LIB_NAME"
 $BUILD_DIR = "./builds/$PLATFORM-$BUILD_TYPE-$RUNTIME_LIB/$LIB_NAME"
 $INSTALL_DIR = "./output/$PLATFORM-$BUILD_TYPE-$RUNTIME_LIB"
 
-if ( $RUNTIME_LIB -eq "MT" ) {
-	if ($BUILD_TYPE -eq "Debug") {
-		$MSVC_RUNTIME = "MultiThreadedDebug"
-	} else {
-		$MSVC_RUNTIME = "MultiThreaded"
-	}
+$MSVC_ARCH = if ($args[0] -eq "arm") { "arm" } else { "x64" }
+$RUNTIME = "MultiThreaded"
+if ($BUILD_TYPE -eq "Debug") { $RUNTIME += "Debug" }
+if ($RUNTIME_LIB -eq "MD") { $RUNTIME += "DLL" }
 
-	$SPECIAL_OPTION = "On"
-} else {
-	if ($BUILD_TYPE -eq "Debug") {
-		$MSVC_RUNTIME = "MultiThreadedDebugDLL"
-	} else {
-		$MSVC_RUNTIME = "MultiThreadedDLL"
-	}
+$RUNTIME = "MultiThreaded"
+if ($BUILD_TYPE -eq "Debug") {
+	$RUNTIME += "Debug"
+}
+if ($RUNTIME_LIB -eq "MD") {
+	$RUNTIME += "DLL"
+}
 
-	$SPECIAL_OPTION = "Off"
+if ($BUILD_TYPE -eq "Debug") {
+	$CMAKE_OPTIONS = @{
+		"CMAKE_MSVC_RUNTIME_LIBRARY" = "$RUNTIME"
+		"CMAKE_C_FLAGS" = "/${RUNTIME_LIB}d /Od /Zi /D_DEBUG /EHsc"
+		"CMAKE_C_FLAGS_DEBUG" = "/${RUNTIME_LIB}d /Od /Zi /D_DEBUG /EHsc"
+		"CMAKE_CXX_FLAGS" = "/${RUNTIME_LIB}d /Od /Zi /D_DEBUG /EHsc"
+		"CMAKE_CXX_FLAGS_DEBUG" = "/${RUNTIME_LIB}d /Od /Zi /D_DEBUG /EHsc"
+	}
+}
+else {
+	$CMAKE_OPTIONS = @{
+		"CMAKE_MSVC_RUNTIME_LIBRARY" = "$RUNTIME"
+		"CMAKE_C_FLAGS" = "/$RUNTIME_LIB /O2 /DNDEBUG /EHsc"
+		"CMAKE_C_FLAGS_RELEASE" = "/$RUNTIME_LIB /O2 /DNDEBUG /EHsc"
+		"CMAKE_CXX_FLAGS" = "/$RUNTIME_LIB /O2 /DNDEBUG /EHsc"
+		"CMAKE_CXX_FLAGS_RELEASE" = "/$RUNTIME_LIB /O2 /DNDEBUG /EHsc"
+	}
+}
+
+$CMAKE_OPTIONS += @{
+	"CMAKE_INSTALL_PREFIX" = "$INSTALL_DIR"
+	"CMAKE_PREFIX_PATH" = "$INSTALL_DIR"
+	"UTF8_TESTS" = "Off"
+	"UTF8_INSTALL" = "Off"
+	"UTF8_SAMPLES" = "Off"
+	"BUILD_SHARED_LIBS" = "Off"
+	"BUILD_FRAMEWORK" = "Off" # Apple only
+	"ENABLE_STATIC_RUNTIME" = if ($RUNTIME_LIB -eq "MT") { "On" } else { "Off" }
+	"ENABLE_CCACHE" = "Off"
+	"VISIBILITY_HIDDEN" = "Off"
+	"BUILD_EXAMPLES" = "Off"
+	"BUILD_BINDINGS" = "Off"
+	"NO_ITUNES_HACKS" = "Off"
+	"PLATFORM_WINRT" = "Off"
+	"WITH_APE" = "On"
+	"WITH_ASF" = "On"
+	"WITH_DSF" = "On"
+	"WITH_MOD" = "On"
+	"WITH_MP4" = "On"
+	"WITH_RIFF" = "On"
+	"WITH_SHORTEN" = "On"
+	"WITH_TRUEAUDIO" = "On"
+	"WITH_VORBIS" = "On"
+	"WITH_ZLIB" = "On"
+	"TRACE_IN_RELEASE" = "Off"
+	"BUILD_TESTING" = "Off"
+}
+
+$CMAKE_DEFS = @()
+$CMAKE_OPTIONS.GetEnumerator() | ForEach-Object {
+	$CMAKE_DEFS += "-D$($_.Name)=$($_.Value)"
 }
 
 Write-Host "`n======================== Configuring '$LIB_NAME' for '$PLATFORM-$BUILD_TYPE' ... ========================`n"
 
-cmake -S $SOURCE_DIR -B $BUILD_DIR -G "Visual Studio 17 2022" -A x64 `
--DCMAKE_BUILD_TYPE="$BUILD_TYPE" `
--DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" `
--DCMAKE_MSVC_RUNTIME_LIBRARY="$MSVC_RUNTIME" `
--DCMAKE_C_FLAGS_RELEASE="/$RUNTIME_LIB" `
--DCMAKE_C_FLAGS_DEBUG="/$RUNTIME_LIBd" `
--DCMAKE_CXX_FLAGS_RELEASE="/$RUNTIME_LIB" `
--DCMAKE_CXX_FLAGS_DEBUG="/$RUNTIME_LIBd" `
--DCMAKE_PREFIX_PATH="$INSTALL_DIR" `
--DBUILD_SHARED_LIBS=Off `
--DBUILD_FRAMEWORK=Off `
--DENABLE_STATIC_RUNTIME=On `
--DENABLE_CCACHE=Off `
--DVISIBILITY_HIDDEN=Off `
--DBUILD_EXAMPLES=Off `
--DBUILD_BINDINGS=Off `
--DNO_ITUNES_HACKS=Off `
--DPLATFORM_WINRT="${SPECIAL_OPTION}" `
--DWITH_APE=On `
--DWITH_ASF=On `
--DWITH_DSF=On `
--DWITH_MOD=On `
--DWITH_MP4=On `
--DWITH_RIFF=On `
--DWITH_SHORTEN=On `
--DWITH_TRUEAUDIO=On `
--DWITH_VORBIS=On `
--DWITH_ZLIB=On `
--DTRACE_IN_RELEASE=Off `
--DBUILD_TESTING=Off
+cmake -S $SOURCE_DIR -B $BUILD_DIR -G "Visual Studio 17 2022" -A $MSVC_ARCH $CMAKE_DEFS
 
 Write-Host "`n======================== Building ... ========================`n"
 
@@ -74,5 +93,19 @@ cmake --build $BUILD_DIR --config $BUILD_TYPE
 Write-Host "`n======================== Installing ... ========================`n"
 
 cmake --install $BUILD_DIR --config $BUILD_TYPE
+
+$pdbSourceDir = "$BUILD_DIR/taglib/$BUILD_TYPE"
+$pdbDestinationDir = "$INSTALL_DIR/lib"
+
+if ($BUILD_TYPE -eq "Debug") {
+	if ( Test-Path $pdbSourceDir ) {
+		Get-ChildItem -Path $pdbSourceDir -Filter *.pdb | ForEach-Object {
+			Write-Host "Copying $($_.Name) to $pdbDestinationDir"
+			Copy-Item -Path $_.FullName -Destination $pdbDestinationDir
+		}
+	} else {
+		Write-Host "PDB source directory not found: $pdbSourceDir. Skipping PDB copy." -ForegroundColor Yellow
+	}
+}
 
 Write-Host "`n======================== Success ! ========================`n"

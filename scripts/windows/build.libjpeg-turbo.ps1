@@ -16,43 +16,64 @@ $SOURCE_DIR = "./repositories/$LIB_NAME"
 $BUILD_DIR = "./builds/$PLATFORM-$BUILD_TYPE-$RUNTIME_LIB/$LIB_NAME"
 $INSTALL_DIR = "./output/$PLATFORM-$BUILD_TYPE-$RUNTIME_LIB"
 
-if ( $RUNTIME_LIB -eq "MT" ) {
-	if ($BUILD_TYPE -eq "Debug") {
-		$MSVC_RUNTIME = "MultiThreadedDebug"
-	} else {
-		$MSVC_RUNTIME = "MultiThreaded"
+$MSVC_ARCH = if ($args[0] -eq "arm") { "arm" } else { "x64" }
+$RUNTIME = "MultiThreaded"
+if ($BUILD_TYPE -eq "Debug") { $RUNTIME += "Debug" }
+if ($RUNTIME_LIB -eq "MD") { $RUNTIME += "DLL" }
+
+$RUNTIME = "MultiThreaded"
+if ($BUILD_TYPE -eq "Debug") {
+	$RUNTIME += "Debug"
+}
+if ($RUNTIME_LIB -eq "MD") {
+	$RUNTIME += "DLL"
+}
+
+if ($BUILD_TYPE -eq "Debug") {
+	$CMAKE_OPTIONS = @{
+		"CMAKE_MSVC_RUNTIME_LIBRARY" = "$RUNTIME"
+		"CMAKE_C_FLAGS" = "/${RUNTIME_LIB}d /Od /Zi /D_DEBUG"
+		"CMAKE_C_FLAGS_DEBUG" = "/${RUNTIME_LIB}d /Od /Zi /D_DEBUG"
 	}
-} else {
-	if ($BUILD_TYPE -eq "Debug") {
-		$MSVC_RUNTIME = "MultiThreadedDebugDLL"
-	} else {
-		$MSVC_RUNTIME = "MultiThreadedDLL"
+}
+else {
+	$CMAKE_OPTIONS = @{
+		"CMAKE_MSVC_RUNTIME_LIBRARY" = "$RUNTIME"
+		"CMAKE_C_FLAGS" = "/$RUNTIME_LIB /O2 /DNDEBUG"
+		"CMAKE_C_FLAGS_RELEASE" = "/$RUNTIME_LIB /O2 /DNDEBUG"
 	}
+}
+
+$CMAKE_OPTIONS += @{
+	"CMAKE_INSTALL_PREFIX" = "$INSTALL_DIR"
+	"CMAKE_PREFIX_PATH" = "$INSTALL_DIR"
+	"CMAKE_ASM_NASM_COMPILER" = "C:\Program Files\NASM\nasm.exe"
+	#"NEON_INTRINSICS" = "On" # Auto-detected
+	"ENABLE_SHARED" = "Off"
+	"ENABLE_STATIC" = "On"
+	"REQUIRE_SIMD" = "On"
+	"WITH_ARITH_DEC" = "On"
+	"WITH_ARITH_ENC" = "On"
+	"WITH_JAVA" = "Off"
+	"WITH_JPEG7" = "Off"
+	"WITH_JPEG8" = "Off"
+	"WITH_SIMD" = "On"
+	"WITH_TURBOJPEG" = "On"
+	"WITH_TOOLS" = "Off" # Tools
+	"WITH_TESTS" = "Off"
+	"WITH_FUZZ" = "Off"
+	"WITH_CRT_DLL" = if ($RUNTIME_LIB -eq "MD") { "On" } else { "Off" }
+	"FORCE_INLINE" = "On"
+}
+
+$CMAKE_DEFS = @()
+$CMAKE_OPTIONS.GetEnumerator() | ForEach-Object {
+	$CMAKE_DEFS += "-D$($_.Name)=$($_.Value)"
 }
 
 Write-Host "`n======================== Configuring '$LIB_NAME' for '$PLATFORM-$BUILD_TYPE' ... ========================`n"
 
-cmake -S $SOURCE_DIR -B $BUILD_DIR -G "Visual Studio 17 2022" -A x64 `
--DCMAKE_BUILD_TYPE="$BUILD_TYPE" `
--DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" `
--DCMAKE_MSVC_RUNTIME_LIBRARY="$MSVC_RUNTIME" `
--DCMAKE_C_FLAGS_RELEASE="/$RUNTIME_LIB" `
--DCMAKE_C_FLAGS_DEBUG="/$RUNTIME_LIBd" `
--DCMAKE_CXX_FLAGS_RELEASE="/$RUNTIME_LIB" `
--DCMAKE_CXX_FLAGS_DEBUG="/$RUNTIME_LIBd" `
--DCMAKE_PREFIX_PATH="$INSTALL_DIR" `
--DCMAKE_ASM_NASM_COMPILER="C:\Program Files\NASM\nasm.exe" `
--DENABLE_SHARED=Off `
--DENABLE_STATIC=On `
--DREQUIRE_SIMD=Off `
--DWITH_ARITH_DEC=On `
--DWITH_ARITH_ENC=On `
--DWITH_JAVA=Off `
--DWITH_JPEG7=Off `
--DWITH_JPEG8=Off `
--DWITH_SIMD=On `
--DWITH_TURBOJPEG=On `
--DWITH_FUZZ=Off
+cmake -S $SOURCE_DIR -B $BUILD_DIR -G "Visual Studio 17 2022" -A $MSVC_ARCH $CMAKE_DEFS
 
 Write-Host "`n======================== Building ... ========================`n"
 
@@ -65,13 +86,15 @@ cmake --install $BUILD_DIR --config $BUILD_TYPE
 $pdbSourceDir = "$BUILD_DIR/$BUILD_TYPE"
 $pdbDestinationDir = "$INSTALL_DIR/lib"
 
-if ( Test-Path $pdbSourceDir ) {
-	Get-ChildItem -Path $pdbSourceDir -Filter *.pdb | ForEach-Object {
-		Write-Host "Copying $($_.Name) to $pdbDestinationDir"
-		Copy-Item -Path $_.FullName -Destination $pdbDestinationDir
+if ($BUILD_TYPE -eq "Debug") {
+	if ( Test-Path $pdbSourceDir ) {
+		Get-ChildItem -Path $pdbSourceDir -Filter *.pdb | ForEach-Object {
+			Write-Host "Copying $($_.Name) to $pdbDestinationDir"
+			Copy-Item -Path $_.FullName -Destination $pdbDestinationDir
+		}
+	} else {
+		Write-Host "PDB source directory not found: $pdbSourceDir. Skipping PDB copy." -ForegroundColor Yellow
 	}
-} else {
-	Write-Host "PDB source directory not found: $pdbSourceDir. Skipping PDB copy." -ForegroundColor Yellow
 }
 
 Write-Host "`n======================== Success ! ========================`n"

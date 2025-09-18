@@ -23,7 +23,7 @@ cmake -S ${SOURCE_DIR} -B ${BUILD_DIR} -G "Ninja" \
 -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} \
 -DCMAKE_C_FLAGS=-fPIC \
 -DBUILD_SHARED_LIBS=Off \
--DBROTLI_BUILD_TOOLS=On
+-DBROTLI_BUILD_TOOLS=Off
 
 echo "\n======================== Building ... ========================\n"
 

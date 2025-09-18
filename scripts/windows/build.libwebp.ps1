@@ -16,49 +16,68 @@ $SOURCE_DIR = "./repositories/$LIB_NAME"
 $BUILD_DIR = "./builds/$PLATFORM-$BUILD_TYPE-$RUNTIME_LIB/$LIB_NAME"
 $INSTALL_DIR = "./output/$PLATFORM-$BUILD_TYPE-$RUNTIME_LIB"
 
-if ( $RUNTIME_LIB -eq "MT" ) {
-	if ($BUILD_TYPE -eq "Debug") {
-		$MSVC_RUNTIME = "MultiThreadedDebug"
-	} else {
-		$MSVC_RUNTIME = "MultiThreaded"
+$MSVC_ARCH = if ($args[0] -eq "arm") { "arm" } else { "x64" }
+$RUNTIME = "MultiThreaded"
+if ($BUILD_TYPE -eq "Debug") { $RUNTIME += "Debug" }
+if ($RUNTIME_LIB -eq "MD") { $RUNTIME += "DLL" }
+
+$RUNTIME = "MultiThreaded"
+if ($BUILD_TYPE -eq "Debug") {
+	$RUNTIME += "Debug"
+}
+if ($RUNTIME_LIB -eq "MD") {
+	$RUNTIME += "DLL"
+}
+
+if ($BUILD_TYPE -eq "Debug") {
+	$CMAKE_OPTIONS = @{
+		"CMAKE_MSVC_RUNTIME_LIBRARY" = "$RUNTIME"
+		"CMAKE_C_FLAGS" = "/${RUNTIME_LIB}d /Od /Zi /D_DEBUG"
+		"CMAKE_C_FLAGS_DEBUG" = "/${RUNTIME_LIB}d /Od /Zi /D_DEBUG"
 	}
-} else {
-	if ($BUILD_TYPE -eq "Debug") {
-		$MSVC_RUNTIME = "MultiThreadedDebugDLL"
-	} else {
-		$MSVC_RUNTIME = "MultiThreadedDLL"
+}
+else {
+	$CMAKE_OPTIONS = @{
+		"CMAKE_MSVC_RUNTIME_LIBRARY" = "$RUNTIME"
+		"CMAKE_C_FLAGS" = "/$RUNTIME_LIB /O2 /DNDEBUG"
+		"CMAKE_C_FLAGS_RELEASE" = "/$RUNTIME_LIB /O2 /DNDEBUG"
 	}
+}
+
+$CMAKE_OPTIONS += @{
+	"CMAKE_INSTALL_PREFIX" = "$INSTALL_DIR"
+	"CMAKE_PREFIX_PATH" = "$INSTALL_DIR"
+	"CMAKE_FIND_ROOT_PATH" = "$INCLUDE_DIR"
+	"BUILD_SHARED_LIBS" = "Off"
+	"WEBP_LINK_STATIC" = if ($RUNTIME_LIB -eq "MT") { "On" } else { "Off" }
+	"WEBP_ENABLE_SIMD" = "On"
+	"WEBP_BUILD_ANIM_UTILS" = "Off"
+	"WEBP_BUILD_CWEBP" = "Off" # Tool
+	"WEBP_BUILD_DWEBP" = "Off" # Tool
+	"WEBP_BUILD_GIF2WEBP" = "Off" # Tool
+	"WEBP_BUILD_IMG2WEBP" = "Off" # Tool
+	"WEBP_BUILD_VWEBP" = "Off" # Tool
+	"WEBP_BUILD_WEBPINFO" = "Off" # Tool
+	"WEBP_BUILD_LIBWEBPMUX" = "On"
+	"WEBP_BUILD_WEBPMUX" = "Off" # Tool
+	"WEBP_BUILD_EXTRAS" = "Off"
+	"WEBP_BUILD_WEBP_JS" = "Off"
+	"WEBP_BUILD_FUZZTEST" = "Off"
+	"WEBP_USE_THREAD" = "On"
+	"WEBP_NEAR_LOSSLESS" = "On"
+	"WEBP_ENABLE_SWAP_16BIT_CSP" = "Off"
+	"WEBP_ENABLE_WUNUSED_RESULT" = "Off"
+	"WEBP_UNICODE" = "On" # Windows only
+}
+
+$CMAKE_DEFS = @()
+$CMAKE_OPTIONS.GetEnumerator() | ForEach-Object {
+	$CMAKE_DEFS += "-D$($_.Name)=$($_.Value)"
 }
 
 Write-Host "`n======================== Configuring '$LIB_NAME' for '$PLATFORM-$BUILD_TYPE' ... ========================`n"
 
-cmake -S $SOURCE_DIR -B $BUILD_DIR -G "Visual Studio 17 2022" -A x64 `
--DCMAKE_BUILD_TYPE="$BUILD_TYPE" `
--DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" `
--DCMAKE_MSVC_RUNTIME_LIBRARY="$MSVC_RUNTIME" `
--DCMAKE_C_FLAGS_RELEASE="/$RUNTIME_LIB" `
--DCMAKE_C_FLAGS_DEBUG="/$RUNTIME_LIBd" `
--DCMAKE_CXX_FLAGS_RELEASE="/$RUNTIME_LIB" `
--DCMAKE_CXX_FLAGS_DEBUG="/$RUNTIME_LIBd" `
--DCMAKE_PREFIX_PATH="$INSTALL_DIR" `
--DBUILD_SHARED_LIBS=Off `
--DWEBP_ENABLE_SIMD=On `
--DWEBP_BUILD_ANIM_UTILS=On `
--DWEBP_BUILD_CWEBP=On `
--DWEBP_BUILD_DWEBP=On `
--DWEBP_BUILD_GIF2WEBP=On `
--DWEBP_BUILD_IMG2WEBP=On `
--DWEBP_BUILD_VWEBP=On `
--DWEBP_BUILD_WEBPINFO=On `
--DWEBP_BUILD_LIBWEBPMUX=On `
--DWEBP_BUILD_WEBPMUX=On `
--DWEBP_BUILD_EXTRAS=On `
--DWEBP_BUILD_WEBP_JS=Off `
--DWEBP_BUILD_FUZZTEST=Off `
--DWEBP_USE_THREAD=On `
--DWEBP_NEAR_LOSSLESS=On `
--DWEBP_ENABLE_SWAP_16BIT_CSP=Off `
--DWEBP_ENABLE_WUNUSED_RESULT=Off 
+cmake -S $SOURCE_DIR -B $BUILD_DIR -G "Visual Studio 17 2022" -A $MSVC_ARCH $CMAKE_DEFS
 
 Write-Host "`n======================== Building ... ========================`n"
 
@@ -67,5 +86,19 @@ cmake --build $BUILD_DIR --config $BUILD_TYPE
 Write-Host "`n======================== Installing ... ========================`n"
 
 cmake --install $BUILD_DIR --config $BUILD_TYPE
+
+$pdbSourceDir = "$BUILD_DIR/$BUILD_TYPE"
+$pdbDestinationDir = "$INSTALL_DIR/lib"
+
+if ($BUILD_TYPE -eq "Debug") {
+	if ( Test-Path $pdbSourceDir ) {
+		Get-ChildItem -Path $pdbSourceDir -Filter *.pdb | ForEach-Object {
+			Write-Host "Copying $($_.Name) to $pdbDestinationDir"
+			Copy-Item -Path $_.FullName -Destination $pdbDestinationDir
+		}
+	} else {
+		Write-Host "PDB source directory not found: $pdbSourceDir. Skipping PDB copy." -ForegroundColor Yellow
+	}
+}
 
 Write-Host "`n======================== Success ! ========================`n"

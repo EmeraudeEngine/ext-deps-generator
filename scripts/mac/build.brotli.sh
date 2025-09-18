@@ -25,7 +25,7 @@ cmake -S ${SOURCE_DIR} -B ${BUILD_DIR} -G "Ninja" \
 -DCMAKE_OSX_DEPLOYMENT_TARGET=${1} \
 -DCMAKE_C_FLAGS="-mmacosx-version-min=${1} -fPIC" \
 -DBUILD_SHARED_LIBS=Off \
--DBROTLI_BUILD_TOOLS=On
+-DBROTLI_BUILD_TOOLS=Off
 
 echo "\n======================== Building ... ========================\n"
 

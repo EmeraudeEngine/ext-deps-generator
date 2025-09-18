@@ -25,7 +25,7 @@ cmake -S ${SOURCE_DIR} -B ${BUILD_DIR} -G "Ninja" \
 -DCMAKE_OSX_DEPLOYMENT_TARGET=${1} \
 -DCMAKE_C_FLAGS="-mmacosx-version-min=${1} -fPIC" \
 -DCMAKE_CXX_FLAGS="-mmacosx-version-min=${1} -fPIC" \
--DCLIPPER2_UTILS=On \
+-DCLIPPER2_UTILS=Off \
 -DCLIPPER2_EXAMPLES=Off \
 -DCLIPPER2_TESTS=Off \
 -DUSE_EXTERNAL_GTEST=Off \

@@ -57,10 +57,10 @@ echo "\n======================== Building dependencies for 'mac.${ARCH}-${BUILD_
 # Below are the projects that require the above to be compiled.
 
 ./scripts/mac/build.taglib.sh "${MIN_SDK}" "${ARCH}" "${BUILD_TYPE}"
-./scripts/mac/build.cppzmq.sh "${MIN_SDK}" "${ARCH}" "${BUILD_TYPE}"
 ./scripts/mac/build.libpng.sh "${MIN_SDK}" "${ARCH}" "${BUILD_TYPE}"
 ./scripts/mac/build.libzip.sh "${MIN_SDK}" "${ARCH}" "${BUILD_TYPE}"
 ./scripts/mac/build.lib3mf.sh "${MIN_SDK}" "${ARCH}" "${BUILD_TYPE}"
 ./scripts/mac/build.freetype.sh "${MIN_SDK}" "${ARCH}" "${BUILD_TYPE}"
+./scripts/mac/build.cppzmq.sh "${MIN_SDK}" "${ARCH}" "${BUILD_TYPE}"
 
 echo "\n======================== Finished ! ========================\n"

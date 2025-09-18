@@ -24,9 +24,15 @@ cmake -S ${SOURCE_DIR} -B ${BUILD_DIR} -G "Ninja" \
 -DCMAKE_OSX_ARCHITECTURES=${2} \
 -DCMAKE_OSX_DEPLOYMENT_TARGET=${1} \
 -DCMAKE_C_FLAGS="-mmacosx-version-min=${1} -fPIC" \
+-DENABLE_WERROR=Off \
+-DENABLE_DEBUG=Off \
+-DENABLE_APP=Off \
+-DENABLE_DOCS=Off \
+-DENABLE_EXAMPLES=Off \
 -DENABLE_LIB_ONLY=On \
+-DENABLE_STATIC_LIB=On \
 -DENABLE_SHARED_LIB=Off \
--DENABLE_STATIC_LIB=On
+-DUSE_OLD_SONAME=Off
 
 echo "\n======================== Building ... ========================\n"
 

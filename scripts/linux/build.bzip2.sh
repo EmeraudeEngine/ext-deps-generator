@@ -22,9 +22,15 @@ cmake -S ${SOURCE_DIR} -B ${BUILD_DIR} -G "Ninja" \
 -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
 -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} \
 -DCMAKE_C_FLAGS=-fPIC \
+-DENABLE_WERROR=Off \
+-DENABLE_DEBUG=Off \
+-DENABLE_APP=Off \
+-DENABLE_DOCS=Off \
+-DENABLE_EXAMPLES=Off \
 -DENABLE_LIB_ONLY=On \
+-DENABLE_STATIC_LIB=On \
 -DENABLE_SHARED_LIB=Off \
--DENABLE_STATIC_LIB=On
+-DUSE_OLD_SONAME=Off
 
 echo "\n======================== Building ... ========================\n"
 

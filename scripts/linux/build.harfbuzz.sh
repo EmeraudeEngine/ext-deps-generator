@@ -29,10 +29,15 @@ cmake -S ${SOURCE_DIR} -B ${BUILD_DIR} -G "Ninja" \
 -DHB_HAVE_GRAPHITE2=Off \
 -DHB_HAVE_GLIB=Off \
 -DHB_HAVE_ICU=Off \
+-DHB_HAVE_CORETEXT=Off \
+-DHB_HAVE_UNISCRIBE=Off \
+-DHB_HAVE_GDI=Off \
+-DHB_HAVE_DIRECTWRITE=Off \
 -DHB_BUILD_UTILS=Off \
 -DHB_BUILD_SUBSET=On \
 -DHB_HAVE_GOBJECT=Off \
--DHB_HAVE_INTROSPECTION=Off
+-DHB_HAVE_INTROSPECTION=Off \
+-DBUILD_FRAMEWORK=Off
 
 echo "\n======================== Building ... ========================\n"
 

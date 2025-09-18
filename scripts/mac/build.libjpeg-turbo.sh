@@ -24,9 +24,10 @@ cmake -S ${SOURCE_DIR} -B ${BUILD_DIR} -G "Ninja" \
 -DCMAKE_OSX_ARCHITECTURES=${2} \
 -DCMAKE_OSX_DEPLOYMENT_TARGET=${1} \
 -DCMAKE_C_FLAGS="-mmacosx-version-min=${1} -fPIC" \
+-DNEON_INTRINSICS=On \
 -DENABLE_SHARED=Off \
 -DENABLE_STATIC=On \
--DREQUIRE_SIMD=Off \
+-DREQUIRE_SIMD=On \
 -DWITH_ARITH_DEC=On \
 -DWITH_ARITH_ENC=On \
 -DWITH_JAVA=Off \
@@ -34,7 +35,11 @@ cmake -S ${SOURCE_DIR} -B ${BUILD_DIR} -G "Ninja" \
 -DWITH_JPEG8=Off \
 -DWITH_SIMD=On \
 -DWITH_TURBOJPEG=On \
--DWITH_FUZZ=Off
+-DWITH_TOOLS=Off \
+-DWITH_TESTS=Off \
+-DWITH_FUZZ=Off \
+-DWITH_CRT_DLL=Off \
+-DFORCE_INLINE=On
 
 echo "\n======================== Building ... ========================\n"
 
