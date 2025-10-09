@@ -1,0 +1,25 @@
+name: hwloc
+source_dir: repositories/hwloc
+
+# hwloc uses autotools on Linux/macOS, CMake on Windows
+build_system: autotools
+
+autotools_options:
+  enable_static: "yes"
+  enable_shared: "no"
+  disable_cairo: true
+  disable_libxml2: true
+  disable_io: true
+  disable_libudev: true
+
+platforms:
+  windows:
+    # Windows has a separate CMake build in contrib/windows-cmake
+    source_dir: repositories/hwloc/contrib/windows-cmake
+    build_system: cmake
+    cmake_options:
+      HWLOC_ENABLE_TESTING: false
+      HWLOC_SKIP_LSTOPO: true
+      HWLOC_SKIP_TOOLS: true
+      HWLOC_SKIP_INCLUDES: false
+      BUILD_SHARED_LIBS: false

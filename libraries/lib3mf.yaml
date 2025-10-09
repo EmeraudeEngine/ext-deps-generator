@@ -1,0 +1,11 @@
+name: lib3mf
+source_dir: repositories/lib3mf
+
+cmake_options:
+  USE_INCLUDED_ZLIB: true
+  USE_INCLUDED_LIBZIP: true
+  USE_INCLUDED_SSL: false
+  BUILD_FOR_CODECOVERAGE: false
+  STRIP_BINARIES: true
+  USE_PLATFORM_UUID: true
+  LIB3MF_TESTS: false

@@ -5,12 +5,14 @@ Thumbs.db
 .vscode
 .vs
 .yarn
+.claude/settings.local.json
 
 # Files backup
 *.orig
 *.~
 
 # Project structure and auto-generated files
+__pycache__
 builds/*
 output/*
 

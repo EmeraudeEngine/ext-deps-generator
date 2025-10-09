@@ -148,10 +148,11 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Notes: There is no compilation here, this is just some headers for libzmq.
 
 ## openal-soft 
-[master, dc7d7054a5b4f3bec1dc23a42fd616a0847af948]
+[master, d3875f333fb6abe2f39d82caca329414871ae53b]
 
 - URL: https://github.com/kcat/openal-soft.git
-- Version: 1.24.3
+- Version: 1.23.1
+- Notes: This version is stable on all platforms. Beware when updating.
 - Dependencies: None
 - Usage: Audio API.
 
@@ -206,83 +207,168 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 
 # Requirements and build process
 
-There are three main scripts at the repository to fire all compilations.
-The "builds" directory will contain the compilation files.
-The "output" directory will contain the final library files to ship.
+The repository uses a unified Python build system (`build.py`) that works on all platforms.
+The `builds/` directory will contain the compilation files.
+The `output/` directory will contain the final library files to ship.
 
-All platforms need at least CMake 3.25.1, Python 3+, ninja build and autotools.
+## Common requirements
 
-## Linux
+All platforms need:
+- **CMake** 3.25.1+
+- **Python** 3.10+ with pyyaml
+- **Ninja** build system
+- **Autotools** (autoconf, automake, libtool) for hwloc
 
-Compilations needs GCC 12+.
+## Python setup
 
-To install autotools
+### Linux (Debian/Ubuntu)
+
 ```bash
-sudo apt install autoconf automake libtool
+# Install Python and pip
+sudo apt install python3 python3-pip python3-venv
+
+# Create a virtual environment (recommended)
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install Python dependencies
+pip install -r requirements.txt
 ```
 
-```bash
-./build.linux.sh x86_64 Release
-./build.linux.sh x86_64 Debug
+### macOS
 
+```bash
+# Python 3 is included with Xcode Command Line Tools
+# Or install via Homebrew
+brew install python3
+
+# Create a virtual environment (recommended)
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install Python dependencies
+pip install -r requirements.txt
 ```
 
-## macOS
-
-Compilations need a proper XCode installed for macOS SDK 12.0
-
-To install brew (https://brew.sh/)
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-To install autotools
-```bash
-brew install samurai autoconf automake libtool
-```
-
-For macOS based on 'Apple Silicon CPU':
-```bash
-./build.mac.sh 12.0 arm64 Release
-./build.mac.sh 12.0 arm64 Debug
-
-```
-
-For macOS based on 'Intel CPU':
-```bash
-./build.mac.sh 12.0 x86_64 Release
-./build.mac.sh 12.0 x86_64 Debug
-
-```
-
-NOTE: The minimum SDK is set to 12.0 here but can be changed.
-
-## Windows
-
-Compilations need a Visual Studio 2022 and NASM from:
-https://www.nasm.us/pub/nasm/releasebuilds/?C=M;O=D
-
-NOTE: Libraries for Windows are separated between the static "MultiThreaded, MultiThreadedDebug" (\MT, \MTd) and 
-the dynamic "MultiThreadedDLL, MultiThreadedDebugDLL" (\MD, \MDd) runtime. (And yes! That was painful...)
+### Windows
 
 ```powershell
-Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
-./build.windows.ps1 x86_64 Release MD
-./build.windows.ps1 x86_64 Debug MD
-./build.windows.ps1 x86_64 Release MT
-./build.windows.ps1 x86_64 Debug MT
+# Download Python from https://www.python.org/downloads/
+# Make sure to check "Add Python to PATH" during installation
 
+# Create a virtual environment (recommended)
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+
+# Install Python dependencies
+pip install -r requirements.txt
 ```
 
-To check .lib files: Open "Developer Command Prompt" and go to a "lib/" directory and type:
+## Platform-specific requirements
+
+### Linux
+
+GCC 12+ is required.
 
 ```bash
-powershell
-Get-ChildItem -Recurse -Filter *.lib | ForEach-Object { $file = $_; dumpbin /directives $file.FullName 2>&1 | Select-String 'LIBCMTD?|MSVCRTD?' | ForEach-Object { $_.Matches.Value } | ForEach-Object { [PSCustomObject]@{ CRT = $_; Fichier = $file.Name } } } | Group-Object -Property CRT
-
+sudo apt install ninja-build autoconf automake libtool nasm
 ```
 
-All "MT" must only print "LIBCMT"
-All "MTd must only print "LIBCMTD"
-All "MD" must only print "MSVCRT"
-All "MDd" must only print "MSVCRTD"
+### macOS
+
+Xcode with macOS SDK 12.0+ is required.
+
+```bash
+# Install Homebrew (if not already installed)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install build tools
+brew install ninja autoconf automake libtool nasm
+```
+
+### Windows
+
+Visual Studio 2022 and NASM are required.
+- Download NASM from: https://www.nasm.us/pub/nasm/releasebuilds/?C=M;O=D
+
+## Build commands
+
+### List available libraries
+
+```bash
+python build.py --list --macos-sdk 12.0   # macOS
+python build.py --list                     # Linux/Windows
+```
+
+### Build all libraries
+
+```bash
+# Linux
+python build.py --arch x86_64 --build-type Release
+python build.py --arch x86_64 --build-type Debug
+
+# macOS (Apple Silicon)
+python build.py --macos-sdk 12.0 --arch arm64 --build-type Release
+python build.py --macos-sdk 12.0 --arch arm64 --build-type Debug
+
+# macOS (Intel)
+python build.py --macos-sdk 12.0 --arch x86_64 --build-type Release
+python build.py --macos-sdk 12.0 --arch x86_64 --build-type Debug
+
+# Windows (DLL runtime)
+python build.py --arch x86_64 --build-type Release --runtime-lib MD
+python build.py --arch x86_64 --build-type Debug --runtime-lib MD
+
+# Windows (Static runtime)
+python build.py --arch x86_64 --build-type Release --runtime-lib MT
+python build.py --arch x86_64 --build-type Debug --runtime-lib MT
+```
+
+### Build a single library (with dependencies)
+
+```bash
+python build.py --macos-sdk 12.0 --library freetype
+```
+
+### Build a single library (without dependencies)
+
+```bash
+python build.py --macos-sdk 12.0 --library freetype --no-deps
+```
+
+### Dry run (show what would be built)
+
+```bash
+python build.py --macos-sdk 12.0 --dry-run
+```
+
+## Command-line options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--arch` | Target architecture (`x86_64`, `arm64`) | `x86_64` |
+| `--build-type` | Build type (`Release`, `Debug`) | `Release` |
+| `--macos-sdk` | macOS deployment target (required on macOS) | - |
+| `--runtime-lib` | Windows runtime library (`MD`, `MT`) | `MD` |
+| `--library` | Build only this library | - |
+| `--no-deps` | Don't build dependencies | `false` |
+| `--list` | List available libraries | - |
+| `--dry-run` | Show build plan without building | - |
+
+## Windows runtime library notes
+
+Libraries for Windows are separated between:
+- **MD/MDd**: Dynamic runtime (`MultiThreadedDLL`, `MultiThreadedDebugDLL`)
+- **MT/MTd**: Static runtime (`MultiThreaded`, `MultiThreadedDebug`)
+
+To verify `.lib` files, open "Developer Command Prompt" and run:
+
+```powershell
+Get-ChildItem -Recurse -Filter *.lib | ForEach-Object { $file = $_; dumpbin /directives $file.FullName 2>&1 | Select-String 'LIBCMTD?|MSVCRTD?' | ForEach-Object { $_.Matches.Value } | ForEach-Object { [PSCustomObject]@{ CRT = $_; Fichier = $file.Name } } } | Group-Object -Property CRT
+```
+
+Expected results:
+- **MT** builds: only `LIBCMT`
+- **MTd** builds: only `LIBCMTD`
+- **MD** builds: only `MSVCRT`
+- **MDd** builds: only `MSVCRTD`

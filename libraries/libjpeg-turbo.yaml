@@ -1,0 +1,35 @@
+name: libjpeg-turbo
+source_dir: repositories/libjpeg-turbo
+
+cmake_options:
+  NEON_INTRINSICS: true
+  ENABLE_SHARED: false
+  ENABLE_STATIC: true
+  REQUIRE_SIMD: true
+  WITH_ARITH_DEC: true
+  WITH_ARITH_ENC: true
+  WITH_JAVA: false
+  WITH_JPEG7: false
+  WITH_JPEG8: false
+  WITH_SIMD: true
+  WITH_TURBOJPEG: true
+  WITH_TOOLS: false
+  WITH_TESTS: false
+  WITH_FUZZ: false
+  FORCE_INLINE: true
+
+platforms:
+  linux:
+    cmake_options:
+      WITH_CRT_DLL: false
+
+  macos:
+    cmake_options:
+      WITH_CRT_DLL: false
+
+  windows:
+    cmake_options: {}
+    runtime_MT:
+      WITH_CRT_DLL: false
+    runtime_MD:
+      WITH_CRT_DLL: true

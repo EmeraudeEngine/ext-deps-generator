@@ -1,0 +1,11 @@
+name: cryptopp-cmake
+source_dir: repositories/cryptopp-cmake
+languages: [c, cxx]
+
+cmake_options:
+  CRYPTOPP_USE_INTERMEDIATE_OBJECTS_TARGET: true
+  CRYPTOPP_USE_PEM_PACK: true
+  CRYPTOPP_BUILD_TESTING: false
+  CRYPTOPP_BUILD_DOCUMENTATION: false
+  CRYPTOPP_INSTALL: true
+  CRYPTOPP_BUILD_SHARED: false

@@ -1,0 +1,42 @@
+name: libzmq
+source_dir: repositories/libzmq
+languages: [c, cxx]
+
+cmake_options:
+  ENABLE_ASAN: false
+  ENABLE_TSAN: false
+  ENABLE_UBSAN: false
+  ENABLE_INTRINSICS: true
+  WITH_OPENPGM: false
+  WITH_NORM: false
+  WITH_VMCI: false
+  ENABLE_DRAFTS: false
+  ENABLE_WS: false
+  ENABLE_RADIX_TREE: false
+  WITH_TLS: true
+  WITH_NSS: false
+  WITH_LIBBSD: false
+  WITH_LIBSODIUM: false
+  WITH_LIBSODIUM_STATIC: false
+  ENABLE_LIBSODIUM_RANDOMBYTES_CLOSE: false
+  ENABLE_CURVE: false
+  WITH_GSSAPI_KRB5: false
+  WITH_MILITANT: false
+  ENABLE_EVENTFD: false
+  ENABLE_ANALYSIS: false
+  LIBZMQ_PEDANTIC: true
+  LIBZMQ_WERROR: false
+  WITH_DOCS: false
+  ENABLE_PRECOMPILED: true
+  BUILD_SHARED: false
+  BUILD_STATIC: true
+  WITH_PERF_TOOL: false
+  BUILD_TESTS: false
+  ENABLE_CPACK: true
+  ENABLE_CLANG: true
+  ENABLE_NO_EXPORT: false
+
+platforms:
+  windows:
+    cmake_options:
+      ENABLE_CLANG: false

@@ -1,0 +1,49 @@
+name: taglib
+source_dir: repositories/taglib
+languages: [c, cxx]
+
+depends_on:
+  - zlib
+
+use_install_prefix_as_find_root: true
+
+cmake_options:
+  UTF8_TESTS: false
+  UTF8_INSTALL: false
+  UTF8_SAMPLES: false
+  BUILD_SHARED_LIBS: false
+  BUILD_FRAMEWORK: false
+  ENABLE_CCACHE: false
+  VISIBILITY_HIDDEN: false
+  BUILD_EXAMPLES: false
+  BUILD_BINDINGS: false
+  NO_ITUNES_HACKS: false
+  PLATFORM_WINRT: false
+  WITH_APE: true
+  WITH_ASF: true
+  WITH_DSF: true
+  WITH_MOD: true
+  WITH_MP4: true
+  WITH_RIFF: true
+  WITH_SHORTEN: true
+  WITH_TRUEAUDIO: true
+  WITH_VORBIS: true
+  WITH_ZLIB: true
+  TRACE_IN_RELEASE: false
+  BUILD_TESTING: false
+
+platforms:
+  linux:
+    cmake_options:
+      ENABLE_STATIC_RUNTIME: false
+
+  macos:
+    cmake_options:
+      ENABLE_STATIC_RUNTIME: false
+
+  windows:
+    cmake_options: {}
+    runtime_MT:
+      ENABLE_STATIC_RUNTIME: true
+    runtime_MD:
+      ENABLE_STATIC_RUNTIME: false

@@ -1,0 +1,10 @@
+name: zlib
+source_dir: repositories/zlib
+
+cmake_options:
+  ZLIB_BUILD_TESTING: false
+  ZLIB_BUILD_SHARED: false
+  ZLIB_BUILD_STATIC: true
+  ZLIB_BUILD_MINIZIP: false
+  ZLIB_INSTALL: true
+  ZLIB_PREFIX: false

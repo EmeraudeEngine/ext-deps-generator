@@ -1,0 +1,38 @@
+name: harfbuzz
+source_dir: repositories/harfbuzz
+languages: [c, cxx]
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  HB_HAVE_CAIRO: false
+  HB_HAVE_FREETYPE: false
+  HB_HAVE_GRAPHITE2: false
+  HB_HAVE_GLIB: false
+  HB_HAVE_ICU: false
+  HB_BUILD_UTILS: false
+  HB_BUILD_SUBSET: true
+  HB_HAVE_GOBJECT: false
+  HB_HAVE_INTROSPECTION: false
+  BUILD_FRAMEWORK: false
+
+platforms:
+  macos:
+    cmake_options:
+      HB_HAVE_CORETEXT: true
+      HB_HAVE_UNISCRIBE: false
+      HB_HAVE_GDI: false
+      HB_HAVE_DIRECTWRITE: false
+
+  linux:
+    cmake_options:
+      HB_HAVE_CORETEXT: false
+      HB_HAVE_UNISCRIBE: false
+      HB_HAVE_GDI: false
+      HB_HAVE_DIRECTWRITE: false
+
+  windows:
+    cmake_options:
+      HB_HAVE_CORETEXT: false
+      HB_HAVE_UNISCRIBE: true
+      HB_HAVE_GDI: true
+      HB_HAVE_DIRECTWRITE: true

@@ -1,0 +1,9 @@
+name: cpu_features
+source_dir: repositories/cpu_features
+
+cmake_options:
+  BUILD_TESTING: false
+  BUILD_EXECUTABLE: false
+  BUILD_SHARED_LIBS: false
+  ENABLE_INSTALL: true
+  CMAKE_POSITION_INDEPENDENT_CODE: true

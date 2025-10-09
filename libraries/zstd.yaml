@@ -1,0 +1,27 @@
+name: zstd
+source_dir: repositories/zstd/build/cmake
+languages: [c, cxx]
+
+cmake_options:
+  ZSTD_LEGACY_SUPPORT: true
+  ZSTD_MULTITHREAD_SUPPORT: true
+  ZSTD_BUILD_PROGRAMS: false
+  ZSTD_BUILD_CONTRIB: false
+  ZSTD_BUILD_TESTS: false
+  ZSTD_PROGRAMS_LINK_SHARED: false
+
+platforms:
+  linux:
+    cmake_options:
+      ZSTD_USE_STATIC_RUNTIME: false
+
+  macos:
+    cmake_options:
+      ZSTD_USE_STATIC_RUNTIME: false
+
+  windows:
+    cmake_options: {}
+    runtime_MT:
+      ZSTD_USE_STATIC_RUNTIME: true
+    runtime_MD:
+      ZSTD_USE_STATIC_RUNTIME: false

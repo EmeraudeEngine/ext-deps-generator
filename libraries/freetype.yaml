@@ -1,0 +1,19 @@
+name: freetype
+source_dir: repositories/freetype
+
+depends_on:
+  - zlib
+  - bzip2
+  - libpng
+  - harfbuzz
+  - brotli
+
+use_install_prefix_as_find_root: true
+
+cmake_options:
+  FT_DISABLE_ZLIB: false
+  FT_DISABLE_BZIP2: false
+  FT_DISABLE_PNG: false
+  FT_DISABLE_HARFBUZZ: false
+  FT_DISABLE_BROTLI: false
+  FT_ENABLE_ERROR_STRINGS: true

@@ -1,0 +1,12 @@
+name: clipper2
+source_dir: repositories/clipper2/CPP
+languages: [c, cxx]
+
+cmake_options:
+  CLIPPER2_UTILS: false
+  CLIPPER2_EXAMPLES: false
+  CLIPPER2_TESTS: false
+  USE_EXTERNAL_GTEST: false
+  USE_EXTERNAL_GBENCHMARK: false
+  BUILD_SHARED_LIBS: false
+  CLIPPER2_USINGZ: false

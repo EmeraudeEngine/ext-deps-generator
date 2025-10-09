@@ -1,0 +1,9 @@
+name: cppzmq
+source_dir: repositories/cppzmq
+languages: [c, cxx]
+
+depends_on:
+  - libzmq
+
+cmake_options:
+  CPPZMQ_BUILD_TESTS: false

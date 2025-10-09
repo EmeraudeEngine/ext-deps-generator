@@ -1,0 +1,24 @@
+name: xz
+source_dir: repositories/xz
+
+cmake_options:
+  XZ_ASM_I386: false
+  XZ_NLS: false
+  BUILD_SHARED_LIBS: false
+  XZ_SMALL: false
+  XZ_EXTERNAL_SHA256: false
+  XZ_MICROLZMA_ENCODER: false
+  XZ_MICROLZMA_DECODER: false
+  XZ_LZIP_DECODER: false
+  XZ_CLMUL_CRC: true
+  XZ_ARM64_CRC32: true
+  XZ_LOONGARCH_CRC32: true
+  XZ_TOOL_XZDEC: false
+  XZ_TOOL_LZMADEC: false
+  XZ_TOOL_LZMAINFO: false
+  XZ_TOOL_XZ: false
+  XZ_TOOL_SYMLINKS: false
+  XZ_TOOL_SYMLINKS_LZMA: false
+  XZ_TOOL_SCRIPTS: false
+  XZ_DOXYGEN: false
+  XZ_DOC: false

@@ -1,0 +1,64 @@
+# Build order configuration
+# Libraries are built in this order. Libraries not listed here will be built
+# after the listed ones, sorted alphabetically.
+#
+# The dependency system will still ensure that dependencies are built first,
+# but this file controls the order within groups of libraries that have no
+# dependencies on each other.
+
+order:
+  # Base compression libraries
+  - zlib
+  - bzip2
+  - xz
+  - zstd
+  - brotli
+
+  # Text and font
+  - harfbuzz
+
+  # Image processing
+  - libjpeg-turbo
+
+  # System utilities
+  - cpu_features
+  - hwloc
+
+  # Audio
+  - openal-soft
+  - libsamplerate
+
+  # Networking
+  - libzmq
+
+  # Image format
+  - libwebp
+
+  # Security
+  - cryptopp-cmake
+
+  # Geometry
+  - clipper2
+
+  # Windows-only
+  - pthread-win32
+
+  # ---- Libraries that depend on the above ----
+
+  # Audio metadata
+  - taglib
+
+  # Image I/O
+  - libpng
+
+  # Archive
+  - libzip
+
+  # 3D formats
+  - lib3mf
+
+  # Font rendering
+  - freetype
+
+  # ZeroMQ C++ bindings
+  - cppzmq

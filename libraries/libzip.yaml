@@ -1,0 +1,45 @@
+name: libzip
+source_dir: repositories/libzip
+
+depends_on:
+  - zlib
+  - bzip2
+  - xz
+  - zstd
+
+use_install_prefix_as_find_root: true
+
+cmake_options:
+  ENABLE_COMMONCRYPTO: true
+  ENABLE_GNUTLS: false
+  ENABLE_MBEDTLS: false
+  ENABLE_OPENSSL: false
+  ENABLE_WINDOWS_CRYPTO: false
+  ENABLE_BZIP2: true
+  ENABLE_LZMA: true
+  ENABLE_ZSTD: true
+  ENABLE_FDOPEN: false
+  BUILD_TOOLS: false
+  BUILD_REGRESS: false
+  BUILD_OSSFUZZ: false
+  BUILD_EXAMPLES: false
+  BUILD_DOC: false
+  BUILD_SHARED_LIBS: false
+  LIBZIP_DO_INSTALL: true
+  SHARED_LIB_VERSIONNING: true
+
+platforms:
+  linux:
+    cmake_options:
+      ENABLE_COMMONCRYPTO: false
+      ENABLE_WINDOWS_CRYPTO: false
+
+  macos:
+    cmake_options:
+      ENABLE_WINDOWS_CRYPTO: false
+
+  windows:
+    cmake_options:
+      ENABLE_COMMONCRYPTO: false
+      ENABLE_WINDOWS_CRYPTO: true
+    extra_c_flags: "-DLZMA_API_STATIC"

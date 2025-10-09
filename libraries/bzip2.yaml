@@ -1,0 +1,13 @@
+name: bzip2
+source_dir: repositories/bzip2
+
+cmake_options:
+  ENABLE_WERROR: false
+  ENABLE_DEBUG: false
+  ENABLE_APP: false
+  ENABLE_DOCS: false
+  ENABLE_EXAMPLES: false
+  ENABLE_LIB_ONLY: true
+  ENABLE_STATIC_LIB: true
+  ENABLE_SHARED_LIB: false
+  USE_OLD_SONAME: false

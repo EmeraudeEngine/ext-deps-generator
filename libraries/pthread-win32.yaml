@@ -1,0 +1,12 @@
+name: pthread-win32
+source_dir: repositories/pthread-win32
+languages: [c, cxx]
+
+# Only needed on Windows
+disabled_platforms:
+  - linux
+  - macos
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  BUILD_TESTING: false

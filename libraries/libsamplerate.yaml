@@ -1,0 +1,8 @@
+name: libsamplerate
+source_dir: repositories/libsamplerate
+
+cmake_options:
+  LIBSAMPLERATE_EXAMPLES: false
+  LIBSAMPLERATE_INSTALL: true
+  LIBSAMPLERATE_SSE2_LRINT: true
+  LIBSAMPLERATE_ENABLE_SANITIZERS: false

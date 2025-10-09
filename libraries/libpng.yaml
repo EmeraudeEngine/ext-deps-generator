@@ -1,0 +1,18 @@
+name: libpng
+source_dir: repositories/libpng
+
+depends_on:
+  - zlib
+
+use_install_prefix_as_find_root: true
+
+cmake_options:
+  PNG_SHARED: false
+  PNG_STATIC: true
+  PNG_FRAMEWORK: false
+  PNG_TESTS: false
+  PNG_EXECUTABLES: false
+  PNG_TOOLS: false
+  PNG_DEBUG: false
+  PNG_HARDWARE_OPTIMIZATIONS: true
+  PNG_BUILD_ZLIB: false

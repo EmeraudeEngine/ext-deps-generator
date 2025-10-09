@@ -1,0 +1,6 @@
+name: brotli
+source_dir: repositories/brotli
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  BROTLI_BUILD_TOOLS: false

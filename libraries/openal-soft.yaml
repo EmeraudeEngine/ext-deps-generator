@@ -1,0 +1,178 @@
+name: openal-soft
+source_dir: repositories/openal-soft
+languages: [c, cxx]
+
+# Common options for all platforms
+cmake_options:
+  # CMake compatibility (OpenAL-Soft uses cmake_minimum_required 3.0.2)
+  CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+
+  # Build type
+  LIBTYPE: STATIC
+
+  # General options
+  ALSOFT_DLOPEN: true
+  ALSOFT_WERROR: false
+  ALSOFT_UPDATE_BUILD_VERSION: false
+
+  # Disable utilities and examples
+  ALSOFT_UTILS: false
+  ALSOFT_NO_CONFIG_UTIL: true
+  ALSOFT_EXAMPLES: false
+
+  # Installation options
+  ALSOFT_INSTALL: true
+  ALSOFT_INSTALL_CONFIG: true
+  ALSOFT_INSTALL_HRTF_DATA: true
+  ALSOFT_INSTALL_AMBDEC_PRESETS: true
+  ALSOFT_INSTALL_EXAMPLES: false
+  ALSOFT_INSTALL_UTILS: false
+  ALSOFT_SEARCH_INSTALL_DATADIR: false
+
+  # HRTF embedding
+  ALSOFT_EMBED_HRTF_DATA: true
+
+  # macOS framework (disabled - we want static lib)
+  ALSOFT_OSX_FRAMEWORK: false
+
+  # Static linking options
+  ALSOFT_STATIC_LIBGCC: false
+  ALSOFT_STATIC_STDCXX: false
+  ALSOFT_STATIC_WINPTHREAD: false
+  FORCE_STATIC_VCRT: false
+
+  # SIMD - enable all, let CMake detect availability
+  ALSOFT_CPUEXT_SSE: true
+  ALSOFT_CPUEXT_SSE2: true
+  ALSOFT_CPUEXT_SSE3: true
+  ALSOFT_CPUEXT_SSE4_1: true
+  ALSOFT_CPUEXT_NEON: true
+  # Don't require - let it be optional at runtime
+  ALSOFT_REQUIRE_SSE: false
+  ALSOFT_REQUIRE_SSE2: false
+  ALSOFT_REQUIRE_SSE3: false
+  ALSOFT_REQUIRE_SSE4_1: false
+  ALSOFT_REQUIRE_NEON: false
+  ALSOFT_ENABLE_SSE2_CODEGEN: true
+
+  # Wave file backend (always available, useful for debugging)
+  ALSOFT_BACKEND_WAVE: true
+
+  # Disable backends that need external deps or aren't commonly needed
+  ALSOFT_BACKEND_PORTAUDIO: false
+  ALSOFT_BACKEND_SDL2: false
+  ALSOFT_BACKEND_SDL3: false
+  ALSOFT_BACKEND_SNDIO: false
+  ALSOFT_BACKEND_OBOE: false
+  ALSOFT_BACKEND_OPENSL: false
+
+  # Don't require any backend
+  ALSOFT_REQUIRE_PORTAUDIO: false
+  ALSOFT_REQUIRE_SDL2: false
+  ALSOFT_REQUIRE_SNDIO: false
+  ALSOFT_REQUIRE_OBOE: false
+  ALSOFT_REQUIRE_OPENSL: false
+
+  # Windows UID definitions
+  ALSOFT_NO_UID_DEFS: false
+
+platforms:
+  macos:
+    cmake_options:
+      # EAX is Windows-only legacy extension
+      ALSOFT_EAX: false
+
+      # RTKit uses D-Bus, not commonly available on macOS
+      ALSOFT_RTKIT: false
+
+      # macOS native backend
+      ALSOFT_BACKEND_COREAUDIO: true
+      ALSOFT_REQUIRE_COREAUDIO: false
+
+      # Disable Linux/Unix backends
+      ALSOFT_BACKEND_ALSA: false
+      ALSOFT_BACKEND_PULSEAUDIO: false
+      ALSOFT_BACKEND_PIPEWIRE: false
+      ALSOFT_BACKEND_OSS: false
+      ALSOFT_BACKEND_SOLARIS: false
+      ALSOFT_BACKEND_JACK: false
+
+      # Disable Windows backends
+      ALSOFT_BACKEND_WASAPI: false
+      ALSOFT_BACKEND_DSOUND: false
+      ALSOFT_BACKEND_WINMM: false
+
+  linux:
+    cmake_options:
+      # EAX is Windows-only legacy extension
+      ALSOFT_EAX: false
+
+      # RTKit for realtime thread priority via D-Bus
+      ALSOFT_RTKIT: true
+      ALSOFT_REQUIRE_RTKIT: false
+
+      # Disable macOS backend
+      ALSOFT_BACKEND_COREAUDIO: false
+
+      # Linux native backends - enable detection
+      ALSOFT_BACKEND_ALSA: true
+      ALSOFT_BACKEND_PULSEAUDIO: true
+      ALSOFT_BACKEND_PIPEWIRE: true
+      ALSOFT_BACKEND_OSS: true
+      ALSOFT_BACKEND_JACK: true
+      ALSOFT_BACKEND_SOLARIS: false
+      # Don't require any specific backend
+      ALSOFT_REQUIRE_ALSA: false
+      ALSOFT_REQUIRE_PULSEAUDIO: false
+      ALSOFT_REQUIRE_PIPEWIRE: false
+      ALSOFT_REQUIRE_OSS: false
+      ALSOFT_REQUIRE_JACK: false
+      ALSOFT_REQUIRE_SOLARIS: false
+
+      # Disable Windows backends
+      ALSOFT_BACKEND_WASAPI: false
+      ALSOFT_BACKEND_DSOUND: false
+      ALSOFT_BACKEND_WINMM: false
+
+  windows:
+    cmake_options:
+      # EAX legacy extension (Windows only)
+      ALSOFT_EAX: true
+
+      # No RTKit on Windows
+      ALSOFT_RTKIT: false
+
+      # Disable macOS backend
+      ALSOFT_BACKEND_COREAUDIO: false
+
+      # Disable Linux backends
+      ALSOFT_BACKEND_ALSA: false
+      ALSOFT_BACKEND_PULSEAUDIO: false
+      ALSOFT_BACKEND_PIPEWIRE: false
+      ALSOFT_BACKEND_OSS: false
+      ALSOFT_BACKEND_JACK: false
+      ALSOFT_BACKEND_SOLARIS: false
+
+      # Windows native backends
+      ALSOFT_BACKEND_WASAPI: true
+      ALSOFT_BACKEND_DSOUND: true
+      ALSOFT_BACKEND_WINMM: true
+      # Don't require any specific backend
+      ALSOFT_REQUIRE_WASAPI: false
+      ALSOFT_REQUIRE_DSOUND: false
+      ALSOFT_REQUIRE_WINMM: false
+
+      # Router for Windows (creates OpenAL32.dll wrapper)
+      ALSOFT_BUILD_ROUTER: false
+
+      # Static linking (common to both runtimes)
+      ALSOFT_STATIC_STDCXX: true
+      ALSOFT_STATIC_WINPTHREAD: true
+
+    # MT-specific options
+    runtime_MT:
+      FORCE_STATIC_VCRT: true
+
+    # MD-specific options
+    runtime_MD:
+      FORCE_STATIC_VCRT: false
