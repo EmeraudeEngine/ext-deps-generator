@@ -214,11 +214,10 @@ All platforms need at least CMake 3.25.1, Python 3+, ninja build and autotools.
 
 ## Linux
 
-Compilations needs GCC 12+.
+The compilation needs needs GCC 12+.
 
-To install autotools
 ```bash
-sudo apt install autoconf automake libtool
+sudo apt install ninja-build autoconf automake libtool nasm
 ```
 
 ```bash
@@ -229,7 +228,7 @@ sudo apt install autoconf automake libtool
 
 ## macOS
 
-Compilations need a proper XCode installed for macOS SDK 12.0
+The compilation needs a proper XCode installed for macOS SDK 12.0
 
 To install brew (https://brew.sh/)
 ```bash
@@ -238,7 +237,7 @@ To install brew (https://brew.sh/)
 
 To install autotools
 ```bash
-brew install samurai autoconf automake libtool
+brew install samurai autoconf automake libtool nasm
 ```
 
 For macOS based on 'Apple Silicon CPU':
@@ -259,7 +258,7 @@ NOTE: The minimum SDK is set to 12.0 here but can be changed.
 
 ## Windows
 
-Compilations need a Visual Studio 2022 and NASM from:
+The compilation needs Visual Studio 2022 and NASM from:
 https://www.nasm.us/pub/nasm/releasebuilds/?C=M;O=D
 
 NOTE: Libraries for Windows are separated between the static "MultiThreaded, MultiThreadedDebug" (\MT, \MTd) and 
