@@ -148,7 +148,7 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Notes: There is no compilation here, this is just some headers for libzmq.
 
 ## openal-soft 
-[master, dc7d7054a5b4f3bec1dc23a42fd616a0847af948]
+[master, 25fb65546d8470e3a43e5c7aaaa71453477d2e2b]
 
 - URL: https://github.com/kcat/openal-soft.git
 - Version: 1.24.3
