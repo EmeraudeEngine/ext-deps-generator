@@ -54,6 +54,14 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Dependencies: None
 - Usage: Common cryptographic library for C++.
 
+## fastgltf
+[v0.9.x, 0d1b67a28c4950ea2deb796702006dcbe31e02b3]
+
+- URL: https://github.com/spnda/fastgltf.git
+- Version: 0.9.0
+- Dependencies: None
+- Usage: GLTF 2.0 file parser.
+
 ## freetype 
 [master, 42608f77f20749dd6ddc9e0536788eaad70ea4b5]
 
@@ -78,6 +86,14 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Dependencies: None
 - Usage: Fetch system capabilities.
 - Notes: Linux and macOS versions are using autotools instead of cmake.
+
+## jsoncpp
+[master, b511d9e64956db998b74909df112ac8c8f41d6ff]
+
+- URL: https://github.com/open-source-parsers/jsoncpp.git
+- Version: 1.9.6~
+- Dependencies: None
+- Usage: JSON parser.
 
 ## lib3mf 
 [3dJan/LinuxConfigAndBuildFixes, 4969189d2039600897fc7a162b0712414a445fe2]
@@ -147,6 +163,14 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Usage: C++ wrapper for libzmq.
 - Notes: There is no compilation here, this is just some headers for libzmq.
 
+## lunasvg
+[master, 27d24820d84fefb48c8ef9b6f7850d2206e80fef]
+
+- URL: https://github.com/sammycage/lunasvg
+- Version: 3.5.0~
+- Dependencies: None
+- Usage: Image format library.
+
 ## openal-soft 
 [master, d3875f333fb6abe2f39d82caca329414871ae53b]
 
@@ -201,7 +225,6 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 
 # Upcoming libraries
 
-- libsvg (https://github.com/ravhed/libsvg.git)
 - OCCT (Open Cascade) (https://github.com/Open-Cascade-SAS/OCCT.git)
 
 

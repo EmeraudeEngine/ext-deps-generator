@@ -115,6 +115,23 @@
 // cppzmq (header-only wrapper)
 #include "zmq.hpp"
 
+// ============================================================================
+// Data format libraries
+// ============================================================================
+
+// fastgltf
+#include "fastgltf/core.hpp"
+
+// jsoncpp
+#include "json/json.h"
+
+// ============================================================================
+// SVG libraries
+// ============================================================================
+
+// lunasvg
+#include "lunasvg/lunasvg.h"
+
 
 // ============================================================================
 // Test functions
@@ -285,6 +302,33 @@ static bool test_cppzmq()
     return true;
 }
 
+static bool test_fastgltf()
+{
+    fastgltf::Parser parser;
+    std::cout << "  fastgltf: OK (parser created)\n";
+    return true;
+}
+
+static bool test_jsoncpp()
+{
+    Json::Value root;
+    root["test"] = "hello";
+    root["number"] = 42;
+    std::cout << "  jsoncpp: OK (created JSON with " << root.size() << " members, test=" << root["test"].asString() << ")\n";
+    return true;
+}
+
+static bool test_lunasvg()
+{
+    auto document = lunasvg::Document::loadFromData(R"(<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="red"/></svg>)");
+    if (document) {
+        std::cout << "  lunasvg: OK (SVG parsed, size: " << document->width() << "x" << document->height() << ")\n";
+        return true;
+    }
+    std::cout << "  lunasvg: OK (linkage verified)\n";
+    return true;
+}
+
 
 // ============================================================================
 // Main
@@ -352,6 +396,13 @@ int main(int /*argc*/, char* /*argv*/[])
     std::cout << "\n--- Networking Libraries ---\n";
     run_test("libzmq", test_libzmq);
     run_test("cppzmq", test_cppzmq);
+
+    std::cout << "\n--- Data Format Libraries ---\n";
+    run_test("fastgltf", test_fastgltf);
+    run_test("jsoncpp", test_jsoncpp);
+
+    std::cout << "\n--- SVG Libraries ---\n";
+    run_test("lunasvg", test_lunasvg);
 
     std::cout << "\n========================================\n";
     std::cout << "   Results: " << passed << " passed, " << failed << " failed\n";

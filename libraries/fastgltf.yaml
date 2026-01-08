@@ -1,0 +1,9 @@
+name: fastgltf
+source_dir: repositories/fastgltf
+languages: [c, cxx]
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  FASTGLTF_ENABLE_TESTS: false
+  FASTGLTF_ENABLE_EXAMPLES: false
+  FASTGLTF_ENABLE_DOCS: false

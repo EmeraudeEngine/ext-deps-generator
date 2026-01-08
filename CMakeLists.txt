@@ -185,8 +185,15 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 # Compile definitions for static libraries
 ########################################################################
 
+# Static linking definitions (required for all platforms)
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    LUNASVG_BUILD_STATIC  # LunaSVG static linking
+    PLUTOVG_BUILD_STATIC  # PlutoVG static linking
+)
+
 if(WIN32)
     target_compile_definitions(${PROJECT_NAME} PRIVATE
+        NOMINMAX            # Prevent windows.h from defining min/max macros
         LZMA_API_STATIC     # xz/lzma static linking
         AL_LIBTYPE_STATIC   # OpenAL static linking
         ZMQ_STATIC          # ZeroMQ static linking
@@ -269,6 +276,10 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Clipper2
     # Networking
     ${ZMQ_LIB}
+    # Data formats
+    fastgltf jsoncpp
+    # SVG rendering (lunasvg depends on plutovg)
+    lunasvg plutovg
 )
 
 ########################################################################
@@ -281,6 +292,8 @@ if(APPLE)
     find_library(FRAMEWORK_AUDIOTOOLBOX AudioToolbox REQUIRED)
     find_library(FRAMEWORK_AUDIOUNIT AudioUnit REQUIRED)
     find_library(FRAMEWORK_IOKIT IOKit REQUIRED)
+    find_library(FRAMEWORK_COREGRAPHICS CoreGraphics REQUIRED)
+    find_library(FRAMEWORK_CORETEXT CoreText REQUIRED)
 
     target_link_libraries(${PROJECT_NAME} PRIVATE
         ${FRAMEWORK_COREFOUNDATION}
@@ -288,6 +301,8 @@ if(APPLE)
         ${FRAMEWORK_AUDIOTOOLBOX}
         ${FRAMEWORK_AUDIOUNIT}
         ${FRAMEWORK_IOKIT}
+        ${FRAMEWORK_COREGRAPHICS}
+        ${FRAMEWORK_CORETEXT}
     )
 
 elseif(WIN32)

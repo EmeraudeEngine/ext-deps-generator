@@ -1,0 +1,8 @@
+name: lunasvg
+source_dir: repositories/lunasvg
+languages: [cxx]
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  LUNASVG_BUILD_EXAMPLES: false
+  USE_SYSTEM_PLUTOVG: false

@@ -1,0 +1,26 @@
+name: jsoncpp
+source_dir: repositories/jsoncpp
+languages: [cxx]
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  BUILD_STATIC_LIBS: true
+  BUILD_OBJECT_LIBS: false
+  JSONCPP_WITH_TESTS: false
+  JSONCPP_WITH_POST_BUILD_UNITTEST: false
+  JSONCPP_WITH_EXAMPLE: false
+  JSONCPP_WITH_PKGCONFIG_SUPPORT: false
+  JSONCPP_WITH_CMAKE_PACKAGE: true
+  CMAKE_CXX_STANDARD: 20
+
+platforms:
+  linux:
+    extra_cxx_flags: "-std=c++20"
+  mac:
+    extra_cxx_flags: "-std=c++20"
+  windows:
+    extra_cxx_flags: "/std:c++20"
+    runtime_MT:
+      JSONCPP_STATIC_WINDOWS_RUNTIME: true
+    runtime_MD:
+      JSONCPP_STATIC_WINDOWS_RUNTIME: false

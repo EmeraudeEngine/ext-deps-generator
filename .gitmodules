@@ -64,3 +64,12 @@
 [submodule "repositories/pthread-win32"]
 	path = repositories/pthread-win32
 	url = https://github.com/GerHobbelt/pthread-win32.git
+[submodule "repositories/jsoncpp"]
+	path = repositories/jsoncpp
+	url = https://github.com/open-source-parsers/jsoncpp.git
+[submodule "repositories/fastgltf"]
+	path = repositories/fastgltf
+	url = https://github.com/spnda/fastgltf.git
+[submodule "repositories/lunasvg"]
+	path = repositories/lunasvg
+	url = https://github.com/sammycage/lunasvg

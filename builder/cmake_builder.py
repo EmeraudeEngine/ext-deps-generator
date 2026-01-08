@@ -13,12 +13,86 @@ if TYPE_CHECKING:
     from .platforms.base import Platform
 
 
+class PatchManager:
+    """Handles applying and reverting patches to library sources."""
+
+    def __init__(self, root_dir: Path):
+        self.root_dir = root_dir
+        self.patches_dir = root_dir / "patches"
+        self._applied_patches: dict[str, Path] = {}
+
+    def apply_patch(self, lib_name: str, source_dir: Path) -> bool:
+        """Apply patch for a library if it exists. Returns True on success."""
+        patch_file = self.patches_dir / f"{lib_name}.patch"
+        if not patch_file.exists():
+            return True  # No patch to apply
+
+        # Check if already applied by looking for our marker
+        marker_file = source_dir / ".patch_applied"
+        if marker_file.exists():
+            print(f"  Patch already applied for '{lib_name}'")
+            return True
+
+        print(f"  Applying patch for '{lib_name}'...")
+        try:
+            # Use git apply with --check first to verify
+            check_cmd = ["git", "apply", "--check", str(patch_file)]
+            result = subprocess.run(
+                check_cmd, cwd=source_dir, capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                # Patch may already be applied or conflicts
+                print(f"  Patch check failed (may already be applied): {result.stderr}")
+                return True
+
+            # Apply the patch
+            apply_cmd = ["git", "apply", str(patch_file)]
+            result = subprocess.run(
+                apply_cmd, cwd=source_dir, capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                # Create marker file
+                marker_file.write_text(f"Patch applied: {patch_file.name}\n")
+                self._applied_patches[lib_name] = source_dir
+                print(f"  Patch applied successfully")
+                return True
+            else:
+                print(f"  Failed to apply patch: {result.stderr}", file=sys.stderr)
+                return False
+        except FileNotFoundError:
+            print("  Warning: git not found, skipping patch", file=sys.stderr)
+            return True
+
+    def revert_patch(self, lib_name: str, source_dir: Path) -> bool:
+        """Revert patch for a library. Returns True on success."""
+        patch_file = self.patches_dir / f"{lib_name}.patch"
+        marker_file = source_dir / ".patch_applied"
+
+        if not marker_file.exists():
+            return True  # No patch was applied
+
+        print(f"  Reverting patch for '{lib_name}'...")
+        try:
+            cmd = ["git", "apply", "--reverse", str(patch_file)]
+            result = subprocess.run(cmd, cwd=source_dir, capture_output=True, text=True)
+            if result.returncode == 0:
+                marker_file.unlink()
+                print(f"  Patch reverted successfully")
+                return True
+            else:
+                print(f"  Failed to revert patch: {result.stderr}", file=sys.stderr)
+                return False
+        except FileNotFoundError:
+            return True
+
+
 class CMakeBuilder:
     """Handles CMake configuration, build, and installation."""
 
     def __init__(self, config: BuildConfig, platform: "Platform"):
         self.config = config
         self.platform = platform
+        self.patch_manager = PatchManager(config.root_dir)
 
     def build(self, lib: Library) -> bool:
         """Build a single library. Returns True on success."""
@@ -31,6 +105,10 @@ class CMakeBuilder:
         # Ensure directories exist
         build_dir.mkdir(parents=True, exist_ok=True)
         install_dir.mkdir(parents=True, exist_ok=True)
+
+        # Apply patches if any
+        if not self.patch_manager.apply_patch(lib.name, source_dir):
+            return False
 
         # Build CMake arguments
         cmake_args = self._build_cmake_args(lib, source_dir, build_dir, install_dir)

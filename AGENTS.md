@@ -9,7 +9,7 @@ Cross-platform build system for external C/C++ dependencies. Generates static li
 build.py                    # Main entry point
 builder/
   config.py                 # BuildConfig, Library, LibraryRegistry classes
-  cmake_builder.py          # CMake build orchestration
+  cmake_builder.py          # CMake build orchestration + PatchManager
   autotools_builder.py      # Autotools build orchestration (Linux/macOS)
   platforms/
     base.py                 # Abstract Platform class
@@ -17,6 +17,7 @@ builder/
     linux.py                # Linux-specific
     macos.py                # macOS-specific
 libraries/*.yaml            # Library configurations
+patches/                    # Git patches applied before build (see Patch System)
 repositories/               # Git submodules (library sources)
 output/                     # Built libraries (per-config subdirs)
 builds/                     # Build intermediates
@@ -60,6 +61,24 @@ After each library build, `dumpbin /directives` validates .lib files:
 
 Build fails immediately if wrong CRT detected.
 
+### Patch System
+Some libraries need modifications to build correctly (e.g., forced C++ standard). Instead of forking, use the patch system:
+
+1. Create `patches/{libname}.patch` (standard git diff format)
+2. The `PatchManager` automatically applies it before CMake configure
+3. A `.patch_applied` marker in the source dir prevents re-applying
+4. Submodules stay clean (patches are applied at build time)
+
+**Example**: `patches/jsoncpp.patch` allows overriding `CMAKE_CXX_STANDARD` (jsoncpp forces C++11, but headers expose `std::string_view` requiring C++17+).
+
+**Creating a patch**:
+```bash
+cd repositories/libname
+# Make changes
+git diff > ../../patches/libname.patch
+git checkout .  # Revert changes
+```
+
 ## CLI Usage
 ```bash
 python build.py                              # Build all
@@ -82,3 +101,4 @@ Builds all dependencies then links a test executable. Requires:
 2. **Missing Windows system libs**: Add to CMakeLists.txt (e.g., `usp10`, `dwrite`, `rpcrt4` for harfbuzz).
 3. **Static linking defines**: Add compile definitions like `LZMA_API_STATIC`, `ZMQ_STATIC`, `AL_LIBTYPE_STATIC`.
 4. **Library name mismatch**: Windows .lib names differ from Unix (e.g., `libpng16_static.lib` vs `png16`).
+5. **C++ ABI mismatch**: Library forces old C++ standard but headers use newer features (e.g., `std::string_view`). Use `CMAKE_CXX_STANDARD` in YAML + patch if library overrides it.
