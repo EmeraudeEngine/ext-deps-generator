@@ -2,6 +2,7 @@
 macOS platform configuration.
 """
 
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -13,6 +14,8 @@ if TYPE_CHECKING:
 
 class MacOSPlatform(Platform):
     """macOS-specific build configuration."""
+
+    _validated_libs: set[str] = set()  # Track already validated .a files
 
     @property
     def name(self) -> str:
@@ -29,12 +32,16 @@ class MacOSPlatform(Platform):
         }
 
     def get_c_flags(self, config: "BuildConfig") -> str:
-        """macOS version min and position-independent code."""
-        return f"-mmacosx-version-min={config.macos_sdk} -fPIC"
+        """macOS architecture, version min, and position-independent code."""
+        return f"-arch {config.arch} -mmacosx-version-min={config.macos_sdk} -fPIC"
 
     def get_cxx_flags(self, config: "BuildConfig") -> str:
-        """macOS version min and position-independent code."""
-        return f"-mmacosx-version-min={config.macos_sdk} -fPIC"
+        """macOS architecture, version min, and position-independent code."""
+        return f"-arch {config.arch} -mmacosx-version-min={config.macos_sdk} -fPIC"
+
+    def get_linker_flags(self, config: "BuildConfig") -> str:
+        """macOS linker flags for cross-compilation."""
+        return f"-arch {config.arch}"
 
     def post_install(
         self,
@@ -45,3 +52,66 @@ class MacOSPlatform(Platform):
     ) -> None:
         """No special post-install actions needed on macOS."""
         pass
+
+    def validate_architecture(
+        self, config: "BuildConfig", install_dir: Path
+    ) -> tuple[bool, list[str]]:
+        """Validate that all .a files have the correct architecture.
+
+        Uses 'lipo -archs' to check each static library.
+        Only validates new files that haven't been checked yet.
+        Returns (success, error_messages).
+        """
+        lib_dir = install_dir / "lib"
+        if not lib_dir.exists():
+            return True, []
+
+        all_lib_files = list(lib_dir.glob("*.a"))
+        if not all_lib_files:
+            return True, []
+
+        # Filter to only new files not yet validated
+        new_lib_files = [
+            f for f in all_lib_files
+            if str(f) not in MacOSPlatform._validated_libs
+        ]
+
+        if not new_lib_files:
+            return True, []
+
+        expected_arch = config.arch
+        errors: list[str] = []
+
+        print(f"\n{'=' * 20} Validating architecture (expected: {expected_arch}) {'=' * 20}\n")
+
+        for lib_file in new_lib_files:
+            try:
+                result = subprocess.run(
+                    ["lipo", "-archs", str(lib_file)],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+
+                if result.returncode != 0:
+                    print(f"  Warning: lipo failed for {lib_file.name}: {result.stderr.strip()}")
+                    continue
+
+                archs = result.stdout.strip().split()
+
+                if expected_arch not in archs:
+                    error = f"{lib_file.name}: found {', '.join(archs)} (expected {expected_arch})"
+                    errors.append(error)
+                    print(f"  FAIL: {error}")
+                else:
+                    # Mark as validated only if successful
+                    MacOSPlatform._validated_libs.add(str(lib_file))
+                    print(f"  OK: {lib_file.name} -> {', '.join(archs)}")
+
+            except subprocess.TimeoutExpired:
+                print(f"  Warning: lipo timeout for {lib_file.name}")
+                continue
+            except FileNotFoundError:
+                return False, ["lipo command not found. This should not happen on macOS."]
+
+        return len(errors) == 0, errors

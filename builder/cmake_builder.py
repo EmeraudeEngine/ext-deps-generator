@@ -140,6 +140,15 @@ class CMakeBuilder:
                     print(f"  - {error}", file=sys.stderr)
                 return False
 
+        # Architecture validation (macOS only)
+        if hasattr(self.platform, "validate_architecture"):
+            success, errors = self.platform.validate_architecture(self.config, install_dir)
+            if not success:
+                print(f"\nArchitecture validation failed for '{lib.name}':", file=sys.stderr)
+                for error in errors:
+                    print(f"  - {error}", file=sys.stderr)
+                return False
+
         print(f"\n{'=' * 20} Success! {'=' * 20}\n")
         return True
 

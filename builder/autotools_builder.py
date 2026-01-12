@@ -3,6 +3,7 @@ Autotools build orchestration for libraries like hwloc.
 """
 
 import os
+import platform as platform_module
 import subprocess
 import sys
 from pathlib import Path
@@ -12,6 +13,14 @@ from .config import BuildConfig, Library
 
 if TYPE_CHECKING:
     from .platforms.base import Platform
+
+
+def _get_host_arch() -> str:
+    """Get the current host architecture."""
+    machine = platform_module.machine()
+    if machine in ("arm64", "aarch64"):
+        return "arm64"
+    return "x86_64"
 
 
 class AutotoolsBuilder:
@@ -61,6 +70,15 @@ class AutotoolsBuilder:
         if not self._run_make_install(build_dir):
             return False
 
+        # Architecture validation (macOS only)
+        if hasattr(self.platform, "validate_architecture"):
+            success, errors = self.platform.validate_architecture(self.config, install_dir)
+            if not success:
+                print(f"\nArchitecture validation failed for '{lib.name}':", file=sys.stderr)
+                for error in errors:
+                    print(f"  - {error}", file=sys.stderr)
+                return False
+
         print(f"\n{'=' * 20} Success! {'=' * 20}\n")
         return True
 
@@ -85,6 +103,16 @@ class AutotoolsBuilder:
 
         args = [str(configure_script), f"--prefix={install_dir}"]
 
+        # Add host/build triplets for cross-compilation on macOS
+        if self.config.platform_name == "macos":
+            host_arch = _get_host_arch()
+            target_arch = self.config.arch
+            if host_arch != target_arch:
+                # Cross-compiling: specify build and host triplets
+                args.append(f"--build={host_arch}-apple-darwin")
+                args.append(f"--host={target_arch}-apple-darwin")
+                print(f"  Cross-compiling: {host_arch} -> {target_arch}")
+
         # Add options
         for key, value in options.items():
             if isinstance(value, bool):
@@ -93,14 +121,14 @@ class AutotoolsBuilder:
             else:
                 args.append(f"--{key.replace('_', '-')}={value}")
 
-        return self._run_command(args, cwd=build_dir)
+        # Set environment for cross-compilation
+        env = self._get_build_env()
+        return self._run_command(args, cwd=build_dir, env=env)
 
     def _run_make(self, build_dir: Path) -> bool:
         """Run make with appropriate flags."""
-        cflags = self._get_cflags()
-        env = os.environ.copy()
-
-        cmd = ["make", f"CFLAGS={cflags}", "-j"]
+        env = self._get_build_env()
+        cmd = ["make", "-j"]
         return self._run_command(cmd, cwd=build_dir, env=env)
 
     def _run_make_install(self, build_dir: Path) -> bool:
@@ -111,8 +139,11 @@ class AutotoolsBuilder:
         """Get CFLAGS based on platform and build type."""
         flags = ["-fPIC"]
 
-        if self.config.platform_name == "macos" and self.config.macos_sdk:
-            flags.append(f"-mmacosx-version-min={self.config.macos_sdk}")
+        if self.config.platform_name == "macos":
+            # Add architecture flag for cross-compilation support
+            flags.append(f"-arch {self.config.arch}")
+            if self.config.macos_sdk:
+                flags.append(f"-mmacosx-version-min={self.config.macos_sdk}")
 
         if self.config.build_type == "Release":
             flags.append("-O2")
@@ -120,6 +151,31 @@ class AutotoolsBuilder:
             flags.extend(["-g3", "-O0"])
 
         return " ".join(flags)
+
+    def _get_ldflags(self) -> str:
+        """Get LDFLAGS based on platform."""
+        flags = []
+
+        if self.config.platform_name == "macos":
+            # Add architecture flag for cross-compilation support
+            flags.append(f"-arch {self.config.arch}")
+
+        return " ".join(flags)
+
+    def _get_build_env(self) -> dict:
+        """Get environment variables for the build."""
+        env = os.environ.copy()
+
+        cflags = self._get_cflags()
+        ldflags = self._get_ldflags()
+
+        if cflags:
+            env["CFLAGS"] = cflags
+            env["CXXFLAGS"] = cflags
+        if ldflags:
+            env["LDFLAGS"] = ldflags
+
+        return env
 
     def _run_command(
         self,
