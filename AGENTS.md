@@ -11,6 +11,7 @@ builder/
   config.py                 # BuildConfig, Library, LibraryRegistry classes
   cmake_builder.py          # CMake build orchestration + PatchManager
   autotools_builder.py      # Autotools build orchestration (Linux/macOS)
+  msys2_builder.py          # MSYS2 build orchestration (Windows, for libvpx)
   platforms/
     base.py                 # Abstract Platform class
     windows.py              # Windows-specific (MSVC flags, CRT validation)
@@ -24,6 +25,30 @@ builds/                     # Build intermediates
 CMakeLists.txt              # Test project to validate all libs link correctly
 ```
 
+## Prerequisites
+
+### All Platforms
+- Python 3.10+
+- CMake 3.20+
+- Git (for submodules and patch system)
+
+### Windows
+- Visual Studio 2022 (MSVC v143 toolchain)
+- MSYS2 (required for building libvpx — provides bash/make for its configure script)
+  - Install from https://www.msys2.org/
+  - Run `pacman -S make` inside MSYS2 to install make
+  - NASM recommended for x86_64 assembly optimizations (`pacman -S nasm` or install via Windows PATH)
+  - The MSYS2 `bash.exe` and `make` must be accessible (used to run libvpx's configure/make targeting MSVC)
+  - Set `MSYS2_PATH` environment variable if MSYS2 is not installed at `C:\msys64`
+
+### macOS
+- Xcode Command Line Tools
+- Ninja build system
+
+### Linux
+- GCC or Clang toolchain
+- Ninja build system
+
 ## Key Concepts
 
 ### Build Configuration String
@@ -34,7 +59,7 @@ CMakeLists.txt              # Test project to validate all libs link correctly
 ```yaml
 name: libname
 source_dir: repositories/libname      # Can be overridden per-platform
-build_system: cmake                   # or autotools
+build_system: cmake                   # or autotools or msys2
 languages: [c, cxx]
 depends_on: [zlib, brotli]
 cmake_options:
@@ -78,6 +103,14 @@ cd repositories/libname
 git diff > ../../patches/libname.patch
 git checkout .  # Revert changes
 ```
+
+### MSYS2 Builder (Windows)
+For libraries like libvpx that use their own configure/make system (not CMake, not standard autotools), the `msys2` build system runs the configure script via MSYS2 bash targeting MSVC:
+- Configure uses `--target=x86_64-win64-vs17` to generate `.vcxproj` files
+- `make` invokes `msbuild.exe` internally (requires Windows PATH to be preserved)
+- `--enable-static-msvcrt` is passed for MT runtime builds
+- Post-install flattens `lib/x64/` subdirectories to `lib/` for consistency
+- CRT validation runs after install
 
 ## CLI Usage
 ```bash

@@ -31,8 +31,9 @@ order:
   # Networking
   - libzmq
 
-  # Image format
+  # Image/Video format
   - libwebp
+  - libvpx
 
   # Security
   - cryptopp-cmake

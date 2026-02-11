@@ -1,0 +1,32 @@
+name: libvpx
+source_dir: repositories/libvpx
+
+# libvpx uses its own configure/make system (not autotools, but compatible)
+build_system: autotools
+languages: [c]
+
+autotools_options:
+  enable_pic: true
+  disable_examples: true
+  disable_tools: true
+  disable_docs: true
+  disable_install_bins: true
+  disable_unit_tests: true
+
+platforms:
+  macos:
+    # Clang 16+ (macOS Tahoe) treats implicit function declarations as errors
+    extra_c_flags: "-Wno-error=implicit-function-declaration"
+    # libvpx uses --target instead of standard --build/--host for cross-compilation
+    cross_compile_targets:
+      x86_64: x86_64-darwin20-gcc
+      arm64: arm64-darwin20-gcc
+  windows:
+    # On Windows, libvpx's configure/make needs MSYS2 bash and targets MSVC
+    build_system: msys2
+    autotools_options:
+      disable_examples: true
+      disable_tools: true
+      disable_docs: true
+      disable_install_bins: true
+      disable_unit_tests: true

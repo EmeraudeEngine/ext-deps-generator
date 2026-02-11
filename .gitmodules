@@ -73,3 +73,6 @@
 [submodule "repositories/lunasvg"]
 	path = repositories/lunasvg
 	url = https://github.com/sammycage/lunasvg
+[submodule "repositories/libvpx"]
+	path = repositories/libvpx
+	url = https://github.com/webmproject/libvpx.git

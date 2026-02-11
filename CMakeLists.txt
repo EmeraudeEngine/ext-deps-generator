@@ -237,6 +237,20 @@ if(WIN32)
     else()
         set(ZMQ_LIB "libzmq-v143-mt-s-4_3_6")
     endif()
+    # libvpx: library name depends on runtime (MT/MD) and build type
+    if(RUNTIME_LIB STREQUAL "MT")
+        if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+            set(VPX_LIB "vpxmtd")
+        else()
+            set(VPX_LIB "vpxmt")
+        endif()
+    else()
+        if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+            set(VPX_LIB "vpxmdd")
+        else()
+            set(VPX_LIB "vpxmd")
+        endif()
+    endif()
 else()
     # Unix library names
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -254,6 +268,7 @@ else()
     set(ZLIB_LIB "z")
     set(ZSTD_LIB "zstd")
     set(ZMQ_LIB "zmq")
+    set(VPX_LIB "vpx")
 endif()
 
 # Use library names only - CMake won't validate existence at configure time
@@ -262,6 +277,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${FREETYPE_LIB} harfbuzz
     # Images (png depends on zlib)
     ${PNG_LIB} ${JPEG_LIB} ${TURBOJPEG_LIB} ${WEBP_LIB} ${SHARPYUV_LIB}
+    # Video
+    ${VPX_LIB}
     # Archive (zip depends on zlib, bzip2, lzma, zstd)
     zip
     # Audio

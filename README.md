@@ -128,7 +128,16 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Dependencies: FFTW3 library (optional, but slower lib)
 - Usage: Audio resampler library.
 
-## libwebp 
+## libvpx
+[v1.16.0, 1024874c5919305883187e2953de8fcb4c3d7fa6]
+
+- URL: https://github.com/webmproject/libvpx.git
+- Version: 1.16.0
+- Dependencies: None
+- Usage: VP8/VP9 video codec library.
+- Notes: Linux and macOS only (configure script requires Cygwin/MSYS2 on Windows).
+
+## libwebp
 [1.6.0, 991170bbab3e6afc74666d124f3f1dc7be942cd0]
 
 - URL: https://github.com/webmproject/libwebp.git
@@ -327,16 +336,16 @@ python build.py --list                     # Linux/Windows
 
 ```bash
 # Linux
-python build.py --arch x86_64 --build-type Release
-python build.py --arch x86_64 --build-type Debug
+python3 build.py --arch x86_64 --build-type Release
+python3 build.py --arch x86_64 --build-type Debug
 
 # macOS (Apple Silicon)
-python build.py --macos-sdk 12.0 --arch arm64 --build-type Release
-python build.py --macos-sdk 12.0 --arch arm64 --build-type Debug
+python3 build.py --macos-sdk 12.0 --arch arm64 --build-type Release
+python3 build.py --macos-sdk 12.0 --arch arm64 --build-type Debug
 
 # macOS (Intel)
-python build.py --macos-sdk 12.0 --arch x86_64 --build-type Release
-python build.py --macos-sdk 12.0 --arch x86_64 --build-type Debug
+python3 build.py --macos-sdk 12.0 --arch x86_64 --build-type Release
+python3 build.py --macos-sdk 12.0 --arch x86_64 --build-type Debug
 
 # Windows (DLL runtime)
 python build.py --arch x86_64 --build-type Release --runtime-lib MD
