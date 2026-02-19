@@ -2,6 +2,7 @@
 macOS platform configuration.
 """
 
+import platform as platform_module
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -10,6 +11,14 @@ from .base import Platform
 
 if TYPE_CHECKING:
     from ..config import BuildConfig, Library
+
+
+def _get_host_arch() -> str:
+    """Get the current host architecture."""
+    machine = platform_module.machine()
+    if machine in ("arm64", "aarch64"):
+        return "arm64"
+    return "x86_64"
 
 
 class MacOSPlatform(Platform):
@@ -25,11 +34,28 @@ class MacOSPlatform(Platform):
         return "Ninja"
 
     def get_platform_cmake_options(self, config: "BuildConfig") -> dict:
-        """macOS requires architecture and deployment target settings."""
-        return {
+        """macOS requires architecture and deployment target settings.
+
+        CMAKE_SYSTEM_PROCESSOR is critical for cross-compilation: without it,
+        CMake auto-detects the host architecture. Libraries like cpu_features
+        use this variable to decide which CPU detection logic to compile.
+        Without it, cross-compiling from ARM to x86_64 produces x86_64 binaries
+        with ARM internal logic.
+
+        CMAKE_SYSTEM_NAME is set when cross-compiling to put CMake in official
+        cross-compilation mode (CMAKE_CROSSCOMPILING=TRUE).
+        """
+        options = {
             "CMAKE_OSX_ARCHITECTURES": config.arch,
             "CMAKE_OSX_DEPLOYMENT_TARGET": config.macos_sdk,
+            "CMAKE_SYSTEM_PROCESSOR": config.arch,
         }
+
+        host_arch = _get_host_arch()
+        if host_arch != config.arch:
+            options["CMAKE_SYSTEM_NAME"] = "Darwin"
+
+        return options
 
     def get_c_flags(self, config: "BuildConfig") -> str:
         """macOS architecture, version min, and position-independent code."""

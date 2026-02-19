@@ -1,0 +1,30 @@
+diff --git a/build/make/Makefile b/build/make/Makefile
+index 39dff825b..a2a121572 100644
+--- a/build/make/Makefile
++++ b/build/make/Makefile
+@@ -305,14 +305,22 @@ $(DIST_DIR)/$(1): $(2)
+ 	$(qexec)cp -p $$< $$@
+ endef
+ 
++# On macOS, use libtool -static instead of ar for creating static archives.
++# macOS ar creates fat Mach-O archives from cross-arch objects that it then
++# cannot update, breaking cross-compilation (e.g., ARM host -> x86_64 target).
++ifeq ($(shell uname -s),Darwin)
++define archive_template
++$(1):
++	$(if $(quiet),@echo "    [AR] $$@")
++	$(qexec)/usr/bin/libtool -static -o $$@ $$^
++endef
++else
+ define archive_template
+-# Not using a pattern rule here because we don't want to generate empty
+-# archives when they are listed as a dependency in files not responsible
+-# for creating them.
+ $(1):
+ 	$(if $(quiet),@echo "    [AR] $$@")
+ 	$(qexec)$$(AR) $$(ARFLAGS) $$@ $$^
+ endef
++endif
+ 
+ # Don't use -Wl,-z,defs with Clang's sanitizers.
+ #

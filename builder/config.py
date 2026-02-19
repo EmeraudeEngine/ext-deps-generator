@@ -84,9 +84,10 @@ class Library:
 
     name: str
     source_dir: str
-    build_system: str = "cmake"  # cmake or autotools
+    build_system: str = "cmake"  # cmake, autotools, msys2, or meson
     cmake_options: dict = field(default_factory=dict)
     autotools_options: dict = field(default_factory=dict)
+    meson_options: dict = field(default_factory=dict)
     platforms: dict = field(default_factory=dict)
     depends_on: list[str] = field(default_factory=list)
     languages: list[str] = field(default_factory=lambda: ["c"])
@@ -105,6 +106,7 @@ class Library:
             build_system=data.get("build_system", "cmake"),
             cmake_options=data.get("cmake_options", {}),
             autotools_options=data.get("autotools_options", {}),
+            meson_options=data.get("meson_options", {}),
             platforms=data.get("platforms", {}),
             depends_on=data.get("depends_on", []),
             languages=data.get("languages", ["c"]),
@@ -134,6 +136,22 @@ class Library:
                 runtime_key = f"runtime_{runtime_lib}"
                 runtime_opts = platform_config.get(runtime_key, {})
                 options.update(runtime_opts)
+
+        return options
+
+    def get_meson_options(self, platform_name: str) -> dict:
+        """Get merged Meson options for a specific platform.
+
+        Args:
+            platform_name: The target platform (linux, macos, windows)
+        """
+        options = dict(self.meson_options)
+
+        # Merge platform-specific options
+        if platform_name in self.platforms:
+            platform_config = self.platforms[platform_name]
+            platform_opts = platform_config.get("meson_options", {})
+            options.update(platform_opts)
 
         return options
 

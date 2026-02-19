@@ -22,6 +22,7 @@ from pathlib import Path
 from builder.config import BuildConfig, Library, LibraryRegistry
 from builder.cmake_builder import CMakeBuilder
 from builder.autotools_builder import AutotoolsBuilder
+from builder.meson_builder import MesonBuilder
 from builder.msys2_builder import Msys2Builder
 from builder.platforms import get_platform
 
@@ -248,6 +249,7 @@ def main() -> int:
     # Build libraries
     cmake_builder = CMakeBuilder(config, platform)
     autotools_builder = AutotoolsBuilder(config, platform)
+    meson_builder = MesonBuilder(config, platform)
     msys2_builder = Msys2Builder(config, platform)
     failed = []
 
@@ -256,6 +258,8 @@ def main() -> int:
         build_system = lib.get_build_system(config.platform_name)
         if build_system == "autotools":
             builder = autotools_builder
+        elif build_system == "meson":
+            builder = meson_builder
         elif build_system == "msys2":
             builder = msys2_builder
         else:
