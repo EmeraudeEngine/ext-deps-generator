@@ -142,8 +142,11 @@ class AutotoolsBuilder:
                     print(f"  Cross-compiling: {host_arch} -> {target_arch} (target: {cross_target})")
                 else:
                     # Standard autotools --build/--host triplets
-                    args.append(f"--build={host_arch}-apple-darwin")
-                    args.append(f"--host={target_arch}-apple-darwin")
+                    # Use aarch64 in triplets — old config.sub doesn't recognize arm64
+                    triplet_build = "aarch64" if host_arch == "arm64" else host_arch
+                    triplet_host = "aarch64" if target_arch == "arm64" else target_arch
+                    args.append(f"--build={triplet_build}-apple-darwin")
+                    args.append(f"--host={triplet_host}-apple-darwin")
                     print(f"  Cross-compiling: {host_arch} -> {target_arch}")
 
         # Add options

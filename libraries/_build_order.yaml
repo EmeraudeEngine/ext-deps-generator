@@ -27,6 +27,12 @@ order:
   # Audio
   - openal-soft
   - libsamplerate
+  - libogg
+  - opus
+  - libvorbis
+  - flac
+  - mpg123
+  - lame
 
   # Networking
   - libzmq
@@ -44,10 +50,29 @@ order:
   # Windows-only
   - pthread-win32
 
+  # Process control
+  - reproc
+
+  # Texture compression (BC7)
+  - bc7enc_rdo
+
+  # FBX parsing
+  - ufbx
+
+  # SPIR-V toolchain (build base before glslang)
+  - spirv-headers
+  - spirv-tools
+
   # ---- Libraries that depend on the above ----
+
+  # GLSL -> SPIR-V compiler (depends on spirv-tools)
+  - glslang
 
   # Audio metadata
   - taglib
+
+  # Audio I/O (depends on libogg, opus, libvorbis, flac, mpg123, lame)
+  - libsndfile
 
   # Image I/O
   - libpng

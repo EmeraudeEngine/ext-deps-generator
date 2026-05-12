@@ -25,6 +25,7 @@ from builder.autotools_builder import AutotoolsBuilder
 from builder.meson_builder import MesonBuilder
 from builder.msys2_builder import Msys2Builder
 from builder.platforms import get_platform
+from builder.tools_check import check_required_tools, report_missing_tools
 
 
 def parse_args() -> argparse.Namespace:
@@ -245,6 +246,12 @@ def main() -> int:
     if args.dry_run:
         print("Dry run - no builds performed.")
         return 0
+
+    # Verify required build tools are installed
+    missing_tools = check_required_tools(config.platform_name)
+    if missing_tools:
+        report_missing_tools(missing_tools)
+        return 1
 
     # Build libraries
     cmake_builder = CMakeBuilder(config, platform)

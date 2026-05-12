@@ -1,0 +1,18 @@
+name: reproc
+source_dir: repositories/reproc
+languages: [c, cxx]
+
+cmake_options:
+  REPROC++: true
+  REPROC_MULTITHREADED: true
+  REPROC_TEST: false
+  REPROC_EXAMPLES: false
+  REPROC_WARNINGS: false
+  REPROC_TIDY: false
+  REPROC_SANITIZERS: false
+  REPROC_WARNINGS_AS_ERRORS: false
+  REPROC_OBJECT_LIBRARIES: false
+  REPROC_INSTALL: true
+  REPROC_INSTALL_PKGCONFIG: true
+  BUILD_SHARED_LIBS: false
+  CMAKE_POSITION_INDEPENDENT_CODE: true

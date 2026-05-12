@@ -1,0 +1,7 @@
+name: mpg123
+source_dir: repositories/mpg123/ports/cmake
+languages: [c]
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  BUILD_LIBOUT123: false

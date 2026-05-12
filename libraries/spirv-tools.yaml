@@ -1,0 +1,21 @@
+name: spirv-tools
+source_dir: repositories/SPIRV-Tools
+languages: [c, cxx]
+
+depends_on:
+  - spirv-headers
+
+use_install_prefix_as_find_root: true
+
+cmake_options:
+  # SPIRV-Tools' external/CMakeLists.txt only uses SPIRV-Headers_SOURCE_DIR to
+  # derive the include path (${SPIRV_HEADER_DIR}/include). Pointing it at the
+  # install prefix where SPIRV-Headers was just installed makes spirv-headers
+  # available via ${INSTALL_PREFIX}/include without re-adding a subdirectory.
+  SPIRV-Headers_SOURCE_DIR: ${INSTALL_PREFIX}
+  SPIRV_SKIP_EXECUTABLES: true
+  SPIRV_SKIP_TESTS: true
+  SPIRV_WERROR: false
+  SPIRV_TOOLS_BUILD_STATIC: true
+  BUILD_SHARED_LIBS: false
+  CMAKE_POSITION_INDEPENDENT_CODE: true

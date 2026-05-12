@@ -1,0 +1,24 @@
+name: glslang
+source_dir: repositories/glslang
+languages: [c, cxx]
+
+depends_on:
+  - spirv-tools
+
+use_install_prefix_as_find_root: true
+
+cmake_options:
+  # Use the standalone SPIRV-Tools we built instead of looking under External/.
+  ALLOW_EXTERNAL_SPIRV_TOOLS: true
+  BUILD_EXTERNAL: false
+  ENABLE_SPIRV: true
+  ENABLE_OPT: true
+  ENABLE_HLSL: false
+  ENABLE_RTTI: false
+  ENABLE_EXCEPTIONS: false
+  ENABLE_GLSLANG_BINARIES: false
+  ENABLE_GLSLANG_JS: false
+  GLSLANG_TESTS: false
+  GLSLANG_ENABLE_INSTALL: true
+  BUILD_SHARED_LIBS: false
+  CMAKE_POSITION_INDEPENDENT_CODE: true

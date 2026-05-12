@@ -37,10 +37,11 @@ CMakeLists.txt              # Test project to validate all libs link correctly
 - Visual Studio 2022 (MSVC v143 toolchain)
 - MSYS2 (required for building libvpx — provides bash/make for its configure script)
   - Install from https://www.msys2.org/
-  - Run `pacman -S make` inside MSYS2 to install make
+  - Run `pacman -S make diffutils` inside MSYS2 to install required tools (libvpx's `configure` needs `diff`)
   - NASM recommended for x86_64 assembly optimizations (`pacman -S nasm` or install via Windows PATH)
   - The MSYS2 `bash.exe` and `make` must be accessible (used to run libvpx's configure/make targeting MSVC)
   - Set `MSYS2_PATH` environment variable if MSYS2 is not installed at `C:\msys64`
+- Meson and Ninja (required for meson-based libraries like harfbuzz): `pip install meson ninja` inside the project venv
 
 ### macOS
 - Xcode Command Line Tools
@@ -83,6 +84,22 @@ platforms:
       OPTION: value
 disabled_platforms: [windows]          # Skip on these platforms
 ```
+
+### Path tokens in `cmake_options` values
+
+String values inside `cmake_options` (top-level or platform-specific) are run through
+a simple token substitution by `CMakeBuilder` before being passed as `-DKEY=value`:
+
+| Token | Resolves to |
+|-------|-------------|
+| `${INSTALL_PREFIX}` | The install/output directory for the current build configuration (`output/<config>`) |
+| `${ROOT_DIR}` | The ext-deps-generator root directory |
+| `${SOURCE_DIR}` | The library's source directory (after `source_dir` resolution) |
+| `${BUILD_DIR}` | The library's build intermediate directory (`builds/<config>/<lib>`) |
+
+Use this when a library expects a path that depends on the build layout — e.g. `spirv-tools`
+needs `SPIRV-Headers_SOURCE_DIR=${INSTALL_PREFIX}` so it picks up the headers from the
+previously installed `spirv-headers` package without re-adding it as a CMake subdirectory.
 
 ### Windows CRT Validation
 After each library build, `dumpbin /directives` validates .lib files:
@@ -152,6 +169,9 @@ Builds all dependencies then links a test executable. Requires:
 
 ### `/build-library <name>`
 Builds a library for both macOS architectures (ARM64 + x86_64) in Release mode with `--no-deps`. Useful for quick validation after modifying a library config or patch.
+
+### `/check-releases`
+Runs `check_releases.py` to compare each submodule's pinned commit against upstream release tags. Read-only: reports which libraries have a newer stable tag, which are on a branch with a tag suggestion, and which have no tags upstream. Does not modify anything.
 
 ## Common Issues
 

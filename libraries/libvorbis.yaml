@@ -1,0 +1,13 @@
+name: libvorbis
+source_dir: repositories/libvorbis
+languages: [c]
+
+depends_on:
+  - libogg
+
+use_install_prefix_as_find_root: true
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  INSTALL_CMAKE_PACKAGE_MODULE: true
+  CMAKE_POLICY_VERSION_MINIMUM: "3.5"

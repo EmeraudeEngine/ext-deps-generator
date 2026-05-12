@@ -1,0 +1,11 @@
+name: ufbx
+source_dir: repositories/ufbx
+languages: [c]
+
+# Upstream ships only `ufbx.c` + `ufbx.h` (no CMakeLists.txt). The patch
+# adds a minimal CMakeLists.txt that builds a static library and installs
+# the header under include/ufbx/.
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  CMAKE_POSITION_INDEPENDENT_CODE: true

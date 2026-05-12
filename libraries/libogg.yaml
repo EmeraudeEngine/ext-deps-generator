@@ -1,0 +1,10 @@
+name: libogg
+source_dir: repositories/libogg
+languages: [c]
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  BUILD_TESTING: false
+  INSTALL_DOCS: false
+  INSTALL_PKG_CONFIG_MODULE: true
+  INSTALL_CMAKE_PACKAGE_MODULE: true

@@ -1,0 +1,12 @@
+name: bc7enc_rdo
+source_dir: repositories/bc7enc_rdo
+languages: [cxx]
+
+# The upstream CMakeLists targets the standalone `bc7enc` executable +
+# RDO tooling. The patch replaces it with a minimal static-library build
+# exposing only the BC7 encoder/decoder core (`bc7enc.cpp` + `bc7decomp.cpp`),
+# which is all downstream Vulkan engines consume.
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  CMAKE_POSITION_INDEPENDENT_CODE: true

@@ -1,0 +1,17 @@
+name: opus
+source_dir: repositories/opus
+languages: [c]
+
+cmake_options:
+  OPUS_BUILD_SHARED_LIBRARY: false
+  OPUS_BUILD_TESTING: false
+  OPUS_BUILD_PROGRAMS: false
+  OPUS_INSTALL_PKG_CONFIG_MODULE: true
+  OPUS_INSTALL_CMAKE_CONFIG_MODULE: true
+
+platforms:
+  windows:
+    runtime_MT:
+      OPUS_STATIC_RUNTIME: true
+    runtime_MD:
+      OPUS_STATIC_RUNTIME: false

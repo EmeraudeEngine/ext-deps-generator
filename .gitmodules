@@ -76,3 +76,42 @@
 [submodule "repositories/libvpx"]
 	path = repositories/libvpx
 	url = https://github.com/webmproject/libvpx.git
+[submodule "repositories/libogg"]
+	path = repositories/libogg
+	url = https://github.com/xiph/ogg.git
+[submodule "repositories/opus"]
+	path = repositories/opus
+	url = https://github.com/xiph/opus.git
+[submodule "repositories/libvorbis"]
+	path = repositories/libvorbis
+	url = https://github.com/xiph/vorbis.git
+[submodule "repositories/flac"]
+	path = repositories/flac
+	url = https://github.com/xiph/flac.git
+[submodule "repositories/mpg123"]
+	path = repositories/mpg123
+	url = https://github.com/madebr/mpg123.git
+[submodule "repositories/libsndfile"]
+	path = repositories/libsndfile
+	url = https://github.com/libsndfile/libsndfile.git
+[submodule "repositories/lame"]
+	path = repositories/lame
+	url = https://github.com/lameproject/lame.git
+[submodule "repositories/SPIRV-Headers"]
+	path = repositories/SPIRV-Headers
+	url = https://github.com/KhronosGroup/SPIRV-Headers.git
+[submodule "repositories/SPIRV-Tools"]
+	path = repositories/SPIRV-Tools
+	url = https://github.com/KhronosGroup/SPIRV-Tools.git
+[submodule "repositories/glslang"]
+	path = repositories/glslang
+	url = https://github.com/KhronosGroup/glslang.git
+[submodule "repositories/reproc"]
+	path = repositories/reproc
+	url = https://github.com/DaanDeMeyer/reproc.git
+[submodule "repositories/bc7enc_rdo"]
+	path = repositories/bc7enc_rdo
+	url = https://github.com/richgel999/bc7enc_rdo.git
+[submodule "repositories/ufbx"]
+	path = repositories/ufbx
+	url = https://github.com/ufbx/ufbx.git

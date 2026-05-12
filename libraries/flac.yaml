@@ -1,0 +1,22 @@
+name: flac
+source_dir: repositories/flac
+languages: [c, cxx]
+
+depends_on:
+  - libogg
+
+use_install_prefix_as_find_root: true
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  BUILD_CXXLIBS: false
+  BUILD_PROGRAMS: false
+  BUILD_EXAMPLES: false
+  BUILD_TESTING: false
+  BUILD_DOCS: false
+  INSTALL_MANPAGES: false
+  INSTALL_PKGCONFIG_MODULES: true
+  INSTALL_CMAKE_CONFIG_MODULE: true
+  WITH_OGG: true
+  WITH_FORTIFY_SOURCE: false
+  WITH_STACK_PROTECTOR: false

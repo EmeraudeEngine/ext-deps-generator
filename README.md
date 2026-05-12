@@ -15,12 +15,21 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 # Available libraries
 
 ## brotli 
-[master, ed738e842d2fbdf2d6459e39267a633c4a9b2f5d]
+[v1.2.0, 028fb5a23661f123017c060daa546b55cf4bde29]
 
 - URL: https://github.com/google/brotli.git
-- Version: 1.1.0
+- Version: 1.2.0
 - Dependencies: None
 - Usage: Lossless compression library (Huffman LZ77). Requested by Freetype.
+
+## bc7enc_rdo
+[master, dbe416d28a5530b4e8cc45b14bf034dc6b96bbde]
+
+- URL: https://github.com/richgel999/bc7enc_rdo.git
+- Version: master (no upstream releases)
+- Dependencies: None
+- Usage: BC7 texture block encoder/decoder. Required by engines doing GPU-side compressed texture upload.
+- Notes: Upstream targets a standalone `bc7enc` executable with RDO tooling. The patch replaces the CMakeLists with a minimal static-library build exposing only the core encoder/decoder (`bc7enc.cpp` + `bc7decomp.cpp`); the RDO optimizer and lodepng/utils helpers are not needed downstream and are excluded.
 
 ## bzip2 
 [master, 1ea1ac188ad4b9cb662e3f8314673c63df95a589]
@@ -31,10 +40,10 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Usage: Compression library.
 
 ## clipper2 
-[main, ef88ee97c0e759792e43a2b2d8072def6c9244e8]
+[Clipper2_2.0.1, 21ebba05db8894f0c7217ad35ea518080f324946]
 
 - URL: https://github.com/AngusJohnson/clipper2
-- Version: 1.5.4
+- Version: 2.0.1
 - Dependencies: None
 - Usage: A polygon clipping and offsetting library.
 
@@ -62,19 +71,36 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Dependencies: None
 - Usage: GLTF 2.0 file parser.
 
+## flac
+[1.5.0, 1507800de4b70e21be71f38caa0d9079d0bc6e45]
+
+- URL: https://github.com/xiph/flac.git
+- Version: 1.5.0
+- Dependencies: libogg
+- Usage: Free Lossless Audio Codec. Required by libsndfile.
+
 ## freetype 
-[master, 42608f77f20749dd6ddc9e0536788eaad70ea4b5]
+[VER-2-14-3, 0a0221a1347e2f1e07c395263540026e9a0aa7c7]
 
 - URL: https://gitlab.freedesktop.org/freetype/freetype.git
-- Version: 2.13.3
+- Version: 2.14.3
 - Dependencies: brotli, bzip2, harbuzz, png, zlib
 - Usage: Fonts files (.ttf, .tti, ...) library.
 
+## glslang
+[16.3.0, 275822a6261ee689aadb1da5f09a0ec2f058685c]
+
+- URL: https://github.com/KhronosGroup/glslang.git
+- Version: 16.3.0
+- Dependencies: spirv-tools (which itself depends on spirv-headers)
+- Usage: GLSL/HLSL front-end and SPIR-V code generator. Required to compile GLSL shaders to SPIR-V at runtime in Vulkan engines.
+- Notes: Built with `ALLOW_EXTERNAL_SPIRV_TOOLS=ON` and `BUILD_EXTERNAL=OFF` so the SPIR-V optimizer is consumed from the standalone spirv-tools package via `find_package` instead of glslang's bundled `update_glslang_sources.py` fetch. Commits of spirv-tools and spirv-headers are aligned with glslang's `known_good.json` to stay ABI-compatible.
+
 ## harfbuzz 
-[main, bf8929fbfb623703cf1522b372cab80002c17c95]
+[14.2.0, b0ffab42d473eb380ad0fcf42730e0f1868cbc97]
 
 - URL: https://github.com/harfbuzz/harfbuzz.git
-- Version: 11.5.0
+- Version: 14.2.0
 - Dependencies: None
 - Usage: Vector font library. Requested by Freetype
 
@@ -95,6 +121,15 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Dependencies: None
 - Usage: JSON parser.
 
+## lame
+[master, 1f5cc9487284d5950343aa5d4f70de433468070a]
+
+- URL: https://github.com/lameproject/lame.git
+- Version: 3.100
+- Dependencies: None
+- Usage: MP3 encoder. Required by libsndfile for MP3 write support.
+- Notes: No official git upstream (lame is on SourceForge in SVN). This mirror has no release tags, so we pin to a master SHA. libsndfile needs LAME 3.100+ (uses `lame_encode_buffer_interleaved_int`). Disabled on Windows: only old VS 2008 project files are provided.
+
 ## lib3mf 
 [3dJan/LinuxConfigAndBuildFixes, 4969189d2039600897fc7a162b0712414a445fe2]
 
@@ -105,18 +140,26 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Notes: This library fails to compile as static.
 
 ## libjpeg-turbo 
-[main, 4e151a4ad91001b3aa8c2ece2205c15f487ce320]
+[3.1.4.1, 9217719d3a58633923b096af4c1d50d304768a64]
 
 - URL: https://github.com/libjpeg-turbo/libjpeg-turbo.git
-- Version: 3.1.2
+- Version: 3.1.4.1
 - Dependencies: NASM compiler (optional, but slower lib)
 - Usage: Image format library.
 
+## libogg
+[v1.3.6, be05b13e98b048f0b5a0f5fa8ce514d56db5f822]
+
+- URL: https://github.com/xiph/ogg.git
+- Version: 1.3.6
+- Dependencies: None
+- Usage: Ogg container format. Required by libvorbis, flac, and libsndfile.
+
 ## libpng 
-[libpng16, 2b978915d82377df13fcbb1fb56660195ded868a]
+[v1.6.58, 3061454d980de7d53608f594194cfac722721d2a]
 
 - URL: https://github.com/glennrp/libpng.git
-- Version: 1.6.50
+- Version: 1.6.58
 - Dependencies: zlib
 - Usage: Image format library.
 
@@ -127,6 +170,23 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Version: 0.2.2~
 - Dependencies: FFTW3 library (optional, but slower lib)
 - Usage: Audio resampler library.
+
+## libsndfile
+[1.2.2, 72f6af15e8f85157bd622ed45b979025828b7001]
+
+- URL: https://github.com/libsndfile/libsndfile.git
+- Version: 1.2.2
+- Dependencies: libogg, libvorbis, flac, opus, mpg123, lame (lame disabled on Windows)
+- Usage: Audio file I/O library (WAV, FLAC, Ogg/Vorbis, Opus, MP3, etc.).
+- Notes: MP3 write support requires lame, so it is disabled on Windows.
+
+## libvorbis
+[v1.3.7, 0657aee69dec8508a0011f47f3b69d7538e9d262]
+
+- URL: https://github.com/xiph/vorbis.git
+- Version: 1.3.7
+- Dependencies: libogg
+- Usage: Vorbis audio codec. Required by libsndfile.
 
 ## libvpx
 [v1.16.0, 1024874c5919305883187e2953de8fcb4c3d7fa6]
@@ -180,6 +240,23 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Dependencies: None
 - Usage: Image format library.
 
+## mpg123
+[master, b18fd7c648aad2420cd49bbb948c91d53b4164b3]
+
+- URL: https://github.com/madebr/mpg123.git
+- Version: 1.33.6-dev
+- Dependencies: None
+- Usage: MP3 decoder. Required by libsndfile for MP3 read support.
+- Notes: Upstream is SourceForge SVN, this is a community git mirror with no release tags, so we pin to a master SHA. Built via the CMake port in `ports/cmake/`.
+
+## opus
+[v1.6.1, 22244de5a79bd1d6d623c32e72bf1954b56235be]
+
+- URL: https://github.com/xiph/opus.git
+- Version: 1.6.1
+- Dependencies: None
+- Usage: Opus audio codec. Required by libsndfile.
+
 ## openal-soft 
 [master, d3875f333fb6abe2f39d82caca329414871ae53b]
 
@@ -189,13 +266,48 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Dependencies: None
 - Usage: Audio API.
 
+## reproc
+[v14.2.7, 06034a7fca1ec46eddb4997f7764db89380c5216]
+
+- URL: https://github.com/DaanDeMeyer/reproc.git
+- Version: 14.2.7
+- Dependencies: None
+- Usage: Cross-platform process control library (C `reproc` + C++ `reproc++`). Both static libraries are built and installed.
+
+## spirv-headers
+[vulkan-sdk-1.4.350.0~, 1a22b167081842915a1c78a0b5b5a353a23284aa]
+
+- URL: https://github.com/KhronosGroup/SPIRV-Headers.git
+- Version: 1.5.5
+- Dependencies: None
+- Usage: SPIR-V header files (enums, opcodes). Consumed by spirv-tools.
+- Notes: Commit pinned to glslang 16.3.0's `known_good.json` to keep the SPIR-V toolchain coherent.
+
+## spirv-tools
+[v2026.2.rc2~, 2ec8457ab33d539b6f1fecc998360c0b8b05ed4f]
+
+- URL: https://github.com/KhronosGroup/SPIRV-Tools.git
+- Version: 2026.2.rc2
+- Dependencies: spirv-headers
+- Usage: SPIR-V parsing, validation, optimization and linking. Consumed by glslang's SPIR-V optimizer (`SPIRV-Tools-opt`).
+- Notes: Built with `SPIRV_TOOLS_BUILD_STATIC=ON` and `SPIRV-Headers_SOURCE_DIR=${INSTALL_PREFIX}` so the headers from the previously installed `spirv-headers` package are reused (no `add_subdirectory` of headers). Commit pinned to glslang 16.3.0's `known_good.json`.
+
 ## taglib 
-[master, 7d86716194777e0294453bfdc9dd170bd033e1f4]
+[v2.3, 1b94b93762636ebe5733180c3e825be4621e4c7f]
 
 - URL: https://github.com/taglib/taglib.git
-- Version: 2.1.1
+- Version: 2.3
 - Dependencies: zlib
 - Usage: Audio meta-data library.
+
+## ufbx
+[v0.21.3, 83bc7cf44f76bc8622de63b809a42b5d557cd733]
+
+- URL: https://github.com/ufbx/ufbx.git
+- Version: 0.21.3
+- Dependencies: None (links libm on Unix)
+- Usage: Single-translation-unit FBX 7.x parser. Used for skeletal mesh/animation import.
+- Notes: Upstream is header + single `.c`, no CMakeLists.txt. The patch adds a minimal one that builds a static library and installs `ufbx.h` under `include/ufbx/`.
 
 ## xz (LZMA) 
 [v5.8, 7c12726c51b2b7d77329dd72a29ecb1ec262b918]
@@ -206,10 +318,10 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Usage: Compression library.
 
 ## zlib 
-[master, 51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf]
+[v1.3.2, da607da739fa6047df13e66a2af6b8bec7c2a498]
 
 - URL: https://github.com/madler/zlib.git
-- Version: 1.3.1
+- Version: 1.3.2
 - Dependencies: None
 - Usage: Compression library.
 - Notes: This version builds the static and the shared libraries, beware when linking. An upcoming release will fix this with cmake options.
@@ -243,85 +355,66 @@ The repository uses a unified Python build system (`build.py`) that works on all
 The `builds/` directory will contain the compilation files.
 The `output/` directory will contain the final library files to ship.
 
-## Common requirements
+## Prerequisites
 
-All platforms need:
-- **CMake** 3.25.1+
-- **Python** 3.10+ with pyyaml
-- **Ninja** build system
-- **Autotools** (autoconf, automake, libtool) for hwloc
-
-## Python setup
+Every platform needs the same core toolchain: **Python 3.10+**, **CMake 3.25.1+**,
+**Ninja**, **Meson**, **Autotools** (autoconf, automake, libtool), and **NASM**
+(for libjpeg-turbo / libvpx assembly optimizations). What differs is the
+compiler and how you install everything.
 
 ### Linux (Debian/Ubuntu)
 
+GCC 12+ is required. For other distributions, install the equivalent packages.
+
 ```bash
-# Install Python and pip
-sudo apt install python3 python3-pip python3-venv
-
-# Create a virtual environment (recommended)
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install Python dependencies
-pip install -r requirements.txt
+sudo apt install build-essential python3 python3-pip python3-venv \
+                 cmake meson ninja-build autoconf automake libtool nasm
 ```
 
 ### macOS
 
-```bash
-# Python 3 is included with Xcode Command Line Tools
-# Or install via Homebrew
-brew install python3
-
-# Create a virtual environment (recommended)
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install Python dependencies
-pip install -r requirements.txt
-```
-
-### Windows
-
-```powershell
-# Download Python from https://www.python.org/downloads/
-# Make sure to check "Add Python to PATH" during installation
-
-# Create a virtual environment (recommended)
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-
-# Install Python dependencies
-pip install -r requirements.txt
-```
-
-## Platform-specific requirements
-
-### Linux
-
-GCC 12+ is required.
+Xcode Command Line Tools with macOS SDK 12.0+ is required.
 
 ```bash
-sudo apt install ninja-build autoconf automake libtool nasm
-```
-
-### macOS
-
-Xcode with macOS SDK 12.0+ is required.
-
-```bash
-# Install Homebrew (if not already installed)
+# Install Homebrew if not already installed (see https://brew.sh)
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# Install build tools
-brew install ninja autoconf automake libtool nasm
+brew install python3 cmake meson ninja autoconf automake libtool nasm
 ```
 
 ### Windows
 
-Visual Studio 2022 and NASM are required.
-- Download NASM from: https://www.nasm.us/pub/nasm/releasebuilds/?C=M;O=D
+Install each tool separately (no single package manager):
+
+- **Visual Studio 2022** with the MSVC v143 toolchain
+- **Python 3.10+** — https://www.python.org/downloads/ (check *Add Python to PATH*)
+- **CMake 3.25.1+** — https://cmake.org/download/
+- **Ninja** and **Meson** — via `pip install ninja meson` (after Python is installed)
+- **NASM** — https://www.nasm.us/pub/nasm/releasebuilds/?C=M;O=D
+- **MSYS2** (required to build libvpx) — https://www.msys2.org/
+  - After install, run `pacman -S make` inside MSYS2
+  - Set the `MSYS2_PATH` env var if MSYS2 is not at `C:\msys64`
+
+Autotools is not needed on Windows: the libraries that use it (hwloc, libvpx)
+fall back to alternate build paths there.
+
+## Python virtual environment
+
+Same steps on every platform — only the activation command changes:
+
+```bash
+# Linux / macOS
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+```powershell
+# Windows (PowerShell)
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
 
 ## Build commands
 

@@ -154,6 +154,10 @@ class MesonBuilder:
             f"--prefix={install_dir}",
             f"--buildtype={buildtype}",
             "--default-library=static",
+            # Force flat lib/ layout. Without this, Debian-flavored hosts make
+            # meson install into lib/<host-triplet>/ (e.g. lib/x86_64-linux-gnu),
+            # which diverges from the CMake builds and breaks downstream linking.
+            "--libdir=lib",
         ]
 
         # Cross-compilation file

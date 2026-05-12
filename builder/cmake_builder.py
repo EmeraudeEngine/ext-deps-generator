@@ -228,6 +228,18 @@ class CMakeBuilder:
             # Handle boolean values
             if isinstance(value, bool):
                 value = "On" if value else "Off"
+            # Path substitution: allow YAML to reference build-time paths.
+            # Supported tokens: ${INSTALL_PREFIX}, ${ROOT_DIR}, ${SOURCE_DIR}, ${BUILD_DIR}
+            # Use forward slashes (CMake convention) so backslash sequences like
+            # \U in C:\Users aren't reinterpreted as escape codes when CMake
+            # re-evaluates the value inside string contexts (add_custom_command, etc.).
+            if isinstance(value, str):
+                value = (
+                    value.replace("${INSTALL_PREFIX}", install_dir.as_posix())
+                    .replace("${ROOT_DIR}", self.config.root_dir.as_posix())
+                    .replace("${SOURCE_DIR}", source_dir.as_posix())
+                    .replace("${BUILD_DIR}", build_dir.as_posix())
+                )
             args.append(f"-D{key}={value}")
 
         return args

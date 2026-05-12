@@ -196,6 +196,10 @@ class Msys2Builder:
         env = os.environ.copy()
         # MSYSTEM=MSYS ensures we get the base MSYS2 environment
         env["MSYSTEM"] = "MSYS"
+        # Inherit the Windows PATH so tools installed outside MSYS2 (NASM,
+        # CMake, etc.) are visible to configure scripts. MSYS2's /usr/bin
+        # still takes precedence because /etc/profile prepends it.
+        env["MSYS2_PATH_TYPE"] = "inherit"
 
         # Build a list of extra directories to inject into MSYS2 PATH
         extra_paths = []

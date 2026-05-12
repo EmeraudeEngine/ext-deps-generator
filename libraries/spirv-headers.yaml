@@ -1,0 +1,8 @@
+name: spirv-headers
+source_dir: repositories/SPIRV-Headers
+languages: [c]
+
+cmake_options:
+  SPIRV_HEADERS_SKIP_EXAMPLES: true
+  SPIRV_HEADERS_SKIP_INSTALL: false
+  BUILD_SHARED_LIBS: false

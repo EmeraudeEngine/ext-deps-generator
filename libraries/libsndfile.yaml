@@ -1,0 +1,32 @@
+name: libsndfile
+source_dir: repositories/libsndfile
+languages: [c, cxx]
+
+depends_on:
+  - libogg
+  - libvorbis
+  - flac
+  - opus
+  - mpg123
+  - lame
+
+use_install_prefix_as_find_root: true
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  BUILD_PROGRAMS: false
+  BUILD_EXAMPLES: false
+  BUILD_TESTING: false
+  BUILD_REGTEST: false
+  ENABLE_CPACK: false
+  ENABLE_EXTERNAL_LIBS: true
+  ENABLE_MPEG: true
+  ENABLE_PACKAGE_CONFIG: true
+  INSTALL_PKGCONFIG_MODULE: true
+  CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+
+platforms:
+  # lame is disabled on Windows, so MPEG encoding is not available there
+  windows:
+    cmake_options:
+      ENABLE_MPEG: false
