@@ -21,6 +21,7 @@ class WindowsPlatform(Platform):
     _dumpbin_path: Optional[Path] = None
     _dumpbin_searched: bool = False
     _validated_libs: set[str] = set()  # Track already validated .lib files
+    _msvc_env_cache: dict[str, Optional[dict[str, str]]] = {}
 
     @property
     def name(self) -> str:
@@ -109,6 +110,111 @@ class WindowsPlatform(Platform):
 
         except (subprocess.TimeoutExpired, OSError) as e:
             print(f"  Warning: Error running vswhere: {e}")
+            return None
+
+    def _find_vcvarsall(self) -> Optional[Path]:
+        """Locate vcvarsall.bat via vswhere."""
+        vswhere_paths = [
+            Path(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"))
+            / "Microsoft Visual Studio"
+            / "Installer"
+            / "vswhere.exe",
+            Path("C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe"),
+        ]
+
+        vswhere = next((p for p in vswhere_paths if p.exists()), None)
+        if not vswhere:
+            return None
+
+        try:
+            result = subprocess.run(
+                [
+                    str(vswhere),
+                    "-latest",
+                    "-requires",
+                    "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                    "-property",
+                    "installationPath",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            if result.returncode != 0 or not result.stdout.strip():
+                return None
+
+            vcvarsall = (
+                Path(result.stdout.strip()) / "VC" / "Auxiliary" / "Build" / "vcvarsall.bat"
+            )
+            return vcvarsall if vcvarsall.exists() else None
+        except (subprocess.TimeoutExpired, OSError):
+            return None
+
+    def get_msvc_env(self, config: "BuildConfig") -> Optional[dict[str, str]]:
+        """Return an environment dict with MSVC tools activated.
+
+        Build systems like Meson auto-detect the C compiler from PATH. If
+        MSYS2's gcc is in PATH (required for libvpx) and MSVC is not, Meson
+        will produce UNIX-style libfoo.a archives instead of foo.lib. To
+        avoid forcing users to launch from a Developer Command Prompt, we
+        locate vcvarsall.bat via vswhere, execute it, and capture the
+        resulting environment.
+
+        Returns None if cl.exe is already in PATH (caller's env is fine),
+        or if vcvarsall.bat could not be located.
+        """
+        cache_key = config.arch
+        if cache_key in WindowsPlatform._msvc_env_cache:
+            return WindowsPlatform._msvc_env_cache[cache_key]
+
+        if shutil.which("cl"):
+            WindowsPlatform._msvc_env_cache[cache_key] = None
+            return None
+
+        vcvarsall = self._find_vcvarsall()
+        if not vcvarsall:
+            print("  Warning: vcvarsall.bat not found; build systems that auto-detect "
+                  "the compiler may pick the wrong toolchain.")
+            WindowsPlatform._msvc_env_cache[cache_key] = None
+            return None
+
+        vcvars_arch = "arm64" if config.arch == "arm64" else "x64"
+        print(f"  Activating MSVC environment ({vcvars_arch}) via {vcvarsall}")
+
+        try:
+            result = subprocess.run(
+                ["cmd.exe", "/c", f'"{vcvarsall}" {vcvars_arch} >nul && set'],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if result.returncode != 0:
+                print(f"  Warning: vcvarsall.bat failed (rc={result.returncode})")
+                WindowsPlatform._msvc_env_cache[cache_key] = None
+                return None
+
+            env: dict[str, str] = {}
+            for line in result.stdout.splitlines():
+                key, sep, value = line.partition("=")
+                if sep:
+                    env[key] = value
+
+            # Sanity check: confirm cl.exe is actually reachable through the
+            # captured PATH. If not, vcvarsall ran but didn't update PATH the
+            # way we expected — better to know now than to fail in meson.
+            cl_path = shutil.which("cl", path=env.get("PATH", ""))
+            if cl_path:
+                print(f"  MSVC activated: cl -> {cl_path}")
+            else:
+                print("  Warning: vcvarsall.bat ran but cl.exe is NOT in the "
+                      "resulting PATH. Meson will likely fail.")
+
+            WindowsPlatform._msvc_env_cache[cache_key] = env
+            return env
+        except (subprocess.TimeoutExpired, OSError) as e:
+            print(f"  Warning: failed to run vcvarsall.bat: {e}")
+            WindowsPlatform._msvc_env_cache[cache_key] = None
             return None
 
     def get_generator(self) -> str:
