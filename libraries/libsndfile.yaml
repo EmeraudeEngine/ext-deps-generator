@@ -25,8 +25,13 @@ cmake_options:
   INSTALL_PKGCONFIG_MODULE: true
   CMAKE_POLICY_VERSION_MINIMUM: "3.5"
 
+# Windows static build: force CONFIG-mode find_package so libsndfile picks
+# up the FLAC/Vorbis/Opus/mpg123 CMake config files installed by each
+# upstream (which correctly propagate FLAC__NO_DLL and friends as PUBLIC
+# compile defs). libsndfile's bundled Find*.cmake modules forget to set
+# FLAC__NO_DLL, leading to unresolved __imp_FLAC__* symbols when
+# downstream code links against the static FLAC.lib.
 platforms:
-  # lame is disabled on Windows, so MPEG encoding is not available there
   windows:
     cmake_options:
-      ENABLE_MPEG: false
+      CMAKE_FIND_PACKAGE_PREFER_CONFIG: true

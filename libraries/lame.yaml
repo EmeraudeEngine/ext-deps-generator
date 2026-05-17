@@ -3,11 +3,7 @@ source_dir: repositories/lame
 build_system: autotools
 languages: [c]
 
-# Windows: lame ships only old vc9 (VS 2008) project files which don't
-# integrate cleanly with our MSVC 2022 toolchain. Disabled until a CMake
-# or modern MSBuild path is wired up.
-disabled_platforms: [windows]
-
+# Linux / macOS: stock autotools build.
 autotools_options:
   enable_static: "yes"
   enable_shared: "no"
@@ -16,3 +12,14 @@ autotools_options:
   disable_decoder: true
   disable_gtktest: true
   disable_analyzer_hooks: true
+
+# Windows: lame upstream only ships VS2008 project files which don't
+# integrate with modern MSVC, and autotools is not available natively.
+# We inject a minimal CMakeLists.txt via patches/lame.patch that builds
+# libmp3lame static (encoder only, no NASM, no mpglib decoder) — the
+# subset libsndfile's Findmp3lame.cmake actually requires.
+platforms:
+  windows:
+    build_system: cmake
+    cmake_options:
+      BUILD_SHARED_LIBS: false

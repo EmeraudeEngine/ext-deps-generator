@@ -1,0 +1,116 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+new file mode 100644
+index 00000000..9c0c7cb0
+--- /dev/null
++++ b/CMakeLists.txt
+@@ -0,0 +1,109 @@
++# CMakeLists.txt for libmp3lame (static)
++#
++# Minimal MSVC-friendly build, added by ext-deps-generator patch.
++# Builds libmp3lame static library only (no frontend, no NASM/asm,
++# no mpglib decoder). Targets libsndfile's Findmp3lame.cmake which
++# only requires libmp3lame.a/.lib + <prefix>/include/lame/lame.h.
++#
++# Upstream lame only ships VS2008 project files (broken on modern
++# MSVC). This CMakeLists.txt unblocks lame on Windows without
++# touching any source file.
++
++cmake_minimum_required(VERSION 3.15)
++project(mp3lame
++	VERSION 3.100.1
++	DESCRIPTION "LAME MP3 encoder library"
++	HOMEPAGE_URL "https://lame.sourceforge.io"
++	LANGUAGES C)
++
++option(BUILD_SHARED_LIBS "Build shared library" OFF)
++
++set(LIBMP3LAME_SOURCES
++	libmp3lame/VbrTag.c
++	libmp3lame/bitstream.c
++	libmp3lame/encoder.c
++	libmp3lame/fft.c
++	libmp3lame/gain_analysis.c
++	libmp3lame/id3tag.c
++	libmp3lame/lame.c
++	libmp3lame/mpglib_interface.c
++	libmp3lame/newmdct.c
++	libmp3lame/presets.c
++	libmp3lame/psymodel.c
++	libmp3lame/quantize.c
++	libmp3lame/quantize_pvt.c
++	libmp3lame/reservoir.c
++	libmp3lame/set_get.c
++	libmp3lame/tables.c
++	libmp3lame/takehiro.c
++	libmp3lame/util.c
++	libmp3lame/vbrquantize.c
++	libmp3lame/version.c
++	# SSE intrinsics — gated by HAVE_XMMINTRIN_H inside the file.
++	# On MSVC x64, configMS.h auto-defines HAVE_XMMINTRIN_H so the
++	# CPU dispatch in quantize.c calls into init_xrpow_core_sse;
++	# without this TU, link fails with unresolved external.
++	libmp3lame/vector/xmm_quantize_sub.c
++)
++
++add_library(mp3lame ${LIBMP3LAME_SOURCES})
++add_library(mp3lame::mp3lame ALIAS mp3lame)
++
++set_target_properties(mp3lame PROPERTIES
++	OUTPUT_NAME mp3lame
++	POSITION_INDEPENDENT_CODE ON
++)
++
++if (MSVC)
++	# Upstream ships configMS.h pre-tuned for MSVC; reuse it as our config.h
++	# so the per-source `#ifdef HAVE_CONFIG_H / #include <config.h>` chain works.
++	configure_file(
++		${CMAKE_CURRENT_SOURCE_DIR}/configMS.h
++		${CMAKE_CURRENT_BINARY_DIR}/config.h
++		COPYONLY
++	)
++
++	target_compile_definitions(mp3lame PRIVATE
++		_CRT_SECURE_NO_WARNINGS
++		_CRT_NONSTDC_NO_WARNINGS
++	)
++
++	# lame is old C with lots of implicit conversions and unreferenced labels.
++	# Silence the noise without lowering warning level globally.
++	target_compile_options(mp3lame PRIVATE
++		/wd4018   # signed/unsigned mismatch
++		/wd4244   # conversion, possible loss of data
++		/wd4267   # conversion size_t -> int
++		/wd4305   # truncation from double to float
++		/wd4554   # operator precedence
++		/wd4715   # not all control paths return a value
++		/wd4996   # POSIX deprecated names
++	)
++else ()
++	# autotools normally generates config.h; on non-MSVC we let the
++	# autotools recipe handle the build entirely (see lame.yaml).
++	message(FATAL_ERROR
++		"This CMakeLists.txt is a Windows/MSVC bridge only. "
++		"Use autotools on Linux/macOS.")
++endif ()
++
++target_compile_definitions(mp3lame PRIVATE HAVE_CONFIG_H)
++
++target_include_directories(mp3lame
++	PRIVATE
++		${CMAKE_CURRENT_BINARY_DIR}
++		${CMAKE_CURRENT_SOURCE_DIR}
++		${CMAKE_CURRENT_SOURCE_DIR}/libmp3lame
++		${CMAKE_CURRENT_SOURCE_DIR}/mpglib
++		${CMAKE_CURRENT_SOURCE_DIR}/include
++)
++
++install(TARGETS mp3lame
++	ARCHIVE DESTINATION lib
++	LIBRARY DESTINATION lib
++	RUNTIME DESTINATION bin
++)
++
++install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/lame.h
++	DESTINATION include/lame
++)
+\ No newline at end of file
