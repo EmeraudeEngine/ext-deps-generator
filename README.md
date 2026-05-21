@@ -105,19 +105,19 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Usage: Vector font library. Requested by Freetype
 
 ## hwloc 
-[v2.12, befdbc5c39419fb18c07f9782c261f202e023afd]
+[v2.13, f3dc66ab3d6a523170e0c6703b0d6550a2fc830d]
 
 - URL: https://github.com/open-mpi/hwloc
-- Version: 2.12
+- Version: 2.13
 - Dependencies: None
 - Usage: Fetch system capabilities.
 - Notes: Linux and macOS versions are using autotools instead of cmake.
 
 ## jsoncpp
-[master, b511d9e64956db998b74909df112ac8c8f41d6ff]
+[master, d4d072177213b117fb81d4cfda140de090616161]
 
 - URL: https://github.com/open-source-parsers/jsoncpp.git
-- Version: 1.9.6~
+- Version: 1.9.7~
 - Dependencies: None
 - Usage: JSON parser.
 
@@ -131,10 +131,10 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Notes: No official git upstream (lame is on SourceForge in SVN). This mirror has no release tags, so we pin to a master SHA. libsndfile needs LAME 3.100+ (uses `lame_encode_buffer_interleaved_int`). Disabled on Windows: only old VS 2008 project files are provided.
 
 ## lib3mf 
-[3dJan/LinuxConfigAndBuildFixes, 4969189d2039600897fc7a162b0712414a445fe2]
+[release/2.5.0, bbbbffb79e197903b874470e5f83609b1d6272ae]
 
 - URL: https://github.com/3MFConsortium/lib3mf.git
-- Version: 2.4.1
+- Version: 2.5.0
 - Dependencies: zlib, libzip
 - Usage: 3D model format library.
 - Notes: This library fails to compile as static.
@@ -216,7 +216,7 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Warning: On Windows, zstd support has been disabled.
 
 ## libzmq (ZeroMQ) 
-[master, 7a7bfa10e6b0e99210ed9397369b59f9e69cef8e]
+[master, b946c18f676760387276cd095bbdd8c0e18c09bf]
 
 - URL: https://github.com/zeromq/libzmq.git
 - Version: 4.3.6~
@@ -233,7 +233,7 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Notes: There is no compilation here, this is just some headers for libzmq.
 
 ## lunasvg
-[master, 27d24820d84fefb48c8ef9b6f7850d2206e80fef]
+[master, 09c2bd26efa29583236c82c1cab7e7977a26eb1f]
 
 - URL: https://github.com/sammycage/lunasvg
 - Version: 3.5.0~
@@ -301,19 +301,19 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Usage: Audio meta-data library.
 
 ## ufbx
-[v0.21.3, 83bc7cf44f76bc8622de63b809a42b5d557cd733]
+[main, 5c3494fb9a0f1b2e9fb5fb90ddf83ea6b676ebbb]
 
 - URL: https://github.com/ufbx/ufbx.git
-- Version: 0.21.3
+- Version: 0.21.5
 - Dependencies: None (links libm on Unix)
 - Usage: Single-translation-unit FBX 7.x parser. Used for skeletal mesh/animation import.
 - Notes: Upstream is header + single `.c`, no CMakeLists.txt. The patch adds a minimal one that builds a static library and installs `ufbx.h` under `include/ufbx/`.
 
 ## xz (LZMA) 
-[v5.8, 7c12726c51b2b7d77329dd72a29ecb1ec262b918]
+[v5.8, 4b73f2ec19a99ef465282fbce633e8deb33691b3]
 
 - URL: https://github.com/tukaani-project/xz.git
-- Version: 5.8.1
+- Version: 5.8.3
 - Dependencies: None
 - Usage: Compression library.
 
@@ -327,10 +327,10 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Notes: This version builds the static and the shared libraries, beware when linking. An upcoming release will fix this with cmake options.
 
 ## pthread-win32
-[master, 3309f4d6e7538f349ae450347b02132ecb0606a7]
+[master, 334dd243487013a7faa3a9b96afa5264fcfb09ba]
 
 - URL: https://github.com/GerHobbelt/pthread-win32.git
-- Version: 3.0.3.1
+- Version: 4.1.0.9
 - Dependencies: None
 - Usage: Thread library.
 - Notes: Only for Windows.
