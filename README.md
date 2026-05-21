@@ -258,10 +258,10 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Usage: Opus audio codec. Required by libsndfile.
 
 ## openal-soft 
-[master, d3875f333fb6abe2f39d82caca329414871ae53b]
+[master, b2c48f7718ef3fcf67921a8b6534c4914e328970]
 
 - URL: https://github.com/kcat/openal-soft.git
-- Version: 1.23.1
+- Version: 1.25.2
 - Notes: This version is stable on all platforms. Beware when updating.
 - Dependencies: None
 - Usage: Audio API.
@@ -369,6 +369,19 @@ GCC 12+ is required. For other distributions, install the equivalent packages.
 ```bash
 sudo apt install build-essential python3 python3-pip python3-venv \
                  cmake meson ninja-build autoconf automake libtool nasm
+```
+
+A few libraries probe for system development headers and silently disable
+optional features if they are missing. The most consequential case is
+**openal-soft**: with no audio backend `-dev` packages installed, CMake drops
+ALSA / PulseAudio / PipeWire / JACK detection and produces a `libopenal.a`
+that links but cannot open any device at runtime. The build now refuses to
+finish in that state (see [Post-build assertions](#post-build-assertions)),
+so install the audio dev headers before running `build.py`:
+
+```bash
+sudo apt install libasound2-dev libpulse-dev \
+                 libpipewire-0.3-dev libjack-jackd2-dev
 ```
 
 ### macOS
@@ -479,6 +492,36 @@ python build.py --macos-sdk 12.0 --dry-run
 | `--no-deps` | Don't build dependencies | `false` |
 | `--list` | List available libraries | - |
 | `--dry-run` | Show build plan without building | - |
+
+## Post-build assertions
+
+Some libraries can produce an artifact that links cleanly but is broken at
+runtime when an optional dependency was missing on the build host. The
+canonical example is OpenAL-soft: `ALSOFT_REQUIRE_*=Off` lets CMake disable
+ALSA / PulseAudio / PipeWire / JACK when their dev headers are absent, and
+the resulting `libopenal.a` then fails `alcOpenDevice()` with
+`ALC_INVALID_VALUE` on every modern Linux box.
+
+To catch these silent dropouts at build time rather than at runtime, a
+library YAML can declare assertions that run after the install step:
+
+```yaml
+platforms:
+  linux:
+    post_build_assertions:
+      - kind: require_any_define
+        file: config.h                   # relative to the build dir
+        defines: [HAVE_ALSA, HAVE_PULSEAUDIO, HAVE_PIPEWIRE, HAVE_JACK]
+        message: |
+          Human-readable remediation, printed when the assertion fails.
+```
+
+Failing assertions abort the build with the message embedded in the YAML.
+The check is opt-in — libraries without a `post_build_assertions` section
+behave as before. Currently wired into the CMake builder
+(`builder/cmake_builder.py`); see `builder/config.py::Library.verify_post_build`
+for the implementation. Extending to other builders is a 5-line copy if a
+non-CMake library ever needs the same guard.
 
 ## Windows runtime library notes
 

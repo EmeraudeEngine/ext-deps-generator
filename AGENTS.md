@@ -110,6 +110,30 @@ After each library build, `dumpbin /directives` validates .lib files:
 
 Build fails immediately if wrong CRT detected.
 
+### Post-build assertions
+A library YAML can declare post-install checks that abort the build when the
+artifact is structurally valid but functionally broken (e.g. OpenAL-soft
+compiled with no real Linux audio backend because the matching `-dev`
+packages were missing). Implemented in `Library.verify_post_build()`
+(`builder/config.py`) and currently invoked from `cmake_builder.py`.
+
+Schema:
+```yaml
+platforms:
+  linux:
+    post_build_assertions:
+      - kind: require_any_define
+        file: config.h                   # relative to the build dir
+        defines: [HAVE_ALSA, HAVE_PULSEAUDIO, HAVE_PIPEWIRE, HAVE_JACK]
+        message: |
+          Remediation message printed when the assertion fails.
+```
+
+Single kind for now (`require_any_define`); extend `verify_post_build()` when
+a new kind is genuinely needed. Opt-in: libraries without the section behave
+as before. The check is CMake-only at the moment — wire it into the other
+builders the same way if a non-CMake library ever needs it.
+
 ### Patch System
 Some libraries need modifications to build correctly (e.g., forced C++ standard, macOS cross-compilation fixes). Instead of forking, use the patch system.
 

@@ -134,6 +134,28 @@ platforms:
       ALSOFT_BACKEND_DSOUND: false
       ALSOFT_BACKEND_WINMM: false
 
+    # Guard against silent backend dropouts when the matching -dev packages are
+    # not installed on the build host. With ALSOFT_REQUIRE_* set to false, CMake
+    # disables a backend when its headers are missing without failing the build,
+    # producing a libopenal.a that links but cannot open any device at runtime.
+    post_build_assertions:
+      # OpenAL-soft 1.25+ moved the per-backend HAVE_* macros out of config.h
+      # into config_backends.h, and switched from `#define HAVE_X` / `/* #undef
+      # HAVE_X */` to always-emitting `#define HAVE_X 1` or `#define HAVE_X 0`.
+      # The check tolerates both formats (it rejects only an explicit zero).
+      - kind: require_any_define
+        file: config_backends.h
+        defines: [HAVE_ALSA, HAVE_PULSEAUDIO, HAVE_PIPEWIRE, HAVE_JACK]
+        message: |
+          OpenAL-soft was built without any real Linux audio backend
+          (ALSA / PulseAudio / PipeWire / JACK). The resulting libopenal.a will
+          enumerate a placeholder "OpenAL Soft" device and fail alcOpenDevice()
+          with ALC_INVALID_VALUE on any modern Linux system. Install the
+          development headers and rebuild:
+
+            sudo apt install libasound2-dev libpulse-dev \
+                             libpipewire-0.3-dev libjack-jackd2-dev
+
   windows:
     cmake_options:
       # EAX legacy extension (Windows only)

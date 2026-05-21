@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 import platform
+import re
 import yaml
 
 
@@ -115,6 +116,91 @@ class Library:
             ),
             disabled_platforms=data.get("disabled_platforms", []),
         )
+
+    def get_post_build_assertions(self, platform_name: str) -> list[dict]:
+        """Get the list of post-build assertions for a specific platform.
+
+        Assertions live under `platforms.<name>.post_build_assertions` in the
+        YAML. They run after the install step and can fail the build when a
+        library was produced in an unusable state despite the build itself
+        succeeding (e.g. OpenAL-soft compiled without any real Linux backend
+        because the matching -dev packages were missing on the host).
+        """
+        if platform_name not in self.platforms:
+            return []
+        return self.platforms[platform_name].get("post_build_assertions", []) or []
+
+    def verify_post_build(
+        self, platform_name: str, build_dir: Path
+    ) -> tuple[bool, list[str]]:
+        """Run the post-build assertions declared in the YAML for this platform.
+
+        Returns (success, errors). An empty assertion list yields success.
+        Unknown assertion kinds are treated as configuration errors so typos
+        in the YAML surface immediately rather than silently passing.
+        """
+        errors: list[str] = []
+
+        for index, assertion in enumerate(self.get_post_build_assertions(platform_name)):
+            kind = assertion.get("kind")
+
+            if kind == "require_any_define":
+                file_name = assertion.get("file")
+                defines = assertion.get("defines", [])
+                message = assertion.get("message", "").strip()
+
+                if not file_name or not defines:
+                    errors.append(
+                        f"post_build_assertions[{index}] (require_any_define): "
+                        "missing 'file' or 'defines'"
+                    )
+                    continue
+
+                target = build_dir / file_name
+
+                if not target.is_file():
+                    errors.append(
+                        f"post_build_assertions[{index}]: file '{file_name}' "
+                        f"not found at {target}"
+                    )
+                    continue
+
+                content = target.read_text(errors="replace")
+                # Match `#define NAME [value]` with NAME at a word boundary so
+                # HAVE_FOO does not match HAVE_FOOBAR. The value capture lets
+                # us reject explicit zeros — OpenAL-soft 1.25+ emits
+                # `#define HAVE_X 0` for disabled backends instead of omitting
+                # the macro. A bare `#define NAME` (no value) is treated as
+                # enabled, matching the legacy convention.
+                pattern = re.compile(
+                    r"^\s*#\s*define\s+("
+                    + "|".join(map(re.escape, defines))
+                    + r")\b(.*)$",
+                    re.MULTILINE,
+                )
+                zero = re.compile(r"^0[LlUu]*$")
+                matched = sorted(
+                    {
+                        name
+                        for name, rest in pattern.findall(content)
+                        if not zero.match(rest.strip())
+                    }
+                )
+
+                if not matched:
+                    detail = (
+                        f"post_build_assertions[{index}] (require_any_define): "
+                        f"none of {defines} are #defined in {file_name}."
+                    )
+                    if message:
+                        detail += "\n" + message
+                    errors.append(detail)
+            else:
+                errors.append(
+                    f"post_build_assertions[{index}]: unknown kind '{kind}'"
+                )
+
+        return (not errors, errors)
 
     def get_cmake_options(self, platform_name: str, runtime_lib: str = "MD") -> dict:
         """Get merged CMake options for a specific platform and runtime.

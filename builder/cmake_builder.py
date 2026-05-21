@@ -149,6 +149,14 @@ class CMakeBuilder:
                     print(f"  - {error}", file=sys.stderr)
                 return False
 
+        # Post-build assertions declared by the library YAML.
+        success, errors = lib.verify_post_build(self.config.platform_name, build_dir)
+        if not success:
+            print(f"\nPost-build assertions failed for '{lib.name}':", file=sys.stderr)
+            for error in errors:
+                print(f"  - {error}", file=sys.stderr)
+            return False
+
         print(f"\n{'=' * 20} Success! {'=' * 20}\n")
         return True
 
