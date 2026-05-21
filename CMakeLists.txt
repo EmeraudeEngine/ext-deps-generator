@@ -160,6 +160,20 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     CXX_STANDARD_REQUIRED ON
 )
 
+# lib3mf is a shared library — set RPATH so the test binary can find lib3mf.so
+# at runtime without LD_LIBRARY_PATH.
+if(APPLE)
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        BUILD_RPATH "${LIBS_ROOT}/lib"
+        INSTALL_RPATH "@executable_path/../lib"
+    )
+elseif(UNIX)
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        BUILD_RPATH "${LIBS_ROOT}/lib"
+        INSTALL_RPATH "$ORIGIN/../lib"
+    )
+endif()
+
 # Windows: Set MSVC runtime library to match dependencies
 if(WIN32)
     if(RUNTIME_LIB STREQUAL "MT")
@@ -198,6 +212,7 @@ if(WIN32)
         AL_LIBTYPE_STATIC   # OpenAL static linking
         ZMQ_STATIC          # ZeroMQ static linking
         TAGLIB_STATIC       # TagLib static linking
+        FLAC__NO_DLL        # FLAC static linking (avoid __declspec(dllimport))
     )
 endif()
 
@@ -251,6 +266,32 @@ if(WIN32)
             set(VPX_LIB "vpxmd")
         endif()
     endif()
+    # Audio codec libs (best-effort Windows defaults; adjust if upstream produces
+    # different basenames on MSVC).
+    set(OGG_LIB "ogg")
+    set(VORBIS_LIB "vorbis")
+    set(VORBISENC_LIB "vorbisenc")
+    set(VORBISFILE_LIB "vorbisfile")
+    set(OPUS_LIB "opus")
+    set(FLAC_LIB "FLAC")
+    set(MPG123_LIB "libmpg123")
+    set(LAME_LIB "libmp3lame")
+    set(SNDFILE_LIB "sndfile")
+    # Shader / SPIR-V
+    set(SPIRV_TOOLS_LIB "SPIRV-Tools")
+    set(SPIRV_TOOLS_OPT_LIB "SPIRV-Tools-opt")
+    # glslang ships as multiple static libs that must all be linked together.
+    set(GLSLANG_LIBS glslang MachineIndependent GenericCodeGen OSDependent SPIRV glslang-default-resource-limits)
+    # Process control
+    set(REPROC_LIB "reproc")
+    set(REPROC_CPP_LIB "reproc++")
+    # Other
+    set(UFBX_LIB "ufbx")
+    set(BC7ENC_LIB "bc7enc_rdo")
+    # lib3mf is a shared library (DLL/.so) — link against its import lib.
+    set(LIB3MF_LIB "lib3mf")
+    # pthread-win32: SHARED build by default produces pthreadVC3 import lib.
+    set(PTHREADWIN32_LIB "pthreadVC3")
 else()
     # Unix library names
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -269,10 +310,38 @@ else()
     set(ZSTD_LIB "zstd")
     set(ZMQ_LIB "zmq")
     set(VPX_LIB "vpx")
+    # Audio codec libs
+    set(OGG_LIB "ogg")
+    set(VORBIS_LIB "vorbis")
+    set(VORBISENC_LIB "vorbisenc")
+    set(VORBISFILE_LIB "vorbisfile")
+    set(OPUS_LIB "opus")
+    set(FLAC_LIB "FLAC")
+    set(MPG123_LIB "mpg123")
+    set(LAME_LIB "mp3lame")
+    set(SNDFILE_LIB "sndfile")
+    # Shader / SPIR-V
+    set(SPIRV_TOOLS_LIB "SPIRV-Tools")
+    set(SPIRV_TOOLS_OPT_LIB "SPIRV-Tools-opt")
+    set(GLSLANG_LIBS glslang MachineIndependent GenericCodeGen OSDependent SPIRV glslang-default-resource-limits)
+    # Process control
+    set(REPROC_LIB "reproc")
+    set(REPROC_CPP_LIB "reproc++")
+    # Other
+    set(UFBX_LIB "ufbx")
+    set(BC7ENC_LIB "bc7enc_rdo")
+    # lib3mf builds as a shared library; CMake resolves `3mf` to `lib3mf.so`.
+    set(LIB3MF_LIB "3mf")
 endif()
 
-# Use library names only - CMake won't validate existence at configure time
+# Use library names only - CMake won't validate existence at configure time.
+# Order matters for static linking: consumers before providers.
 target_link_libraries(${PROJECT_NAME} PRIVATE
+    # Shader / SPIR-V (glslang consumes SPIRV-Tools-opt internally)
+    ${GLSLANG_LIBS}
+    ${SPIRV_TOOLS_OPT_LIB} ${SPIRV_TOOLS_LIB}
+    # SVG rendering (lunasvg depends on plutovg)
+    lunasvg plutovg
     # Fonts (freetype depends on harfbuzz, png, brotli, bzip2, zlib)
     ${FREETYPE_LIB} harfbuzz
     # Images (png depends on zlib)
@@ -281,8 +350,12 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${VPX_LIB}
     # Archive (zip depends on zlib, bzip2, lzma, zstd)
     zip
-    # Audio
+    # Audio I/O (libsndfile depends on flac, vorbis, opus, mpg123, lame, ogg)
+    ${SNDFILE_LIB}
     ${OPENAL_LIB} samplerate tag
+    # Audio codecs (flac/vorbis depend on ogg)
+    ${FLAC_LIB} ${VORBISFILE_LIB} ${VORBISENC_LIB} ${VORBIS_LIB} ${OGG_LIB}
+    ${OPUS_LIB} ${MPG123_LIB} ${LAME_LIB}
     # Compression (dependencies of above)
     brotlienc brotlidec brotlicommon ${ZSTD_LIB} lzma bz2_static ${ZLIB_LIB}
     # System
@@ -293,11 +366,18 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Clipper2
     # Networking
     ${ZMQ_LIB}
+    # Process control
+    ${REPROC_CPP_LIB} ${REPROC_LIB}
     # Data formats
-    fastgltf jsoncpp
-    # SVG rendering (lunasvg depends on plutovg)
-    lunasvg plutovg
+    fastgltf jsoncpp ${UFBX_LIB} ${LIB3MF_LIB}
+    # Texture compression
+    ${BC7ENC_LIB}
 )
+
+# pthread-win32 is Windows-only
+if(WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${PTHREADWIN32_LIB})
+endif()
 
 ########################################################################
 # Platform-specific system libraries
