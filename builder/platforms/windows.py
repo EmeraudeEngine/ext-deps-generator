@@ -230,6 +230,15 @@ class WindowsPlatform(Platform):
 
         options = {
             "CMAKE_MSVC_RUNTIME_LIBRARY": runtime,
+            # CMAKE_MSVC_RUNTIME_LIBRARY is only honored when CMake policy
+            # CMP0091 is NEW, which requires cmake_minimum_required(VERSION
+            # 3.15+) at the consumed library's top level. Several upstreams
+            # we vendor still declare older minimums (e.g. pthread-win32:
+            # 2.8...3.14) and silently fall back to the legacy /MD-by-default
+            # flags, producing .lib files that link MSVCRT regardless of the
+            # runtime requested here. Forcing CMP0091=NEW project-wide makes
+            # the runtime knob authoritative and keeps CRT validation honest.
+            "CMAKE_POLICY_DEFAULT_CMP0091": "NEW",
         }
 
         return options

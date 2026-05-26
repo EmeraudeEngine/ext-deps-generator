@@ -367,8 +367,7 @@ compiler and how you install everything.
 GCC 12+ is required. For other distributions, install the equivalent packages.
 
 ```bash
-sudo apt install build-essential python3 python3-pip python3-venv \
-                 cmake meson ninja-build autoconf automake libtool nasm
+sudo apt install build-essential python3 python3-pip python3-venv cmake meson ninja-build autoconf automake libtool nasm
 ```
 
 A few libraries probe for system development headers and silently disable
@@ -380,8 +379,7 @@ finish in that state (see [Post-build assertions](#post-build-assertions)),
 so install the audio dev headers before running `build.py`:
 
 ```bash
-sudo apt install libasound2-dev libpulse-dev \
-                 libpipewire-0.3-dev libjack-jackd2-dev
+sudo apt install libasound2-dev libpulse-dev libpipewire-0.3-dev libjack-jackd2-dev
 ```
 
 ### macOS
