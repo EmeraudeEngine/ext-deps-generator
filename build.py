@@ -127,7 +127,7 @@ def clean_directories(root_dir: Path) -> None:
     print("Cleaning build directories")
     print(f"{'=' * 60}\n")
 
-    # Clean builds directory
+    # Clean builds directory (also wipes builds/tests/ for the inclusion test)
     builds_dir = root_dir / "builds"
     if builds_dir.exists():
         print(f"Cleaning: {builds_dir}")
@@ -135,15 +135,6 @@ def clean_directories(root_dir: Path) -> None:
         print("  Done")
     else:
         print(f"Not found: {builds_dir}")
-
-    # Clean test-binary build directories
-    build_test_dir = root_dir / "build_test"
-    if build_test_dir.exists():
-        print(f"\nCleaning: {build_test_dir}")
-        shutil.rmtree(build_test_dir)
-        print("  Done")
-    else:
-        print(f"\nNot found: {build_test_dir}")
 
     # Empty each subdirectory in output/ but keep them
     output_dir = root_dir / "output"
@@ -181,7 +172,7 @@ def run_dependencies_test(config: BuildConfig, root_dir: Path) -> int:
 
     Returns 0 on success, non-zero on failure.
     """
-    build_dir = root_dir / "build_test" / config.build_suffix
+    build_dir = root_dir / "builds" / "tests" / config.build_suffix
 
     print(f"\n{'=' * 60}")
     print(f"Running dependencies test for '{config.build_suffix}'")

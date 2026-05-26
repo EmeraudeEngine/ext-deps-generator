@@ -11,16 +11,16 @@
 #
 # Usage:
 #   # macOS (SDK version required)
-#   cmake -B build_test -DMACOS_SDK=12.0
+#   cmake -B builds/tests -DMACOS_SDK=12.0
 #
 #   # Windows (runtime library required)
-#   cmake -B build_test -DRUNTIME_LIB=MD
+#   cmake -B builds/tests -DRUNTIME_LIB=MD
 #
 #   # Linux (no extra options needed)
-#   cmake -B build_test
+#   cmake -B builds/tests
 #
 #   # Then build
-#   cmake --build build_test
+#   cmake --build builds/tests
 ########################################################################
 
 cmake_minimum_required(VERSION 3.20)

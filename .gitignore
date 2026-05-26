@@ -14,7 +14,5 @@ Thumbs.db
 # Project structure and auto-generated files
 __pycache__
 builds/*
-output/*
-
 cmake-build-*
-build_test
+output/*
