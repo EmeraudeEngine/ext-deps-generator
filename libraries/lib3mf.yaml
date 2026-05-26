@@ -9,3 +9,7 @@ cmake_options:
   STRIP_BINARIES: true
   USE_PLATFORM_UUID: true
   LIB3MF_TESTS: false
+  # Force static. lib3mf defaults to SHARED via BUILD_SHARED_LIBS, which on
+  # Windows also drags InstallRequiredSystemLibraries (msvcp140.dll, vcruntime140.dll, ...)
+  # into the install. LIB3MF_BUILD_SHARED=OFF disables both side-effects.
+  LIB3MF_BUILD_SHARED: false

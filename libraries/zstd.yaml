@@ -9,6 +9,9 @@ cmake_options:
   ZSTD_BUILD_CONTRIB: false
   ZSTD_BUILD_TESTS: false
   ZSTD_PROGRAMS_LINK_SHARED: false
+  # zstd defaults to building both static and shared. We only want static.
+  ZSTD_BUILD_STATIC: true
+  ZSTD_BUILD_SHARED: false
 
 platforms:
   linux:

@@ -140,20 +140,6 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     CXX_STANDARD_REQUIRED ON
 )
 
-# lib3mf is a shared library — set RPATH so the test binary can find lib3mf.so
-# at runtime without LD_LIBRARY_PATH.
-if(APPLE)
-    set_target_properties(${PROJECT_NAME} PROPERTIES
-        BUILD_RPATH "${LIBS_ROOT}/lib"
-        INSTALL_RPATH "@executable_path/../lib"
-    )
-elseif(UNIX)
-    set_target_properties(${PROJECT_NAME} PROPERTIES
-        BUILD_RPATH "${LIBS_ROOT}/lib"
-        INSTALL_RPATH "$ORIGIN/../lib"
-    )
-endif()
-
 # Windows: Set MSVC runtime library to match dependencies
 if(WIN32)
     if(RUNTIME_LIB STREQUAL "MT")
@@ -268,7 +254,7 @@ if(WIN32)
     # Other
     set(UFBX_LIB "ufbx")
     set(BC7ENC_LIB "bc7enc_rdo")
-    # lib3mf is a shared library (DLL/.so) — link against its import lib.
+    # lib3mf (static): static archive name matches the CMake target name.
     set(LIB3MF_LIB "lib3mf")
     # pthread-win32: SHARED build by default produces pthreadVC3 import lib.
     set(PTHREADWIN32_LIB "pthreadVC3")
@@ -310,8 +296,8 @@ else()
     # Other
     set(UFBX_LIB "ufbx")
     set(BC7ENC_LIB "bc7enc_rdo")
-    # lib3mf builds as a shared library; CMake resolves `3mf` to `lib3mf.so`.
-    set(LIB3MF_LIB "3mf")
+    # lib3mf (static): CMake target named "lib3mf" produces "liblib3mf.a".
+    set(LIB3MF_LIB "lib3mf")
 endif()
 
 # Use library names only - CMake won't validate existence at configure time.
@@ -389,9 +375,12 @@ elseif(WIN32)
         iphlpapi
         # Audio
         winmm
+        avrt        # OpenAL WASAPI: Av*MmThreadCharacteristics*
         # COM/OLE
         ole32
         shell32
+        # Path helpers (mpg123 compat.obj: PathCombineW / PathIsRelativeW / PathIsUNCW)
+        shlwapi
         # Harfbuzz dependencies (Uniscribe, DirectWrite, GDI)
         usp10       # Uniscribe
         dwrite      # DirectWrite
