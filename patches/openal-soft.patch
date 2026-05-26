@@ -1,0 +1,17 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index c925aa870..a42d693b4 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -407,9 +407,9 @@ else()
+         list(APPEND C_FLAGS -Werror=undef -Werror=format-security
+             $<$<COMPILE_LANGUAGE:C>:-Werror=implicit -Werror=incompatible-pointer-types
+                 -Werror=int-conversion>)
+-        if(HAVE_WFUNCTION_EFFECTS)
+-            list(APPEND C_FLAGS $<$<COMPILE_LANGUAGE:CXX>:-Werror=function-effects>)
+-        endif()
++        # -Werror=function-effects removed: recent clang flags noexcept
++        # lambdas assigned to AURenderCallback (which carries the nonblocking
++        # attribute) as errors. -Wfunction-effects above keeps it as a warning.
+     endif()
+ 
+     # NOTE: This essentially provides the equivalent of the C++26 feature to
