@@ -218,19 +218,13 @@ if(WIN32)
     else()
         set(ZMQ_LIB "libzmq-v143-mt-s-4_3_6")
     endif()
-    # libvpx: library name depends on runtime (MT/MD) and build type
+    # libvpx: library name depends on runtime (MT/MD) only — the configure
+    # script bakes the CRT into the basename and produces vpxmt.lib / vpxmd.lib
+    # for both Release and Debug builds (no "d" suffix in Debug).
     if(RUNTIME_LIB STREQUAL "MT")
-        if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-            set(VPX_LIB "vpxmtd")
-        else()
-            set(VPX_LIB "vpxmt")
-        endif()
+        set(VPX_LIB "vpxmt")
     else()
-        if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-            set(VPX_LIB "vpxmdd")
-        else()
-            set(VPX_LIB "vpxmd")
-        endif()
+        set(VPX_LIB "vpxmd")
     endif()
     # Audio codec libs (best-effort Windows defaults; adjust if upstream produces
     # different basenames on MSVC).
@@ -243,11 +237,16 @@ if(WIN32)
     set(MPG123_LIB "mpg123")
     set(LAME_LIB "mp3lame")
     set(SNDFILE_LIB "sndfile")
-    # Shader / SPIR-V
+    # Shader / SPIR-V (SPIRV-Tools-* keep their basenames in Debug)
     set(SPIRV_TOOLS_LIB "SPIRV-Tools")
     set(SPIRV_TOOLS_OPT_LIB "SPIRV-Tools-opt")
     # glslang ships as multiple static libs that must all be linked together.
-    set(GLSLANG_LIBS glslang MachineIndependent GenericCodeGen OSDependent SPIRV glslang-default-resource-limits)
+    # The glslang build appends a "d" suffix in Debug; SPIRV-Tools does not.
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(GLSLANG_LIBS glslangd MachineIndependentd GenericCodeGend OSDependentd SPIRVd glslang-default-resource-limitsd)
+    else()
+        set(GLSLANG_LIBS glslang MachineIndependent GenericCodeGen OSDependent SPIRV glslang-default-resource-limits)
+    endif()
     # Process control
     set(REPROC_LIB "reproc")
     set(REPROC_CPP_LIB "reproc++")
