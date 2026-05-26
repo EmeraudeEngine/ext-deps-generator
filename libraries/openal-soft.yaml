@@ -158,6 +158,16 @@ platforms:
 
   windows:
     cmake_options:
+      # C++20 modules: disabled on Windows. OpenAL-soft 1.25 advertises support
+      # with VS 17 2022 + MSVC 14.34+, but MSBuild's parallel compilation does
+      # not consistently honor the module dependency graph: .cpp consumers get
+      # scheduled before the .ifc producers are built, so files in al/effects/
+      # fail with "module 'alc.context' introuvable" / "use of undefined type
+      # 'al::Context'". Upstream itself flags the modules wiring as fragile
+      # (see the FIXME around CMakeLists.txt:1822). Modules are a build-time
+      # optimization only; the library is functionally identical without them.
+      ALSOFT_ENABLE_MODULES: false
+
       # EAX legacy extension (Windows only)
       ALSOFT_EAX: true
 

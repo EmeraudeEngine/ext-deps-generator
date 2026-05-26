@@ -1,8 +1,13 @@
 ########################################################################
 # Dependencies Inclusion Test
 #
-# This CMakeLists.txt will automatically build the dependencies using
-# build.py before building the test executable.
+# This CMakeLists.txt verifies that the external libraries have already
+# been built (output/<config>/lib must exist) and compiles a test
+# executable that links against all of them. It does NOT invoke build.py;
+# build the libraries first with one of:
+#   python build.py --runtime-lib MT|MD --build-type Release|Debug   (Windows)
+#   python build.py --build-type Release|Debug                       (Linux)
+#   python build.py --macos-sdk <ver> --build-type Release|Debug     (macOS)
 #
 # Usage:
 #   # macOS (SDK version required)
@@ -102,46 +107,24 @@ message(STATUS "Libraries config: ${LIBS_CONFIG}")
 message(STATUS "Libraries root: ${LIBS_ROOT}")
 
 ########################################################################
-# Build dependencies with Python script
+# Verify dependencies are present
 ########################################################################
 
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
-
-# Build the command arguments
-set(BUILD_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/build.py")
-set(BUILD_ARGS
-    "--arch" "${DETECTED_ARCH}"
-    "--build-type" "${CMAKE_BUILD_TYPE}"
-)
-
-if(APPLE)
-    list(APPEND BUILD_ARGS "--macos-sdk" "${MACOS_SDK}")
-endif()
-
-if(WIN32)
-    list(APPEND BUILD_ARGS "--runtime-lib" "${RUNTIME_LIB}")
-endif()
-
-# Create a stamp file per configuration to track if dependencies were built
-set(DEPS_STAMP "${CMAKE_CURRENT_BINARY_DIR}/deps_built_${LIBS_CONFIG}.stamp")
-
-# Also check if output directory exists (in case stamp is stale)
-add_custom_command(
-    OUTPUT "${DEPS_STAMP}"
-    COMMAND ${Python3_EXECUTABLE} ${BUILD_SCRIPT} ${BUILD_ARGS}
-    COMMAND ${CMAKE_COMMAND} -E touch "${DEPS_STAMP}"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    COMMENT "Building dependencies for ${LIBS_CONFIG}..."
-    VERBATIM
-)
-
-add_custom_target(BuildDependencies
-    DEPENDS "${DEPS_STAMP}"
-)
-
-# Force rebuild if output directory doesn't exist
-if(NOT EXISTS "${LIBS_ROOT}/lib")
-    file(REMOVE "${DEPS_STAMP}")
+# The test executable consumes pre-built libraries from output/<config>/lib.
+# Building them is the job of build.py; this CMakeLists never invokes it.
+if(NOT IS_DIRECTORY "${LIBS_ROOT}/lib")
+    if(WIN32)
+        set(_build_hint "python build.py --runtime-lib ${RUNTIME_LIB} --build-type ${CMAKE_BUILD_TYPE}")
+    elseif(APPLE)
+        set(_build_hint "python build.py --macos-sdk ${MACOS_SDK} --build-type ${CMAKE_BUILD_TYPE}")
+    else()
+        set(_build_hint "python build.py --build-type ${CMAKE_BUILD_TYPE}")
+    endif()
+    message(FATAL_ERROR
+        "External libraries not found for config '${LIBS_CONFIG}'.\n"
+        "Expected: ${LIBS_ROOT}/lib\n"
+        "Build them first with:\n"
+        "  ${_build_hint}")
 endif()
 
 ########################################################################
@@ -149,9 +132,6 @@ endif()
 ########################################################################
 
 add_executable(${PROJECT_NAME} "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
-
-# Make sure dependencies are built first
-add_dependencies(${PROJECT_NAME} BuildDependencies)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
     C_STANDARD 17

@@ -16,6 +16,7 @@ Usage:
 
 import argparse
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -135,6 +136,15 @@ def clean_directories(root_dir: Path) -> None:
     else:
         print(f"Not found: {builds_dir}")
 
+    # Clean test-binary build directories
+    build_test_dir = root_dir / "build_test"
+    if build_test_dir.exists():
+        print(f"\nCleaning: {build_test_dir}")
+        shutil.rmtree(build_test_dir)
+        print("  Done")
+    else:
+        print(f"\nNot found: {build_test_dir}")
+
     # Empty each subdirectory in output/ but keep them
     output_dir = root_dir / "output"
     if output_dir.exists():
@@ -160,6 +170,76 @@ def clean_directories(root_dir: Path) -> None:
     print(f"\n{'=' * 60}")
     print("Clean completed!")
     print(f"{'=' * 60}\n")
+
+
+def run_dependencies_test(config: BuildConfig, root_dir: Path) -> int:
+    """Configure, build and run the DependenciesTest executable.
+
+    The test links a single binary against every library we produced, so a
+    successful run is the strongest available signal that the whole set is
+    coherent (CRT, ABI, symbol names) for the current configuration.
+
+    Returns 0 on success, non-zero on failure.
+    """
+    build_dir = root_dir / "build_test" / config.build_suffix
+
+    print(f"\n{'=' * 60}")
+    print(f"Running dependencies test for '{config.build_suffix}'")
+    print(f"{'=' * 60}\n")
+
+    configure_cmd = [
+        "cmake",
+        "-S", str(root_dir),
+        "-B", str(build_dir),
+        f"-DCMAKE_BUILD_TYPE={config.build_type}",
+    ]
+    if config.platform_name == "windows":
+        configure_cmd.append(f"-DRUNTIME_LIB={config.runtime_lib}")
+    elif config.platform_name == "macos":
+        configure_cmd.append(f"-DMACOS_SDK={config.macos_sdk}")
+
+    print("==================== Configuring test ====================\n")
+    print(f"Running: {' '.join(configure_cmd)}\n")
+    if subprocess.run(configure_cmd).returncode != 0:
+        print("\nError: Test configure failed", file=sys.stderr)
+        return 1
+
+    build_cmd = ["cmake", "--build", str(build_dir), "--config", config.build_type]
+    print("\n==================== Building test ====================\n")
+    print(f"Running: {' '.join(build_cmd)}\n")
+    if subprocess.run(build_cmd).returncode != 0:
+        print("\nError: Test build failed", file=sys.stderr)
+        return 1
+
+    # Locate the produced binary. Multi-config generators (Visual Studio) drop
+    # it under <build_dir>/<config>/, single-config generators (Ninja, Make)
+    # under <build_dir>/ directly.
+    if config.platform_name == "windows":
+        candidates = [
+            build_dir / config.build_type / "DependenciesTest.exe",
+            build_dir / "DependenciesTest.exe",
+        ]
+    else:
+        candidates = [build_dir / "DependenciesTest"]
+    exe = next((c for c in candidates if c.exists()), None)
+    if exe is None:
+        print(
+            f"\nError: Test executable not found. Looked for:\n  "
+            + "\n  ".join(str(c) for c in candidates),
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"\n==================== Running test ({exe.name}) ====================\n")
+    rc = subprocess.run([str(exe)]).returncode
+    if rc != 0:
+        print(f"\nError: Test executable exited with code {rc}", file=sys.stderr)
+        return rc
+
+    print(f"\n{'=' * 60}")
+    print(f"Test passed for '{config.build_suffix}'")
+    print(f"{'=' * 60}\n")
+    return 0
 
 
 def main() -> int:
@@ -284,6 +364,12 @@ def main() -> int:
     print(f"\n{'=' * 60}")
     print("All builds completed successfully!")
     print(f"{'=' * 60}\n")
+
+    # Final validation: only when we built the full set. A targeted build
+    # (--library X) is for iterating on a single lib; the test binary links
+    # against every library and only makes sense once everything is present.
+    if not args.library:
+        return run_dependencies_test(config, root_dir)
 
     return 0
 

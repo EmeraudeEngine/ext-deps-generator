@@ -41,17 +41,17 @@ CMakeLists.txt              # Test project to validate all libs link correctly
   - NASM recommended for x86_64 assembly optimizations (`pacman -S nasm` or install via Windows PATH)
   - The MSYS2 `bash.exe` and `make` must be accessible (used to run libvpx's configure/make targeting MSVC)
   - Set `MSYS2_PATH` environment variable if MSYS2 is not installed at `C:\msys64`
-- Meson and Ninja (required for meson-based libraries like harfbuzz): `pip install meson ninja` inside the project venv
+- Python packages: `pip install -r requirements.txt` inside the project venv (installs PyYAML, Meson, Ninja — these have no convenient system installer on Windows)
 
 ### macOS
 - Xcode Command Line Tools
-- Ninja build system
-- Meson (if building meson-based libraries like harfbuzz)
+- Meson and Ninja (e.g., `brew install meson ninja`)
+- PyYAML (e.g., `pip install PyYAML` in the project venv)
 
 ### Linux
 - GCC or Clang toolchain
-- Ninja build system
-- Meson (if building meson-based libraries like harfbuzz)
+- Meson and Ninja (e.g., `apt install meson ninja-build`)
+- PyYAML (e.g., `apt install python3-yaml`, or `pip install PyYAML` in the project venv)
 
 ## Key Concepts
 
