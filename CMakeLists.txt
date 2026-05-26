@@ -296,8 +296,10 @@ else()
     # Other
     set(UFBX_LIB "ufbx")
     set(BC7ENC_LIB "bc7enc_rdo")
-    # lib3mf (static): CMake target named "lib3mf" produces "liblib3mf.a".
-    set(LIB3MF_LIB "lib3mf")
+    # lib3mf sets PREFIX "" on its target, so the archive is "lib3mf.a"
+    # (not "liblib3mf.a"). Use a full path to bypass the `-l` short-name search,
+    # which would otherwise look for "liblib3mf.{a,so,dylib}".
+    set(LIB3MF_LIB "${LIBS_ROOT}/lib/lib3mf.a")
 endif()
 
 # Use library names only - CMake won't validate existence at configure time.
@@ -357,6 +359,8 @@ if(APPLE)
     find_library(FRAMEWORK_IOKIT IOKit REQUIRED)
     find_library(FRAMEWORK_COREGRAPHICS CoreGraphics REQUIRED)
     find_library(FRAMEWORK_CORETEXT CoreText REQUIRED)
+    # Foundation: lib3mf with USE_PLATFORM_UUID uses CFUUID via Foundation.
+    find_library(FRAMEWORK_FOUNDATION Foundation REQUIRED)
 
     target_link_libraries(${PROJECT_NAME} PRIVATE
         ${FRAMEWORK_COREFOUNDATION}
@@ -366,6 +370,7 @@ if(APPLE)
         ${FRAMEWORK_IOKIT}
         ${FRAMEWORK_COREGRAPHICS}
         ${FRAMEWORK_CORETEXT}
+        ${FRAMEWORK_FOUNDATION}
     )
 
 elseif(WIN32)
@@ -386,6 +391,7 @@ elseif(WIN32)
         dwrite      # DirectWrite
         rpcrt4      # UuidCreate
         gdi32       # GDI
+        uuid        # lib3mf: IID_*/CLSID_* (Windows SDK)
     )
 
 else()
@@ -395,6 +401,7 @@ else()
         Threads::Threads
         ${CMAKE_DL_LIBS}
         m
+        uuid        # lib3mf: libuuid (USE_PLATFORM_UUID)
     )
 endif()
 
