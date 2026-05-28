@@ -30,7 +30,7 @@ CMakeLists.txt              # Test project to validate all libs link correctly
 
 ### All Platforms
 - Python 3.10+
-- CMake 3.20+
+- CMake 3.26+ (some libraries — e.g. openal-soft — use the `$<BUILD_LOCAL_INTERFACE:...>` generator expression introduced in 3.26)
 - Git (for submodules and patch system)
 
 ### Windows
@@ -50,7 +50,8 @@ CMakeLists.txt              # Test project to validate all libs link correctly
 
 ### Linux
 - GCC or Clang toolchain
-- Meson and Ninja (e.g., `apt install meson ninja-build`)
+- CMake 3.26+. Ubuntu 22.04's system package is 3.22 and is **too old** — install a newer one either via `pip install cmake` in the project venv (matches the macOS/Windows flow) or via Kitware's APT repo at https://apt.kitware.com/
+- Meson and Ninja (e.g., `apt install meson ninja-build`, or `pip install -r requirements.txt` in the project venv)
 - PyYAML (e.g., `apt install python3-yaml`, or `pip install PyYAML` in the project venv)
 
 ## Key Concepts
