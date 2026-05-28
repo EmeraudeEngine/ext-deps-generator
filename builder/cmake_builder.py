@@ -61,6 +61,30 @@ class PatchManager:
         # Either SHA may be abbreviated; accept if one is a prefix of the other.
         return actual.startswith(target) or target.startswith(actual)
 
+    @staticmethod
+    def _apply_path_args(source_dir: Path) -> list[str]:
+        # `git apply` resolves patch paths against the work tree root, not cwd.
+        # When source_dir is a subdirectory of the submodule (e.g. clipper2's
+        # CPP/), we must add --directory=<rel> so paths land in the right
+        # place; otherwise git silently no-ops and reports success.
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"],
+                cwd=source_dir, capture_output=True, text=True,
+            )
+        except FileNotFoundError:
+            return []
+        if result.returncode != 0:
+            return []
+        toplevel = Path(result.stdout.strip())
+        try:
+            rel = source_dir.resolve().relative_to(toplevel.resolve())
+        except ValueError:
+            return []
+        if rel == Path(".") or str(rel) == "":
+            return []
+        return [f"--directory={rel.as_posix()}"]
+
     def apply_patch(self, lib_name: str, source_dir: Path) -> bool:
         """Apply patch for a library if it exists. Returns True on success."""
         patch_file = self.patches_dir / f"{lib_name}.patch"
@@ -100,9 +124,10 @@ class PatchManager:
                 return False
 
         print(f"  Applying patch for '{lib_name}'...")
+        path_args = self._apply_path_args(source_dir)
         try:
             # Use git apply with --check first to verify
-            check_cmd = ["git", "apply", "--check", str(patch_file)]
+            check_cmd = ["git", "apply", "--check", *path_args, str(patch_file)]
             result = subprocess.run(
                 check_cmd, cwd=source_dir, capture_output=True, text=True
             )
@@ -112,7 +137,7 @@ class PatchManager:
                 return True
 
             # Apply the patch
-            apply_cmd = ["git", "apply", str(patch_file)]
+            apply_cmd = ["git", "apply", *path_args, str(patch_file)]
             result = subprocess.run(
                 apply_cmd, cwd=source_dir, capture_output=True, text=True
             )
@@ -138,8 +163,9 @@ class PatchManager:
             return True  # No patch was applied
 
         print(f"  Reverting patch for '{lib_name}'...")
+        path_args = self._apply_path_args(source_dir)
         try:
-            cmd = ["git", "apply", "--reverse", str(patch_file)]
+            cmd = ["git", "apply", "--reverse", *path_args, str(patch_file)]
             result = subprocess.run(cmd, cwd=source_dir, capture_output=True, text=True)
             if result.returncode == 0:
                 marker_file.unlink()
