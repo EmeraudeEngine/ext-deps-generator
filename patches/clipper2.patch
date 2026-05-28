@@ -1,0 +1,13 @@
+diff --git a/Clipper2Lib/src/clipper.triangulation.cpp b/Clipper2Lib/src/clipper.triangulation.cpp
+index 4345293..21b0a6d 100644
+--- a/Clipper2Lib/src/clipper.triangulation.cpp
++++ b/Clipper2Lib/src/clipper.triangulation.cpp
+@@ -1202,7 +1202,7 @@ namespace Clipper2Lib
+ 
+   TriangulateResult Triangulate(const PathsD& pp, int decPlaces, PathsD& solution, bool useDelaunay)
+   {
+-    int ec;
++    int ec = 0;
+     double scale;
+     TriangulateResult result;
+     if (decPlaces <= 0) scale = 1;
