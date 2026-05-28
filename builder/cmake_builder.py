@@ -2,6 +2,7 @@
 CMake build orchestration.
 """
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -16,10 +17,49 @@ if TYPE_CHECKING:
 class PatchManager:
     """Handles applying and reverting patches to library sources."""
 
+    _TARGET_COMMIT_RE = re.compile(r"^#\s*target-commit:\s*([0-9a-fA-F]{7,40})\s*$")
+
     def __init__(self, root_dir: Path):
         self.root_dir = root_dir
         self.patches_dir = root_dir / "patches"
         self._applied_patches: dict[str, Path] = {}
+
+    @classmethod
+    def _read_target_commit(cls, patch_file: Path) -> str | None:
+        """Pull a `# target-commit: <sha>` annotation from the patch preamble.
+
+        Returns None if no header is present (patch is unguarded). Reading
+        stops at the first `diff ` line — anything past that is patch content.
+        """
+        with patch_file.open() as f:
+            for line in f:
+                if line.startswith("diff "):
+                    return None
+                match = cls._TARGET_COMMIT_RE.match(line.rstrip("\n"))
+                if match:
+                    return match.group(1)
+        return None
+
+    @staticmethod
+    def _current_source_commit(source_dir: Path) -> str | None:
+        """Return the HEAD SHA of the git repo containing `source_dir`, or None."""
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=source_dir,
+                capture_output=True,
+                text=True,
+            )
+        except FileNotFoundError:
+            return None
+        if result.returncode != 0:
+            return None
+        return result.stdout.strip()
+
+    @staticmethod
+    def _commits_match(target: str, actual: str) -> bool:
+        # Either SHA may be abbreviated; accept if one is a prefix of the other.
+        return actual.startswith(target) or target.startswith(actual)
 
     def apply_patch(self, lib_name: str, source_dir: Path) -> bool:
         """Apply patch for a library if it exists. Returns True on success."""
@@ -32,6 +72,32 @@ class PatchManager:
         if marker_file.exists():
             print(f"  Patch already applied for '{lib_name}'")
             return True
+
+        # Guard against silent drift: if the patch declares a target commit,
+        # bail out when the source has moved underneath it. A patch authored
+        # against an older revision may apply with subtly wrong semantics or
+        # fail later in compilation; better to surface the mismatch up front.
+        target_commit = self._read_target_commit(patch_file)
+        if target_commit is not None:
+            current_commit = self._current_source_commit(source_dir)
+            if current_commit is None:
+                print(
+                    f"  Warning: could not determine HEAD of {source_dir}; "
+                    f"skipping target-commit check for '{lib_name}'",
+                    file=sys.stderr,
+                )
+            elif not self._commits_match(target_commit, current_commit):
+                print(
+                    f"  Error: patch '{lib_name}' targets commit "
+                    f"{target_commit[:12]} but source is at "
+                    f"{current_commit[:12]}.\n"
+                    f"    The submodule has moved since the patch was "
+                    f"authored. Review patches/{lib_name}.patch against the "
+                    f"current source, regenerate if needed, then update the "
+                    f"`# target-commit:` line at the top of the patch.",
+                    file=sys.stderr,
+                )
+                return False
 
         print(f"  Applying patch for '{lib_name}'...")
         try:
