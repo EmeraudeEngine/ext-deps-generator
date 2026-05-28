@@ -26,7 +26,12 @@ from builder.autotools_builder import AutotoolsBuilder
 from builder.meson_builder import MesonBuilder
 from builder.msys2_builder import Msys2Builder
 from builder.platforms import get_platform
-from builder.tools_check import check_required_tools, report_missing_tools
+from builder.tools_check import (
+    check_required_tools,
+    check_tool_versions,
+    report_missing_tools,
+    report_tool_version_errors,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -322,6 +327,11 @@ def main() -> int:
     missing_tools = check_required_tools(config.platform_name)
     if missing_tools:
         report_missing_tools(missing_tools)
+        return 1
+
+    version_errors = check_tool_versions(config.platform_name)
+    if version_errors:
+        report_tool_version_errors(version_errors)
         return 1
 
     # Build libraries
