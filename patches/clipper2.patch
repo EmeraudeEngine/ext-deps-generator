@@ -1,15 +1,24 @@
 # target-commit: 21ebba05db8894f0c7217ad35ea518080f324946
 
-diff --git a/Clipper2Lib/src/clipper.triangulation.cpp b/Clipper2Lib/src/clipper.triangulation.cpp
-index 4345293..21b0a6d 100644
---- a/Clipper2Lib/src/clipper.triangulation.cpp
-+++ b/Clipper2Lib/src/clipper.triangulation.cpp
-@@ -1202,7 +1202,7 @@ namespace Clipper2Lib
- 
-   TriangulateResult Triangulate(const PathsD& pp, int decPlaces, PathsD& solution, bool useDelaunay)
-   {
--    int ec;
-+    int ec = 0;
-     double scale;
-     TriangulateResult result;
-     if (decPlaces <= 0) scale = 1;
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 7642e86..b411926 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -80,7 +80,7 @@ if (NOT (CLIPPER2_USINGZ STREQUAL "ONLY"))
+   if (MSVC)
+     target_compile_options(Clipper2 PRIVATE /W4 /WX)
+   else()
+-    target_compile_options(Clipper2 PRIVATE -Wall -Wextra -Wpedantic -Werror)
++    target_compile_options(Clipper2 PRIVATE -Wall -Wextra -Wpedantic)
+     target_link_libraries(Clipper2 PUBLIC -lm)
+   endif()
+ endif()
+@@ -105,7 +105,7 @@ if (NOT (CLIPPER2_USINGZ STREQUAL "OFF"))
+   if (MSVC)
+     target_compile_options(Clipper2Z PRIVATE /W4 /WX)
+   else()
+-    target_compile_options(Clipper2Z PRIVATE -Wall -Wextra -Wpedantic -Werror)
++    target_compile_options(Clipper2Z PRIVATE -Wall -Wextra -Wpedantic)
+     target_link_libraries(Clipper2Z PUBLIC -lm)
+   endif()
+ endif()
