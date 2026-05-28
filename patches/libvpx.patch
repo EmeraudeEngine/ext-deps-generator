@@ -1,3 +1,5 @@
+# target-commit: 1024874c5919305883187e2953de8fcb4c3d7fa6
+
 diff --git a/build/make/Makefile b/build/make/Makefile
 index 39dff825b..a2a121572 100644
 --- a/build/make/Makefile

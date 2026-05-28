@@ -1,3 +1,5 @@
+# target-commit: 5c3494fb9a0f1b2e9fb5fb90ddf83ea6b676ebbb
+
 diff --git a/CMakeLists.txt b/CMakeLists.txt
 new file mode 100644
 index 0000000..38b9c2a

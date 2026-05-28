@@ -1,3 +1,5 @@
+# target-commit: dbe416d28a5530b4e8cc45b14bf034dc6b96bbde
+
 diff --git a/CMakeLists.txt b/CMakeLists.txt
 index 1ec2e73..9030fd7 100644
 --- a/CMakeLists.txt
