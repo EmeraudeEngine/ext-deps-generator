@@ -4,6 +4,7 @@ Autotools build orchestration for libraries like hwloc.
 
 import os
 import platform as platform_module
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -22,6 +23,50 @@ def _get_host_arch() -> str:
     if machine in ("arm64", "aarch64"):
         return "arm64"
     return "x86_64"
+
+
+def _toolchain_signature(platform_name: str) -> str:
+    """Return a string that uniquely identifies the active C/C++ toolchain.
+
+    Used to detect when the compiler changed between two builds reusing the
+    same build dir. Generated dependency (.d) files hardcode the compiler's
+    internal header paths (e.g. /usr/lib/gcc/.../12/include/stddef.h); if the
+    compiler is swapped (gcc-12 -> gcc-14) those paths vanish and make aborts
+    with "no rule to make target .../stddef.h". Wiping the build dir on a
+    signature change regenerates clean dependencies.
+
+    The signature combines, for both CC and CXX, the resolved binary path and
+    its --version banner — enough to catch a version bump or a different
+    compiler entirely.
+    """
+    if platform_name == "linux":
+        defaults = {"CC": "gcc", "CXX": "g++"}
+    elif platform_name == "macos":
+        defaults = {"CC": "clang", "CXX": "clang++"}
+    else:
+        defaults = {"CC": "cc", "CXX": "c++"}
+
+    parts: list[str] = []
+    for var, default in defaults.items():
+        compiler = os.environ.get(var) or default
+        resolved = shutil.which(compiler)
+        if resolved is None:
+            parts.append(f"{var}={compiler}:missing")
+            continue
+        try:
+            banner = subprocess.run(
+                [resolved, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            ).stdout.splitlines()
+            version = banner[0].strip() if banner else ""
+        except (OSError, subprocess.SubprocessError):
+            version = ""
+        real = os.path.realpath(resolved)
+        parts.append(f"{var}={compiler}:{real}:{version}")
+
+    return "\n".join(parts)
 
 
 class AutotoolsBuilder:
@@ -75,6 +120,12 @@ class AutotoolsBuilder:
         build_dir = source_dir / f"build-{self.config.arch}-{self.config.build_type}"
         build_dir.mkdir(parents=True, exist_ok=True)
 
+        # Wipe the build dir if the active toolchain changed since the last
+        # build. Generated .d dependency files hardcode the compiler's internal
+        # header paths; reusing them after a gcc-12 -> gcc-14 swap makes `make`
+        # demand a header that no longer exists and abort.
+        self._ensure_toolchain_match(build_dir)
+
         # Configure
         print(f"\n{'=' * 20} Configuring '{lib.name}' {'=' * 20}\n")
         if not self._run_configure(source_dir, build_dir, install_dir, autotools_opts, lib):
@@ -101,6 +152,33 @@ class AutotoolsBuilder:
 
         print(f"\n{'=' * 20} Success! {'=' * 20}\n")
         return True
+
+    def _ensure_toolchain_match(self, build_dir: Path) -> None:
+        """Wipe and recreate build_dir if the toolchain changed since last build.
+
+        Compares the current toolchain signature against a stamp left by the
+        previous build. On mismatch (or a corrupt/missing stamp next to stale
+        artifacts), the build dir is cleared so configure/make regenerate
+        dependency files against the current compiler.
+        """
+        stamp = build_dir / ".toolchain_stamp"
+        signature = _toolchain_signature(self.config.platform_name)
+
+        previous = stamp.read_text() if stamp.is_file() else None
+
+        # Treat a build dir that already holds artifacts but has no stamp as a
+        # mismatch — it predates this mechanism and may carry stale .d files.
+        has_artifacts = any(
+            child.name != ".toolchain_stamp" for child in build_dir.iterdir()
+        )
+
+        if previous != signature and has_artifacts:
+            reason = "toolchain changed" if previous else "no toolchain stamp"
+            print(f"  Toolchain check: {reason}; wiping {build_dir}")
+            shutil.rmtree(build_dir)
+            build_dir.mkdir(parents=True, exist_ok=True)
+
+        stamp.write_text(signature)
 
     def _run_autogen(self, source_dir: Path) -> bool:
         """Run autogen.sh if it exists."""
