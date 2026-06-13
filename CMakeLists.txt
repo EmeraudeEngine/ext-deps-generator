@@ -315,6 +315,9 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${PNG_LIB} ${JPEG_LIB} ${TURBOJPEG_LIB} ${WEBP_LIB} ${SHARPYUV_LIB}
     # Video
     ${VPX_LIB}
+    # 3D model formats (lib3mf depends on libzip -> zlib/bzip2/lzma/zstd, so it
+    # must precede zip and the compression libs in static link order)
+    ${LIB3MF_LIB}
     # Archive (zip depends on zlib, bzip2, lzma, zstd)
     zip
     # Audio I/O (libsndfile depends on flac, vorbis, opus, mpg123, lame, ogg)
@@ -336,7 +339,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     # Process control
     ${REPROC_CPP_LIB} ${REPROC_LIB}
     # Data formats
-    fastgltf jsoncpp ${UFBX_LIB} ${LIB3MF_LIB}
+    fastgltf jsoncpp ${UFBX_LIB}
     # Texture compression
     ${BC7ENC_LIB}
 )

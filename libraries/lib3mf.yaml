@@ -1,9 +1,22 @@
 name: lib3mf
 source_dir: repositories/lib3mf
 
+# Use ext-deps-generator's own zlib/libzip instead of lib3mf's bundled copies.
+# With USE_INCLUDED_LIBZIP=ON, lib3mf compiles its embedded libzip straight into
+# its static archive; an app that also links our standalone libzip then gets two
+# copies of the libzip symbols (often different versions) -> ODR/link mismatch.
+# Switching both to OFF makes lib3mf find_package(libzip/ZLIB) the shared copies.
+# depends_on builds them first and sets CMAKE_PREFIX_PATH; use_install_prefix_as_find_root
+# sets CMAKE_FIND_ROOT_PATH so libzip-config.cmake's transitive find_dependency()
+# (ZLIB/BZip2/LibLZMA/zstd, module mode) resolves against our install prefix.
+depends_on:
+  - libzip
+
+use_install_prefix_as_find_root: true
+
 cmake_options:
-  USE_INCLUDED_ZLIB: true
-  USE_INCLUDED_LIBZIP: true
+  USE_INCLUDED_ZLIB: false
+  USE_INCLUDED_LIBZIP: false
   USE_INCLUDED_SSL: false
   BUILD_FOR_CODECOVERAGE: false
   STRIP_BINARIES: true
