@@ -183,8 +183,12 @@ class WindowsPlatform(Platform):
         print(f"  Activating MSVC environment ({vcvars_arch}) via {vcvarsall}")
 
         try:
+            # Pass the command as one string with `/s /c "<cmd>"`, not an argv
+            # list: with a list, cmd's /c de-quoting mangles a vcvarsall path
+            # containing spaces and exits rc=1. `/s` strips only the outer quote
+            # pair, preserving the inner quoting around the path.
             result = subprocess.run(
-                ["cmd.exe", "/c", f'"{vcvarsall}" {vcvars_arch} >nul && set'],
+                f'cmd.exe /s /c " "{vcvarsall}" {vcvars_arch} >nul && set "',
                 capture_output=True,
                 text=True,
                 timeout=60,
@@ -203,7 +207,10 @@ class WindowsPlatform(Platform):
             # Sanity check: confirm cl.exe is actually reachable through the
             # captured PATH. If not, vcvarsall ran but didn't update PATH the
             # way we expected — better to know now than to fail in meson.
-            cl_path = shutil.which("cl", path=env.get("PATH", ""))
+            # `set` emits PATH under its stored casing, "Path" on most machines
+            # but "PATH" on some, so accept either.
+            captured_path = env.get("PATH") or env.get("Path", "")
+            cl_path = shutil.which("cl", path=captured_path)
             if cl_path:
                 print(f"  MSVC activated: cl -> {cl_path}")
             else:
@@ -305,16 +312,29 @@ class WindowsPlatform(Platform):
         if config.build_type != "Debug":
             return
 
-        pdb_source_dir = build_dir / config.build_type
         pdb_dest_dir = install_dir / "lib"
 
-        if not pdb_source_dir.exists():
-            print(f"PDB source directory not found: {pdb_source_dir}. Skipping PDB copy.")
+        if not build_dir.exists():
+            print(f"Build directory not found: {build_dir}. Skipping PDB copy.")
+            return
+
+        # Different libraries emit their .pdb in different locations under the
+        # build dir (e.g. <build_dir>/Debug for most, <build_dir>/lib/Debug for
+        # libzip). Search recursively for any per-target PDB matching the build
+        # type, skipping compiler intermediate PDBs (vcNNN.pdb).
+        pdb_files = [
+            pdb
+            for pdb in build_dir.rglob(f"{config.build_type}/*.pdb")
+            if not re.fullmatch(r"vc\d+\.pdb", pdb.name, re.IGNORECASE)
+        ]
+
+        if not pdb_files:
+            print(f"No PDB files found under {build_dir}. Skipping PDB copy.")
             return
 
         pdb_dest_dir.mkdir(parents=True, exist_ok=True)
 
-        for pdb_file in pdb_source_dir.glob("*.pdb"):
+        for pdb_file in pdb_files:
             dest_file = pdb_dest_dir / pdb_file.name
             print(f"Copying {pdb_file.name} to {pdb_dest_dir}")
             shutil.copy2(pdb_file, dest_file)

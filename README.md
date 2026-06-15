@@ -403,7 +403,7 @@ Install each tool separately (no single package manager):
 - **Ninja** and **Meson** — via `pip install ninja meson` (after Python is installed)
 - **NASM** — https://www.nasm.us/pub/nasm/releasebuilds/?C=M;O=D
 - **MSYS2** (required to build libvpx) — https://www.msys2.org/
-  - After install, run `pacman -S make` inside MSYS2
+  - After install, run `pacman -S make diffutils` inside MSYS2
   - Set the `MSYS2_PATH` env var if MSYS2 is not at `C:\msys64`
 
 Autotools is not needed on Windows: the libraries that use it (hwloc, libvpx)
