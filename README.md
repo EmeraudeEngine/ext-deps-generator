@@ -11,6 +11,34 @@ If you update a dependency that requires other dependencies like freetype, updat
 
 When a dependency is updated, remember to report in 'Available libraries' the changes (branch, commit, version, ...).
 
+## Updating LibreSSL (vendored)
+
+LibreSSL is the **one exception** to the "every dependency is a git submodule" rule: its
+sources are a committed release tarball under `repositories/libressl/` (see the "Vendored
+Sources" section in `AGENTS.md` for why). `check_releases.py` cannot see it, so releases must
+be checked manually. To move to a new version:
+
+```sh
+# 1. Check for a newer stable at https://www.libressl.org/releases.html
+#    (x.y.2 is the first STABLE of a branch; x.y.0/x.y.1 are dev snapshots).
+
+# 2. Download the tarball and the mirror's signed checksum list, then VERIFY.
+VER=4.3.2   # <-- set the target version
+cd /tmp
+curl -sSLO "https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-${VER}.tar.gz"
+curl -sSLO "https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/SHA256"
+grep "libressl-${VER}.tar.gz" SHA256
+sha256sum "libressl-${VER}.tar.gz"     # <-- the two hashes MUST match
+
+# 3. Replace the vendored sources (from the ext-deps-generator repo root).
+rm -rf repositories/libressl
+mkdir  repositories/libressl
+tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-components=1
+
+# 4. Update the version + SHA256 in libraries/libressl.yaml AND the "## libressl"
+#    entry in this README, then rebuild + run the link-test to confirm.
+```
+
 
 # Available libraries
 
@@ -162,6 +190,26 @@ When a dependency is updated, remember to report in 'Available libraries' the ch
 - Version: 1.6.58
 - Dependencies: zlib
 - Usage: Image format library.
+
+## libressl
+[VENDORED — release tarball, NOT a git submodule]
+
+- Source: https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-4.3.2.tar.gz
+- Version: 4.3.2 (first stable of the 4.3 branch; LibreSSL convention: x.y.0/x.y.1 are
+  development snapshots, x.y.2 is the first stable of a branch)
+- SHA256: edf01aee24c65d69e6a9efcb9d44bcda682ff9d4f3bbbd95e794e1dfa90847b5
+- Dependencies: None
+- Usage: TLS/crypto provider (libtls + libssl + libcrypto). Consumed by emeraude-base's
+  HTTPS client through `asio::ssl` (OpenSSL-compatible API). Chosen over OpenSSL because
+  LibreSSL-portable builds with CMake, whereas OpenSSL's perl `Configure` would require a
+  bespoke builder plus perl/nasm build deps in this CMake-centric generator.
+- **Notes — THE ONE VENDORED DEPENDENCY.** Unlike every other library here, LibreSSL is
+  NOT a git submodule: its full release sources are committed under `repositories/libressl/`.
+  The `libressl/portable` git repo is not self-contained (crypto/ssl/tls hold only build
+  files; the real sources are pulled from OpenBSD by `update.sh` at build time), so the
+  reproducible form is the release tarball. See "Updating LibreSSL (vendored)" above and the
+  "Vendored Sources" section in `AGENTS.md`. `check_releases.py` does NOT track it (it only
+  sees `.gitmodules`) — check for new releases manually at https://www.libressl.org/releases.html
 
 ## libsamplerate 
 [master, 2ccde9568cca73c7b32c97fefca2e418c16ae5e3]
