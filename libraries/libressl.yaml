@@ -1,0 +1,35 @@
+# LibreSSL — TLS/crypto provider (libcrypto, libssl, libtls).
+#
+# VENDORED RELEASE TARBALL — NOT a git submodule (the only such dependency).
+# The libressl/portable git repository is not self-contained: crypto/ssl/tls
+# hold only build files, the real sources are pulled from the OpenBSD tree by
+# update.sh at build time (build-time network, weak reproducibility). The
+# self-contained form of a LibreSSL release is the tarball, vendored into
+# repositories/libressl/.
+#
+#   Version:  4.3.2 (first stable of the 4.3 branch, released 2026-05-25;
+#             LibreSSL convention: x.y.0/x.y.1 are development snapshots,
+#             x.y.2 is the first stable of a branch)
+#   Source:   https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-4.3.2.tar.gz
+#   SHA256:   edf01aee24c65d69e6a9efcb9d44bcda682ff9d4f3bbbd95e794e1dfa90847b5
+#             (verified against the mirror's signed SHA256 list at vendoring time)
+#
+# Upgrading: download the new tarball + the SHA256 file from the same mirror,
+# verify the checksum, wipe repositories/libressl/, re-extract with
+# --strip-components=1, then update this header. check_releases.py does NOT
+# track this library (it enumerates .gitmodules) — check releases manually at
+# https://www.libressl.org/releases.html
+#
+# Notes:
+# - MSVC CRT selection is handled by the builder (CMAKE_MSVC_RUNTIME_LIBRARY);
+#   LibreSSL's own USE_STATIC_MSVC_RUNTIMES option stays at its default (OFF)
+#   so it never overrides the builder's choice.
+# - LibreSSL disables ENABLE_ASM by itself where unsupported (e.g. MSVC).
+
+name: libressl
+source_dir: repositories/libressl
+
+cmake_options:
+  LIBRESSL_APPS: false
+  LIBRESSL_TESTS: false
+  BUILD_SHARED_LIBS: false

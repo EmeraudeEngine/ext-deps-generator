@@ -20,7 +20,8 @@ builder/
     macos.py                # macOS-specific
 libraries/*.yaml            # Library configurations
 patches/                    # Git patches applied before build (see Patch System)
-repositories/               # Git submodules (library sources)
+repositories/               # Git submodules (library sources) — EXCEPTION: libressl is a
+                            # vendored release tarball, not a submodule (see Vendored Sources)
 output/                     # Built libraries (per-config subdirs)
 builds/                     # Build intermediates
 CMakeLists.txt              # Test project to validate all libs link correctly
@@ -134,6 +135,22 @@ Single kind for now (`require_any_define`); extend `verify_post_build()` when
 a new kind is genuinely needed. Opt-in: libraries without the section behave
 as before. The check is CMake-only at the moment — wire it into the other
 builders the same way if a non-CMake library ever needs it.
+
+### Vendored Sources (exception to the submodule convention)
+All library sources are git submodules, with **one deliberate exception: `repositories/libressl/`
+holds the committed contents of an upstream release tarball** (owner-ruled 2026-07-04). Reason:
+the `libressl/portable` git repository is not self-contained — its crypto/ssl/tls directories
+hold only build files, the real sources are pulled from the OpenBSD tree by `update.sh` at
+build time (build-time network access, weak reproducibility). The self-contained form of a
+LibreSSL release is the tarball.
+
+Rules for a vendored library:
+- The version, source URL, and tarball SHA256 are recorded in the library's YAML header
+  (`libraries/libressl.yaml`), along with the upgrade procedure.
+- `check_releases.py` does NOT see vendored libraries (it enumerates `.gitmodules`) — release
+  freshness must be checked manually (https://www.libressl.org/releases.html).
+- Do not add further vendored deps without weighing the submodule alternative first; this is
+  an exception, not a precedent.
 
 ### Patch System
 Some libraries need modifications to build correctly (e.g., forced C++ standard, macOS cross-compilation fixes). Instead of forking, use the patch system.

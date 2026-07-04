@@ -332,6 +332,9 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     cpu_features hwloc
     # Crypto
     cryptopp
+    # TLS (LibreSSL: consumers before providers — tls -> ssl -> crypto;
+    # static archive basenames are identical on Unix and MSVC)
+    tls ssl crypto
     # Geometry
     Clipper2
     # Networking
@@ -394,6 +397,9 @@ elseif(WIN32)
         rpcrt4      # UuidCreate
         gdi32       # GDI
         uuid        # lib3mf: IID_*/CLSID_* (Windows SDK)
+        # LibreSSL (libcrypto getentropy: BCryptGenRandom; cert store hooks: Crypt*)
+        bcrypt
+        crypt32
     )
 
 else()

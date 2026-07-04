@@ -137,6 +137,11 @@
 #include "cryptopp/cryptlib.h"
 #include "cryptopp/sha.h"
 
+// libressl (OpenSSL-compatible API + libtls)
+#include "openssl/opensslv.h"
+#include "openssl/crypto.h"
+#include "tls.h"
+
 // ============================================================================
 // Geometry libraries
 // ============================================================================
@@ -421,6 +426,18 @@ static bool test_cryptopp()
     return true;
 }
 
+static bool test_libressl()
+{
+    // Exercises all three archives: tls_init() pulls libtls -> libssl -> libcrypto.
+    if (tls_init() != 0)
+    {
+        std::cout << "  libressl: FAILED (tls_init returned non-zero)\n";
+        return false;
+    }
+    std::cout << "  libressl: OK (" << OpenSSL_version(OPENSSL_VERSION) << ")\n";
+    return true;
+}
+
 static bool test_clipper2()
 {
     Clipper2Lib::Paths64 subject;
@@ -636,6 +653,7 @@ int main(int /*argc*/, char* /*argv*/[])
 
     std::cout << "\n--- Crypto Libraries ---\n";
     run_test("cryptopp", test_cryptopp);
+    run_test("libressl", test_libressl);
 
     std::cout << "\n--- Geometry Libraries ---\n";
     run_test("clipper2", test_clipper2);
