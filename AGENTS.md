@@ -6,7 +6,8 @@ Cross-platform build system for external C/C++ dependencies. Generates static li
 ## Architecture
 
 ```
-build.py                    # Main entry point
+build.py                    # Main entry point (static libs from the YAML registry)
+build_cef.py                # SEPARATE path: CEF from source (see § CEF below)
 builder/
   config.py                 # BuildConfig, Library, LibraryRegistry classes
   cmake_builder.py          # CMake build orchestration + PatchManager
@@ -214,6 +215,63 @@ Builds a library for both macOS architectures (ARM64 + x86_64) in Release mode w
 
 ### `/check-releases`
 Runs `check_releases.py` to compare each submodule's pinned commit against upstream release tags. Read-only: reports which libraries have a newer stable tag, which are on a branch with a tag suggestion, and which have no tags upstream. Does not modify anything.
+
+## CEF (separate build path — `build_cef.py`)
+
+CEF is **deliberately NOT** in the `libraries/*.yaml` registry. The registry
+handles small static libs from git submodules (cmake/autotools/meson/msys2),
+ordered by a dependency graph and linked together by `DependenciesTest`. CEF is
+a full Chromium checkout (~100 GB, hours) driven by `depot_tools` +
+`automate-git.py` + GN, producing a *binary distribution* (shared libcef +
+`libcef_dll_wrapper` static lib + resources + headers), versioned by a CEF
+branch number. Putting a `cef.yaml` in `libraries/` would break the registry
+(the loader would order/link it like a static lib). So it lives in its own
+standalone script.
+
+**Why build CEF ourselves** — two goals, each requiring a from-source build:
+1. **H.264 / proprietary codecs**: official builds ship `proprietary_codecs=false`.
+2. **No V8 sandbox**: app_system's zero-copy ArrayBuffer bridge is incompatible
+   with the V8 sandbox (external backing stores must live inside the sandbox
+   cage). The sandbox is default-ON upstream but still disable-able at build time
+   — which requires **also** disabling pointer compression (three flags kept
+   together in `BASE_GN_DEFINES`).
+
+**Staying current**: bump `DEFAULT_CEF_BRANCH` in `build_cef.py` every 2-3 months
+to the current stable CEF branch, re-run per platform, publish the archive. The
+GN args never change across versions — only the branch does. This works as long
+as `v8_enable_sandbox=false` survives upstream (unsupported config → guard the
+zero-copy in CI after each bump).
+
+```bash
+python build_cef.py                     # host platform, Release, x86_64
+python build_cef.py --branch 7827       # target a specific CEF branch (bump to stay current)
+python build_cef.py --arch arm64 --macos-sdk 12.0
+python build_cef.py --distrib minimal   # ship-ready, smaller
+python build_cef.py --archive           # also zip the dist folder for publishing
+python build_cef.py --dry-run           # print plan (env, GN_DEFINES, command), build nothing
+python build_cef.py --clean             # remove output/*.cef.* folders (NOT the Chromium checkout)
+```
+
+- **Cannot cross-compile** Chromium (except macOS x86_64/arm64 on Apple Silicon):
+  run on a native machine per target OS.
+- **Checkout location**: `--download-dir` > `$CEF_DOWNLOAD_DIR` > `~/chromium_git`
+  (must be outside this repo).
+- **Output — matches the Spotify CDN exactly**: the produced distribution is
+  copied into `output/` keeping its verbatim official name
+  `cef_binary_<version>_<token>[_<flavor>]/` (e.g.
+  `output/cef_binary_149.0.6+g…+chromium-149.0.7827.201_linux64/`). The platform
+  `<token>` is the Spotify one — `linux64`, `linuxarm64`, `windows64`,
+  `windowsarm64`, `macosx64`, `macosarm64`. **Why identical to Spotify**: the
+  app_system consumer keeps working unchanged — only its CEF **download base URL**
+  flips from the Spotify CDN to our GitHub release (a single `-DCEF_DOWNLOAD_BASE_URL=…`
+  configure flag in `cmake/InstallCEF.cmake`, + a `CEF_PACKAGE_VERSION` bump); the
+  archive name is the same.
+  The folder is laid out like an extracted Spotify archive: `Release/` and/or
+  `Debug/` subdirs (only the build type(s) built; same-branch runs **merge**, so
+  a Debug run keeps an existing Release/ and vice-versa) plus the shared dirs
+  (`include`, `Resources`, `libcef_dll`, `cmake`, `*.txt`). Add `--archive` to
+  also produce `output/cef_binary_<version>_<token>.tar.bz2` (the Spotify archive
+  format) for upload as a GitHub release asset.
 
 ## Common Issues
 
