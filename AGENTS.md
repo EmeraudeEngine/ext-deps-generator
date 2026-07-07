@@ -260,6 +260,21 @@ GN args never change across versions — only the branch does. This works as lon
 as `v8_enable_sandbox=false` survives upstream (unsupported config → guard the
 zero-copy in CI after each bump).
 
+**Linux glibc floor (why CEF has NO glibc tag, unlike the static libs)**: CEF is
+built with `use_sysroot=true` (`BASE_GN_DEFINES` in `build_cef.py`), so it links
+against Chromium's bundled Debian sysroot — currently **Bullseye → glibc 2.31** —
+*regardless of the build host's glibc*. The produced `libcef.so` therefore runs
+on any distro with glibc ≥ 2.31, exactly like the official Spotify CDN builds
+(which use the same infrastructure). This is the deliberate difference from the
+static libs built by `build.py`: those link against the **host** glibc, so their
+output folder carries a `-glibc<ver>` tag (see § Build Configuration String),
+whereas CEF's folder keeps the plain Spotify token (`linux64`, no glibc tag)
+because its floor is fixed by the sysroot, not by the machine.
+Caveat: the sysroot pins the floor of `libcef.so` and Chromium's own code only.
+`libcef_dll_wrapper` (the static C++ lib you compile and link engine-side) and
+your own code still follow the host toolchain — that is the link to watch if the
+final app must run on a distro older than the build host.
+
 ```bash
 python build_cef.py                     # host platform, Release, x86_64
 python build_cef.py --branch 7827       # target a specific CEF branch (bump to stay current)
