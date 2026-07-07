@@ -254,8 +254,13 @@ python build_cef.py --clean             # remove output/*.cef.* folders (NOT the
 
 - **Cannot cross-compile** Chromium (except macOS x86_64/arm64 on Apple Silicon):
   run on a native machine per target OS.
-- **Checkout location**: `--download-dir` > `$CEF_DOWNLOAD_DIR` > `~/chromium_git`
-  (must be outside this repo).
+- **Checkout location**: `--download-dir` > `$CEF_DOWNLOAD_DIR` >
+  `<repo>/builds/cef-chromium` (the ~100 GB Chromium checkout + depot_tools +
+  automate-git.py). The default lives under `builds/` so it is git-ignored
+  (`builds/*`), and it is **deliberately excluded from `build.py --clean`** (see
+  `clean_directories()`, which imports `CEF_CHECKOUT_DIRNAME`) so a normal clean
+  never nukes the multi-hour checkout. Point `--download-dir` at a bigger disk if
+  needed.
 - **Output — matches the Spotify CDN exactly**: the produced distribution is
   copied into `output/` keeping its verbatim official name
   `cef_binary_<version>_<token>[_<flavor>]/` (e.g.

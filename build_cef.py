@@ -51,6 +51,11 @@ Usage:
 CANNOT cross-compile Chromium: run this on the target OS (the one exception is
 macOS x86_64/arm64 on an Apple-Silicon host). depot_tools is bootstrapped into
 the download dir automatically if absent.
+
+Download dir (the ~100 GB Chromium checkout + depot_tools + automate-git.py):
+    --download-dir  >  $CEF_DOWNLOAD_DIR  >  <repo>/builds/cef-chromium
+The default lives under builds/ (git-ignored) and is DELIBERATELY excluded from
+`build.py --clean`, so a normal clean never nukes the multi-hour checkout.
 """
 
 import argparse
@@ -81,6 +86,13 @@ AUTOMATE_GIT_URL = (
     "https://bitbucket.org/chromiumembedded/cef/raw/master/tools/automate/automate-git.py"
 )
 DEPOT_TOOLS_URL = "https://chromium.googlesource.com/chromium/tools/depot_tools.git"
+
+# Default location for the ~100 GB Chromium checkout + depot_tools + automate-git.py,
+# relative to the repo root: builds/<CEF_CHECKOUT_DIRNAME>/. Kept under builds/ so it
+# is git-ignored (builds/* in .gitignore) but DELIBERATELY excluded from
+# `build.py --clean` (which wipes builds/) — see clean_directories() in build.py, which
+# imports this name to skip it. Overridable via --download-dir / $CEF_DOWNLOAD_DIR.
+CEF_CHECKOUT_DIRNAME = "cef-chromium"
 
 
 # ---------------------------------------------------------------------------
@@ -167,8 +179,8 @@ def parse_args() -> argparse.Namespace:
         metavar="PATH",
         help=(
             "Where the Chromium checkout + depot_tools live (~100 GB). "
-            "Defaults to $CEF_DOWNLOAD_DIR, then ~/chromium_git. MUST be outside "
-            "this repo."
+            "Defaults to $CEF_DOWNLOAD_DIR, then <repo>/builds/cef-chromium "
+            "(git-ignored, and excluded from `build.py --clean`)."
         ),
     )
     parser.add_argument(
@@ -194,14 +206,21 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def resolve_download_dir(arg: str | None) -> Path:
-    """--download-dir > $CEF_DOWNLOAD_DIR > ~/chromium_git."""
+def resolve_download_dir(arg: str | None, root_dir: Path) -> Path:
+    """--download-dir > $CEF_DOWNLOAD_DIR > <repo>/builds/cef-chromium.
+
+    The default now lives inside the repo (under builds/, git-ignored) rather than
+    ~/chromium_git, so the checkout ships with the project's working tree. It is
+    excluded from `build.py --clean` so the ~100 GB / multi-hour checkout survives a
+    normal clean; use `--download-dir` / $CEF_DOWNLOAD_DIR to place it elsewhere
+    (e.g. a bigger disk).
+    """
     if arg:
         return Path(arg).expanduser().resolve()
     env = os.environ.get("CEF_DOWNLOAD_DIR")
     if env:
         return Path(env).expanduser().resolve()
-    return (Path.home() / "chromium_git").resolve()
+    return (root_dir / "builds" / CEF_CHECKOUT_DIRNAME).resolve()
 
 
 # Map (platform, arch) to the Spotify CDN platform token — the exact tokens the
@@ -448,7 +467,7 @@ def main() -> int:
             print(f"Error: {e}", file=sys.stderr)
         return 1
 
-    download_dir = resolve_download_dir(args.download_dir)
+    download_dir = resolve_download_dir(args.download_dir, root_dir)
     gn_defines = build_gn_defines(config.platform_name)
     env = build_environment(config, gn_defines)
 

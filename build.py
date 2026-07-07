@@ -124,19 +124,32 @@ def list_libraries(registry: LibraryRegistry, platform_name: str) -> None:
 def clean_directories(root_dir: Path) -> None:
     """Clean build and output directories.
 
-    - Removes all contents from builds/
+    - Removes all contents from builds/ EXCEPT the CEF Chromium checkout
+      (builds/cef-chromium/), a ~100 GB / multi-hour tree managed by build_cef.py
+      that must survive a normal clean (use `build_cef.py --clean` for its output).
     - Empties each subdirectory in output/ but keeps the directories themselves
       (symlinks may be attached to them)
     """
+    from build_cef import CEF_CHECKOUT_DIRNAME
+
     print(f"\n{'=' * 60}")
     print("Cleaning build directories")
     print(f"{'=' * 60}\n")
 
-    # Clean builds directory (also wipes builds/tests/ for the inclusion test)
+    # Clean builds directory (also wipes builds/tests/ for the inclusion test),
+    # but preserve the CEF Chromium checkout — it is expensive to recreate and is
+    # owned by build_cef.py, not the static-lib build.
     builds_dir = root_dir / "builds"
     if builds_dir.exists():
         print(f"Cleaning: {builds_dir}")
-        shutil.rmtree(builds_dir)
+        for item in builds_dir.iterdir():
+            if item.name == CEF_CHECKOUT_DIRNAME:
+                print(f"  Preserving: {item.name}/ (CEF Chromium checkout)")
+                continue
+            if item.is_dir():
+                shutil.rmtree(item)
+            else:
+                item.unlink()
         print("  Done")
     else:
         print(f"Not found: {builds_dir}")
