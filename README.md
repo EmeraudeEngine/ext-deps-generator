@@ -591,7 +591,7 @@ Expected results:
 
 Quick recap and reminder to release assets on GitHub. Here is an example for separated uploads for the assets v013.
 
-*Notes* : Use --cobbler to overwrite.
+*Notes* : Use --clobber to overwrite.
 
 ```
 # Create the release
