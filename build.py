@@ -212,6 +212,10 @@ def run_dependencies_test(config: BuildConfig, root_dir: Path) -> int:
         configure_cmd.append(f"-DRUNTIME_LIB={config.runtime_lib}")
     elif config.platform_name == "macos":
         configure_cmd.append(f"-DMACOS_SDK={config.macos_sdk}")
+        # Without this the test compiles for the host arch (arm64 on Apple
+        # Silicon) while linking libs built for config.arch — cross-arch
+        # builds (--arch x86_64) then fail at compile or link time.
+        configure_cmd.append(f"-DCMAKE_OSX_ARCHITECTURES={config.arch}")
 
     print("==================== Configuring test ====================\n")
     print(f"Running: {' '.join(configure_cmd)}\n")
