@@ -53,9 +53,10 @@ macOS x86_64/arm64 on an Apple-Silicon host). depot_tools is bootstrapped into
 the download dir automatically if absent.
 
 Download dir (the ~100 GB Chromium checkout + depot_tools + automate-git.py):
-    --download-dir  >  $CEF_DOWNLOAD_DIR  >  <repo>/builds/cef-chromium
-The default lives under builds/ (git-ignored) and is DELIBERATELY excluded from
-`build.py --clean`, so a normal clean never nukes the multi-hour checkout.
+    --download-dir  >  $CEF_DOWNLOAD_DIR  >  <repo>/../cef-chromium
+The default is a SIBLING of the repo (outside it), so it stays invisible to git and
+to IDEs that would otherwise index the giant tree (CLion), and a `build.py --clean`
+never reaches it.
 """
 
 import argparse
@@ -87,11 +88,13 @@ AUTOMATE_GIT_URL = (
 )
 DEPOT_TOOLS_URL = "https://chromium.googlesource.com/chromium/tools/depot_tools.git"
 
-# Default location for the ~100 GB Chromium checkout + depot_tools + automate-git.py,
-# relative to the repo root: builds/<CEF_CHECKOUT_DIRNAME>/. Kept under builds/ so it
-# is git-ignored (builds/* in .gitignore) but DELIBERATELY excluded from
-# `build.py --clean` (which wipes builds/) — see clean_directories() in build.py, which
-# imports this name to skip it. Overridable via --download-dir / $CEF_DOWNLOAD_DIR.
+# Default location for the ~100 GB Chromium checkout + depot_tools + automate-git.py:
+# a sibling of the repo root (<repo>/../<CEF_CHECKOUT_DIRNAME>/). Living OUTSIDE the
+# repo keeps it invisible to git (no .gitignore entry needed) and to IDEs that would
+# otherwise try to index the giant tree (CLion), and puts it out of reach of
+# `build.py --clean` (which only touches paths inside the repo) without special-casing.
+# build.py still imports this name to preserve any legacy in-repo checkout under
+# builds/. Overridable via --download-dir / $CEF_DOWNLOAD_DIR.
 CEF_CHECKOUT_DIRNAME = "cef-chromium"
 
 
@@ -179,8 +182,8 @@ def parse_args() -> argparse.Namespace:
         metavar="PATH",
         help=(
             "Where the Chromium checkout + depot_tools live (~100 GB). "
-            "Defaults to $CEF_DOWNLOAD_DIR, then <repo>/builds/cef-chromium "
-            "(git-ignored, and excluded from `build.py --clean`)."
+            "Defaults to $CEF_DOWNLOAD_DIR, then <repo>/../cef-chromium "
+            "(a sibling of the repo: outside git, unseen by IDEs, untouched by `build.py --clean`)."
         ),
     )
     parser.add_argument(
@@ -207,20 +210,22 @@ def parse_args() -> argparse.Namespace:
 
 
 def resolve_download_dir(arg: str | None, root_dir: Path) -> Path:
-    """--download-dir > $CEF_DOWNLOAD_DIR > <repo>/builds/cef-chromium.
+    """--download-dir > $CEF_DOWNLOAD_DIR > <repo>/../cef-chromium.
 
-    The default now lives inside the repo (under builds/, git-ignored) rather than
-    ~/chromium_git, so the checkout ships with the project's working tree. It is
-    excluded from `build.py --clean` so the ~100 GB / multi-hour checkout survives a
-    normal clean; use `--download-dir` / $CEF_DOWNLOAD_DIR to place it elsewhere
-    (e.g. a bigger disk).
+    The default lives *beside* the repo (a sibling directory), not inside it. An
+    earlier iteration kept it under <repo>/builds/ (git-ignored), but IDEs such as
+    CLion still try to index the ~100 GB Chromium tree when it sits inside the
+    project. Placing it outside the repo keeps it invisible to git and to the IDE,
+    and puts it out of reach of `build.py --clean` (which only ever touches paths
+    inside the repo) with no special-casing. Use `--download-dir` / $CEF_DOWNLOAD_DIR
+    to place it elsewhere (e.g. a bigger disk).
     """
     if arg:
         return Path(arg).expanduser().resolve()
     env = os.environ.get("CEF_DOWNLOAD_DIR")
     if env:
         return Path(env).expanduser().resolve()
-    return (root_dir / "builds" / CEF_CHECKOUT_DIRNAME).resolve()
+    return (root_dir.parent / CEF_CHECKOUT_DIRNAME).resolve()
 
 
 # Map (platform, arch) to the Spotify CDN platform token — the exact tokens the

@@ -59,8 +59,26 @@ CMakeLists.txt              # Test project to validate all libs link correctly
 ## Key Concepts
 
 ### Build Configuration String
-- Linux/macOS: `{platform}.{arch}-{build_type}` (e.g., `linux.x86_64-Release`)
-- Windows: `{platform}.{arch}-{build_type}-{runtime}` (e.g., `windows.x86_64-Release-MD`)
+Unified grammar: `{os}.{arch}-{build_type}[-{os_tag}]`, where `{os_tag}` encodes
+whatever else changes the ABI of the produced static libraries (so
+ABI-incompatible builds never overwrite each other in the same folder):
+
+- Linux: `{os}.{arch}-{build_type}-glibc{ver}` (e.g., `linux.x86_64-Release-glibc2.35`)
+- macOS: `{os}.{arch}-{build_type}-sdk{ver}` (e.g., `macos.arm64-Release-sdk12.0`)
+- Windows: `{os}.{arch}-{build_type}-{runtime}` (e.g., `windows.x86_64-Release-MD`)
+
+The `{os}` prefix is always `linux`/`macos`/`windows` (matches `platform_name`).
+Implemented in `BuildConfig.build_suffix` (`builder/config.py`).
+
+**Linux libc tag** (`detect_libc_tag()`): reflects the **build host's** glibc,
+which is the *floor* — static `.a` archives embed versioned libc symbol refs
+(e.g. `memcpy@GLIBC_2.14`), and the highest one determines the oldest distro the
+final binary can run on. The tag reflects this floor; it does **not** lower it.
+For true "runs on every distro" compatibility, ALSO build against an old glibc
+(a manylinux container or a sysroot) — the tag then records that lower floor.
+Other portability factors to control at the toolchain level: `_GLIBCXX_USE_CXX11_ABI`
+(libstdc++ dual ABI), a conservative CPU baseline (no `-march=native`), and
+`-fPIC` (already set in `linux.py`).
 
 ### YAML Library Config
 ```yaml
@@ -255,12 +273,13 @@ python build_cef.py --clean             # remove output/*.cef.* folders (NOT the
 - **Cannot cross-compile** Chromium (except macOS x86_64/arm64 on Apple Silicon):
   run on a native machine per target OS.
 - **Checkout location**: `--download-dir` > `$CEF_DOWNLOAD_DIR` >
-  `<repo>/builds/cef-chromium` (the ~100 GB Chromium checkout + depot_tools +
-  automate-git.py). The default lives under `builds/` so it is git-ignored
-  (`builds/*`), and it is **deliberately excluded from `build.py --clean`** (see
-  `clean_directories()`, which imports `CEF_CHECKOUT_DIRNAME`) so a normal clean
-  never nukes the multi-hour checkout. Point `--download-dir` at a bigger disk if
-  needed.
+  `<repo>/../cef-chromium` (the ~100 GB Chromium checkout + depot_tools +
+  automate-git.py). The default is a **sibling of the repo, outside it**: this
+  keeps it invisible to git (no `.gitignore` entry needed) and to IDEs that would
+  otherwise try to index the giant tree (CLion), and it is naturally out of reach
+  of `build.py --clean` (which only touches paths inside the repo). `build.py`
+  still imports `CEF_CHECKOUT_DIRNAME` to preserve any *legacy* in-repo checkout
+  under `builds/`. Point `--download-dir` at a bigger disk if needed.
 - **Output — matches the Spotify CDN exactly**: the produced distribution is
   copied into `output/` keeping its verbatim official name
   `cef_binary_<version>_<token>[_<flavor>]/` (e.g.

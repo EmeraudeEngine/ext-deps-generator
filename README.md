@@ -589,37 +589,32 @@ Expected results:
 
 ## Release assets creation
 
-Quick recap and reminder to release assets on GitHub. Here is an example for separated uploads for the assets v012.
+Quick recap and reminder to release assets on GitHub. Here is an example for separated uploads for the assets v013.
 
 *Notes* : Use --cobbler to overwrite.
 
 ```
 # Create the release
-gh release create v012 --repo EmeraudeEngine/ext-deps-generator --title "External dependencies v012" --notes "Precompiled binaries for Emeraude-Engine"
+gh release create v013 --repo EmeraudeEngine/ext-deps-generator --title "External dependencies v013" --notes "Precompiled binaries for Emeraude-Engine"
 
-# Linux Debian
-gh release upload v012 --repo EmeraudeEngine/ext-deps-generator linux-Debian.x86_64-Release-012.zip
-gh release upload v012 --repo EmeraudeEngine/ext-deps-generator linux-Debian.x86_64-Debug-012.zip
+# Linux — the archive folder name now carries the host's glibc floor
+# (e.g. glibc2.35), which supersedes the old per-distro naming: the glibc
+# version is the actual cross-distro compatibility boundary, distro name was
+# only a proxy for it. Adjust the token to match your build host / sysroot.
+gh release upload v013 --repo EmeraudeEngine/ext-deps-generator linux.x86_64-Release-glibc2.35.v013.zip
+gh release upload v013 --repo EmeraudeEngine/ext-deps-generator linux.x86_64-Debug-glibc2.35.v013.zip
 
-# Linux Mint
-gh release upload v012 --repo EmeraudeEngine/ext-deps-generator linux-Linuxmint.x86_64-Release-012.zip
-gh release upload v012 --repo EmeraudeEngine/ext-deps-generator linux-Linuxmint.x86_64-Debug-012.zip
-
-# Linux Ubuntu
-gh release upload v012 --repo EmeraudeEngine/ext-deps-generator linux-Ubuntu.x86_64-Release-012.zip
-gh release upload v012 --repo EmeraudeEngine/ext-deps-generator linux-Ubuntu.x86_64-Debug-012.zip
-
-# Apple macOS
-gh release upload v012 --repo EmeraudeEngine/ext-deps-generator mac.arm64-Release-012.zip
-gh release upload v012 --repo EmeraudeEngine/ext-deps-generator mac.arm64-Debug-012.zip
-gh release upload v012 --repo EmeraudeEngine/ext-deps-generator mac.x86_64-Release-012.zip
-gh release upload v012 --repo EmeraudeEngine/ext-deps-generator mac.x86_64-Debug-012.zip
+# Apple macOS — folder name carries the deployment target (sdk<ver>)
+gh release upload v013 --repo EmeraudeEngine/ext-deps-generator macos.arm64-Release-sdk12.0.v013.zip
+gh release upload v013 --repo EmeraudeEngine/ext-deps-generator macos.arm64-Debug-sdk12.0.v013.zip
+gh release upload v013 --repo EmeraudeEngine/ext-deps-generator macos.x86_64-Release-sdk12.0.v013.zip
+gh release upload v013 --repo EmeraudeEngine/ext-deps-generator macos.x86_64-Debug-sdk12.0.v013.zip
 
 # Microsoft Windows
-gh release upload v012 --repo EmeraudeEngine/ext-deps-generator windows.x86_64-Release-MD-012.zip
-gh release upload v012 --repo EmeraudeEngine/ext-deps-generator windows.x86_64-Debug-MD-012.zip
-gh release upload v012 --repo EmeraudeEngine/ext-deps-generator windows.x86_64-Release-MT-012.zip
-gh release upload v012 --repo EmeraudeEngine/ext-deps-generator windows.x86_64-Debug-MT-012.zip
+gh release upload v013 --repo EmeraudeEngine/ext-deps-generator windows.x86_64-Release-MD.v013.zip
+gh release upload v013 --repo EmeraudeEngine/ext-deps-generator windows.x86_64-Debug-MD.v013.zip
+gh release upload v013 --repo EmeraudeEngine/ext-deps-generator windows.x86_64-Release-MT.v013.zip
+gh release upload v013 --repo EmeraudeEngine/ext-deps-generator windows.x86_64-Debug-MT.v013.zip
 ```
 
 ## TODO list

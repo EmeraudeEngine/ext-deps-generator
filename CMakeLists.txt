@@ -38,7 +38,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # Detect platform
 if(APPLE)
-    set(DETECTED_PLATFORM "mac")
+    set(DETECTED_PLATFORM "macos")
     if(CMAKE_OSX_ARCHITECTURES STREQUAL "arm64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
         set(DETECTED_ARCH "arm64")
     else()
@@ -96,10 +96,34 @@ endif()
 # Build configuration string
 ########################################################################
 
-if(WIN32)
-    set(LIBS_CONFIG "${DETECTED_PLATFORM}.${DETECTED_ARCH}-${CMAKE_BUILD_TYPE}-${RUNTIME_LIB}")
-else()
-    set(LIBS_CONFIG "${DETECTED_PLATFORM}.${DETECTED_ARCH}-${CMAKE_BUILD_TYPE}")
+# build.py passes the authoritative folder name via -DLIBS_CONFIG — it is the
+# single source of truth (BuildConfig.build_suffix in builder/config.py). When
+# this file is configured by hand (cmake -B builds/tests), we must re-derive the
+# exact same name here, including the OS-specific ABI tag.
+if(NOT DEFINED LIBS_CONFIG)
+    if(WIN32)
+        set(LIBS_CONFIG "${DETECTED_PLATFORM}.${DETECTED_ARCH}-${CMAKE_BUILD_TYPE}-${RUNTIME_LIB}")
+    elseif(APPLE)
+        set(LIBS_CONFIG "${DETECTED_PLATFORM}.${DETECTED_ARCH}-${CMAKE_BUILD_TYPE}-sdk${MACOS_SDK}")
+    else()
+        # Linux: mirror detect_libc_tag() — tag with the host glibc floor so this
+        # matches the directory build.py installed into.
+        set(_libc_tag "")
+        execute_process(
+            COMMAND getconf GNU_LIBC_VERSION
+            OUTPUT_VARIABLE _libc_raw
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET)
+        # _libc_raw looks like "glibc 2.41"; normalise "gnu" -> "glibc".
+        if(_libc_raw MATCHES "([A-Za-z]+)[ \t]+([0-9][0-9.]*)")
+            string(TOLOWER "${CMAKE_MATCH_1}" _libc_name)
+            if(_libc_name STREQUAL "gnu")
+                set(_libc_name "glibc")
+            endif()
+            set(_libc_tag "-${_libc_name}${CMAKE_MATCH_2}")
+        endif()
+        set(LIBS_CONFIG "${DETECTED_PLATFORM}.${DETECTED_ARCH}-${CMAKE_BUILD_TYPE}${_libc_tag}")
+    endif()
 endif()
 set(LIBS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/output/${LIBS_CONFIG}")
 

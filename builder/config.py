@@ -5,9 +5,51 @@ Configuration classes for the build system.
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+import os
 import platform
 import re
 import yaml
+
+
+def detect_libc_tag() -> str:
+    """Best-effort libc identity of the *build host*, used to tag Linux output dirs.
+
+    Linux static libraries (.a) embed references to versioned libc symbols
+    (e.g. ``memcpy@GLIBC_2.14``). The *highest* such version pins the runtime
+    floor: the final binary that links these archives will not start on a
+    distribution whose libc is older than the host we built on. We therefore
+    reflect the host libc in the output folder name so that ABI-incompatible
+    builds (e.g. one made on glibc 2.35, another on 2.28) do not collide in the
+    same directory.
+
+    This reflects the host floor only — it does NOT lower it. Achieving broad
+    "runs on every distro" compatibility additionally requires building against
+    an *old* glibc (a manylinux container or a sysroot); see AGENTS.md.
+
+    Returns a token like ``glibc2.35`` or ``musl1.2``, or ``""`` when the libc
+    cannot be identified (the caller then omits the token).
+    """
+    # CS_GNU_LIBC_VERSION yields "glibc 2.35" on glibc hosts. The key is absent
+    # on musl (Alpine), where confstr raises ValueError or returns None.
+    try:
+        value = os.confstr("CS_GNU_LIBC_VERSION")
+    except (ValueError, OSError):
+        value = None
+
+    if value:
+        parts = value.split()
+        if len(parts) == 2:
+            name, version = parts
+            name = "glibc" if name.lower() in ("glibc", "gnu") else name.lower()
+            return f"{name}{version}"
+
+    # Fallback: platform.libc_ver() can still recognise glibc on some hosts;
+    # it returns ('', '') on musl.
+    libc_name, libc_version = platform.libc_ver()
+    if libc_name and libc_version:
+        return f"{libc_name.lower()}{libc_version}"
+
+    return ""
 
 
 @dataclass
@@ -34,17 +76,38 @@ class BuildConfig:
 
     @property
     def platform_triplet(self) -> str:
-        """Get the platform triplet (e.g., mac.arm64, linux.x86_64)."""
-        prefix_map = {"macos": "mac", "linux": "linux", "windows": "windows"}
-        prefix = prefix_map.get(self.platform_name, self.platform_name)
-        return f"{prefix}.{self.arch}"
+        """Get the platform triplet (e.g., macos.arm64, linux.x86_64)."""
+        return f"{self.platform_name}.{self.arch}"
 
     @property
     def build_suffix(self) -> str:
-        """Get the build suffix including runtime lib for Windows."""
+        """Get the output/builds directory name for this configuration.
+
+        Grammar (unified across OSes): ``{os}.{arch}-{build_type}[-{os_tag}]``,
+        where the OS-specific tag encodes whatever else changes the ABI of the
+        produced static libraries:
+
+        * Windows: the CRT runtime (``MD``/``MT``) — differently-linked archives.
+        * macOS:   the deployment target (``sdk<ver>``) — different min-OS floors.
+        * Linux:   the host libc floor (``glibc<ver>``) — see ``detect_libc_tag``.
+
+        Without these tags, ABI-incompatible builds would silently overwrite one
+        another in the same directory.
+        """
+        base = f"{self.platform_triplet}-{self.build_type}"
+
         if self.platform_name == "windows":
-            return f"{self.platform_triplet}-{self.build_type}-{self.runtime_lib}"
-        return f"{self.platform_triplet}-{self.build_type}"
+            return f"{base}-{self.runtime_lib}"
+
+        if self.platform_name == "macos" and self.macos_sdk:
+            return f"{base}-sdk{self.macos_sdk}"
+
+        if self.platform_name == "linux":
+            libc_tag = detect_libc_tag()
+            if libc_tag:
+                return f"{base}-{libc_tag}"
+
+        return base
 
     @property
     def output_dir(self) -> Path:

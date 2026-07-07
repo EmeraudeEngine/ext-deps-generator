@@ -124,9 +124,12 @@ def list_libraries(registry: LibraryRegistry, platform_name: str) -> None:
 def clean_directories(root_dir: Path) -> None:
     """Clean build and output directories.
 
-    - Removes all contents from builds/ EXCEPT the CEF Chromium checkout
-      (builds/cef-chromium/), a ~100 GB / multi-hour tree managed by build_cef.py
-      that must survive a normal clean (use `build_cef.py --clean` for its output).
+    - Removes all contents from builds/ EXCEPT a legacy in-repo CEF Chromium
+      checkout (builds/cef-chromium/) if one is present — a ~100 GB / multi-hour
+      tree managed by build_cef.py that must survive a normal clean (use
+      `build_cef.py --clean` for its output). The current build_cef.py default
+      puts this checkout in a SIBLING of the repo (outside it), where clean can
+      never reach it anyway; this guard only matters for old in-repo checkouts.
     - Empties each subdirectory in output/ but keeps the directories themselves
       (symlinks may be attached to them)
     """
@@ -201,6 +204,9 @@ def run_dependencies_test(config: BuildConfig, root_dir: Path) -> int:
         "-S", str(root_dir),
         "-B", str(build_dir),
         f"-DCMAKE_BUILD_TYPE={config.build_type}",
+        # Pass the authoritative folder name so the test never has to re-derive
+        # it (in particular the Linux glibc tag, which CMake cannot know a priori).
+        f"-DLIBS_CONFIG={config.build_suffix}",
     ]
     if config.platform_name == "windows":
         configure_cmd.append(f"-DRUNTIME_LIB={config.runtime_lib}")
