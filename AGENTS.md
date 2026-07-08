@@ -282,9 +282,30 @@ python build_cef.py --arch arm64 --macos-sdk 12.0
 python build_cef.py --distrib minimal   # ship-ready, smaller
 python build_cef.py --archive           # also zip the dist folder for publishing
 python build_cef.py --dry-run           # print plan (env, GN_DEFINES, command), build nothing
+python build_cef.py --force-build       # compile an already-synced tree (see note below)
 python build_cef.py --clean             # remove output/*.cef.* folders (NOT the Chromium checkout)
 ```
 
+- **`--force-build` (resuming an interrupted run)**: automate-git.py only builds
+  when the source hashes changed or the `out/` dir is absent. If a run dies during
+  the multi-hour sync (e.g. a transient `chromium.googlesource.com` fetch timeout),
+  the *next* run finds the checkout complete-and-unchanged, so it **no-ops the build
+  AND the distribution, yet returns success** — build_cef.py then fails with
+  "no CEF binary distribution found under …/cef/binary_distrib". That is not a build
+  failure: the compile simply never ran. Re-run with `--force-build` to compile the
+  already-synced tree (building implies `--force-distrib` upstream). Use `--force-clean`
+  only to wipe and re-fetch the whole tree from scratch.
+- **Linux build target is `cefsimple`, not `cefclient`**: automate-git.py defaults
+  to building the `cefclient` sample, but on Linux its sources
+  (`cefclient_sources_linux` in `cef_paths2.gypi`) unconditionally `#include
+  <gtk/gtk.h>`, while CEF's `BUILD.gn` sets `cef_use_gtk = !use_sysroot`. Because we
+  always build with `use_sysroot=true`, the GTK include/link config is never added
+  and cefclient fails with `'gtk/gtk.h' file not found`. `build_cef.py` therefore
+  passes `--build-target=cefsimple` on Linux (X11-only, no GTK); libcef + the wrapper
+  — all the binary distribution actually needs — are still built as dependencies.
+  Override with `--build-target` if you truly need cefclient (then you must make GTK3
+  resolvable, e.g. `cef_use_gtk=true` + GTK `.pc` files reachable by the sysroot
+  pkg-config). Windows/macOS keep automate-git.py's `cefclient` default.
 - **Cannot cross-compile** Chromium (except macOS x86_64/arm64 on Apple Silicon):
   run on a native machine per target OS.
 - **Checkout location**: `--download-dir` > `$CEF_DOWNLOAD_DIR` >

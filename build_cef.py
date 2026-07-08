@@ -110,7 +110,11 @@ CEF_CHECKOUT_DIRNAME = "cef-chromium"
 BASE_GN_DEFINES: dict[str, str] = {
     # --- Official, optimized build ---
     "is_official_build": "true",
-    "use_thin_lto": "false",     # custom-build friendly + faster; official builds tolerate off
+    "use_thin_lto": "false",     # custom-build friendly + faster (skips the slow, RAM-hungry LTO link)
+    "is_cfi": "false",           # MUST accompany use_thin_lto=false: is_official_build enables CFI
+                                 # by default on Linux x64/arm64, and compiler.gni asserts
+                                 # `!is_cfi || use_thin_lto` (CFI requires ThinLTO). No-op on
+                                 # Windows/macOS where CFI is already off.
     "chrome_pgo_phase": "0",     # no profile-guided optimization data for a custom build
 
     # --- Goal 1: H.264 / AAC proprietary codecs ---
@@ -190,6 +194,29 @@ def parse_args() -> argparse.Namespace:
         "--force-clean",
         action="store_true",
         help="Pass --force-clean to automate-git.py (wipe & re-fetch the Chromium tree).",
+    )
+    parser.add_argument(
+        "--force-build",
+        action="store_true",
+        help=(
+            "Pass --force-build to automate-git.py. Needed to build when the checkout "
+            "already exists and is unchanged: automate-git.py otherwise no-ops the build "
+            "AND the distribution (returning success with no binary_distrib) unless the "
+            "source hashes changed. Use this to compile/re-compile an already-synced tree; "
+            "building implies --force-distrib upstream."
+        ),
+    )
+    parser.add_argument(
+        "--build-target",
+        metavar="NAME",
+        default=None,
+        help=(
+            "Ninja target passed to automate-git.py's --build-target. Defaults to "
+            "'cefsimple' on Linux (cefclient needs GTK, unavailable in the sysroot "
+            "we build against) and to automate-git.py's own default ('cefclient') "
+            "elsewhere. Either way libcef + the wrapper are built, which is all the "
+            "binary distribution needs."
+        ),
     )
     parser.add_argument(
         "--dry-run",
@@ -379,8 +406,24 @@ def automate_git_command(
         cmd.append("--client-distrib")
     # 'standard' -> automate produces the standard distribution by default.
 
+    # Build target. automate-git.py defaults to 'cefclient', but on Linux that
+    # sample #includes <gtk/gtk.h> unconditionally (cef_paths2.gypi bundles the
+    # *_gtk.cc files into cefclient_sources_linux) while CEF sets
+    # `cef_use_gtk = !use_sysroot` — so with our mandatory use_sysroot=true the
+    # GTK include/link config is never added and cefclient fails to compile.
+    # 'cefsimple' (X11-only, no GTK) still pulls in libcef + the wrapper, which
+    # is all the binary distribution needs. Let the caller override either way.
+    target = args.build_target
+    if target is None and config.platform_name == "linux":
+        target = "cefsimple"
+    if target is not None:
+        cmd.append(f"--build-target={target}")
+
     if args.force_clean:
         cmd.append("--force-clean")
+
+    if args.force_build:
+        cmd.append("--force-build")
 
     return cmd
 
