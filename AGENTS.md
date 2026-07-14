@@ -254,9 +254,13 @@ standalone script.
    — which requires **also** disabling pointer compression (three flags kept
    together in `BASE_GN_DEFINES`).
 
-**Staying current**: bump `DEFAULT_CEF_BRANCH` in `build_cef.py` every 2-3 months
-to the current stable CEF branch, re-run per platform, publish the archive. The
-GN args never change across versions — only the branch does. This works as long
+**Staying current**: bump `DEFAULT_CEF_BRANCH` + `DEFAULT_CEF_CHECKOUT` in
+`build_cef.py` every 2-3 months to the current Spotify-CDN stable (from a CDN
+version `150.0.11+gb887805+chromium-150.0.7871.115`: branch = `7871`, checkout =
+`b887805` — the exact-commit pin makes the produced `cef_binary_<version>` name
+match the CDN artifact instead of the moving branch HEAD), re-run per platform,
+publish the archive. The GN args never change across versions — only the
+version pins do. This works as long
 as `v8_enable_sandbox=false` survives upstream (unsupported config → guard the
 zero-copy in CI after each bump).
 
@@ -277,8 +281,9 @@ final app must run on a distro older than the build host.
 
 ```bash
 python build_cef.py                     # host platform, Release, x86_64
-python build_cef.py --branch 7827       # target a specific CEF branch (bump to stay current)
+python build_cef.py --branch 7827       # target another CEF branch (drops the exact-commit pin)
 python build_cef.py --arch arm64 --macos-sdk 12.0
+python build_cef.py --build-type Both   # Release + Debug in ONE run (complete Spotify layout)
 python build_cef.py --distrib minimal   # ship-ready, smaller
 python build_cef.py --archive           # also zip the dist folder for publishing
 python build_cef.py --dry-run           # print plan (env, GN_DEFINES, command), build nothing
@@ -345,7 +350,7 @@ python build_cef.py --clean             # remove output/*.cef.* folders (NOT the
 - **Output — matches the Spotify CDN exactly**: the produced distribution is
   copied into `output/` keeping its verbatim official name
   `cef_binary_<version>_<token>[_<flavor>]/` (e.g.
-  `output/cef_binary_149.0.6+g…+chromium-149.0.7827.201_linux64/`). The platform
+  `output/cef_binary_150.0.11+gb887805+chromium-150.0.7871.115_linux64/`). The platform
   `<token>` is the Spotify one — `linux64`, `linuxarm64`, `windows64`,
   `windowsarm64`, `macosx64`, `macosarm64`. **Why identical to Spotify**: the
   app_system consumer keeps working unchanged — only its CEF **download base URL**
@@ -354,7 +359,8 @@ python build_cef.py --clean             # remove output/*.cef.* folders (NOT the
   archive name is the same.
   The folder is laid out like an extracted Spotify archive: `Release/` and/or
   `Debug/` subdirs (only the build type(s) built; same-branch runs **merge**, so
-  a Debug run keeps an existing Release/ and vice-versa) plus the shared dirs
+  a Debug run keeps an existing Release/ and vice-versa — or pass
+  `--build-type Both` to get the two in a single run) plus the shared dirs
   (`include`, `Resources`, `libcef_dll`, `cmake`, `*.txt`). Add `--archive` to
   also produce `output/cef_binary_<version>_<token>.tar.bz2` (the Spotify archive
   format) for upload as a GitHub release asset.

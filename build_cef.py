@@ -30,9 +30,10 @@ Why we build CEF ourselves (both reasons require a from-source build):
      compression (three flags below, kept together). Cost: uncompressed 64-bit
      pointers = a bit more RAM per renderer. Negligible for us.
 
-Staying current: bump DEFAULT_CEF_BRANCH (below) every 2-3 months to the current
-stable CEF branch, re-run this script per platform, publish the archive. The
-GN_DEFINES do not change across versions — only the branch number does.
+Staying current: bump DEFAULT_CEF_BRANCH + DEFAULT_CEF_CHECKOUT (below) every
+2-3 months to the current Spotify-CDN stable, re-run this script per platform,
+publish the archive. The GN_DEFINES do not change across versions — only the
+version pins do.
 
     Find the current stable branch:
       https://bitbucket.org/chromiumembedded/cef/wiki/BranchesAndBuilding.md
@@ -43,6 +44,7 @@ Usage:
     python build_cef.py --branch 6478                    # target a specific CEF branch
     python build_cef.py --arch arm64 --macos-sdk 12.0    # macOS arm64
     python build_cef.py --build-type Debug               # debug distribution
+    python build_cef.py --build-type Both                # Release + Debug in one run
     python build_cef.py --distrib minimal                # smaller, ship-ready distribution
     python build_cef.py --download-dir /data/chromium    # where the ~100 GB checkout lives
     python build_cef.py --dry-run                         # print the plan, build nothing
@@ -72,14 +74,23 @@ from builder.config import BuildConfig
 
 
 # ---------------------------------------------------------------------------
-# Pinned CEF version — the ONLY knob to bump when staying current.
+# Pinned CEF version — the ONLY knobs to bump when staying current.
 # ---------------------------------------------------------------------------
-# Bump this to the current stable branch on each refresh cycle (see the URLs in
-# the module docstring; branch = the 3rd component of the Chromium version, e.g.
-# 149.0.7827.201 -> 7827). Override per-run with --branch.
-#   7827 == CEF 149 / Chromium 149 (stable as of 2026-07)
-#   6478 == CEF 126 / Chromium 126 (mid-2024 anchor, kept for reference)
-DEFAULT_CEF_BRANCH = "7827"
+# Bump BOTH to the current Spotify-CDN stable on each refresh cycle (see the
+# URLs in the module docstring). From a CDN version string such as
+# `150.0.11+gb887805+chromium-150.0.7871.115`:
+#   branch   = 3rd component of the Chromium version -> 7871
+#   checkout = the CEF commit after '+g'             -> b887805
+# Override per-run with --branch / --checkout.
+#   7871 @ b887805 == CEF 150.0.11 / Chromium 150.0.7871.115 (CDN stable, 2026-07)
+#   7827           == CEF 149 / Chromium 149 (previous anchor)
+#   6478           == CEF 126 / Chromium 126 (mid-2024 anchor, kept for reference)
+DEFAULT_CEF_BRANCH = "7871"
+# Exact CEF commit within DEFAULT_CEF_BRANCH: pins the produced version string
+# to the Spotify CDN artifact (the branch HEAD may have moved past it, which
+# would yield a different cef_binary_<version> name). Only applied while
+# --branch is left at its default; `--checkout head` unpins.
+DEFAULT_CEF_CHECKOUT = "b887805"
 
 # automate-git.py is fetched from the CEF repo (kept out of the checkout so a
 # --force-clean of the Chromium tree never deletes our tooling).
@@ -155,6 +166,17 @@ def parse_args() -> argparse.Namespace:
         help=f"CEF branch number (default: {DEFAULT_CEF_BRANCH}). Bump to stay current.",
     )
     parser.add_argument(
+        "--checkout",
+        metavar="COMMIT",
+        default=None,
+        help=(
+            "Exact CEF commit/tag to build (passed to automate-git.py --checkout). "
+            f"Defaults to the pinned {DEFAULT_CEF_CHECKOUT} while --branch is left "
+            "at its default, otherwise to the branch head. Pass 'head' to force "
+            "the branch head explicitly."
+        ),
+    )
+    parser.add_argument(
         "--arch",
         choices=["x86_64", "arm64"],
         default="x86_64",
@@ -162,9 +184,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--build-type",
-        choices=["Release", "Debug"],
+        choices=["Release", "Debug", "Both"],
         default="Release",
-        help="Build type (default: Release).",
+        help=(
+            "Build type (default: Release). 'Both' compiles Release AND Debug in a "
+            "single automate-git.py run, yielding one distribution folder that "
+            "already contains both subdirs (the complete Spotify layout)."
+        ),
     )
     parser.add_argument(
         "--distrib",
@@ -390,10 +416,22 @@ def automate_git_command(
         f"--branch={args.branch}",
     ]
 
-    # Build type: automate builds both by default; restrict to the one we want.
-    if config.build_type == "Release":
+    # Exact CEF commit pin — keeps the produced cef_binary_<version> name
+    # identical to the Spotify CDN artifact. The default pin belongs to the
+    # default branch, so it is dropped when --branch is overridden without a
+    # matching --checkout (the Chromium version follows the CEF commit via
+    # CHROMIUM_BUILD_COMPATIBILITY.txt either way).
+    checkout = args.checkout
+    if checkout is None and args.branch == DEFAULT_CEF_BRANCH:
+        checkout = DEFAULT_CEF_CHECKOUT
+    if checkout and checkout.lower() != "head":
+        cmd.append(f"--checkout={checkout}")
+
+    # Build type: automate-git.py builds BOTH Release and Debug by default;
+    # restrict unless 'Both' was requested (then neither flag is passed).
+    if args.build_type == "Release":
         cmd.append("--no-debug-build")
-    else:
+    elif args.build_type == "Debug":
         cmd.append("--no-release-build")
 
     # Architecture flag.
@@ -501,9 +539,12 @@ def main() -> int:
     if args.clean:
         return clean_output(root_dir)
 
+    # BuildConfig only knows Release/Debug (the static-lib grammar); for 'Both'
+    # a Release stand-in passes validation — the real build-type selection
+    # happens in automate_git_command(), which reads args.build_type directly.
     config = BuildConfig(
         arch=args.arch,
-        build_type=args.build_type,
+        build_type="Release" if args.build_type == "Both" else args.build_type,
         macos_sdk=args.macos_sdk,
         root_dir=root_dir,
     )
@@ -519,12 +560,15 @@ def main() -> int:
     gn_defines = build_gn_defines(config.platform_name)
     env = build_environment(config, gn_defines)
 
+    build_type_display = (
+        "Release + Debug" if args.build_type == "Both" else args.build_type
+    )
     print(f"\n{'=' * 60}")
-    print(f"Building CEF for '{config.build_suffix}'")
+    print(f"Building CEF {args.branch} for {config.platform_name}.{config.arch} ({build_type_display})")
     print(f"{'=' * 60}\n")
     print(f"  CEF branch    : {args.branch}")
     print(f"  Platform      : {config.platform_name} ({config.arch})")
-    print(f"  Build type    : {config.build_type}")
+    print(f"  Build type    : {build_type_display}")
     print(f"  Distribution  : {args.distrib}")
     print(f"  Download dir  : {download_dir}")
     print(f"  Output        : {cef_output_root(root_dir)}/cef_binary_<version>_{spotify_platform_token(config)}/  (Spotify layout)")
