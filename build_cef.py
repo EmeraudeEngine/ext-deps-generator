@@ -129,6 +129,17 @@ BASE_GN_DEFINES: dict[str, str] = {
                                  # Windows/macOS where CFI is already off.
     "chrome_pgo_phase": "0",     # no profile-guided optimization data for a custom build
 
+    # --- Symbols: match the official/Spotify builds ---
+    # Without it, is_official_build keeps full debug info (symbol_level=2):
+    # multi-GB libcef.so, slow links — and gdb still struggled to symbolize it.
+    # Level 1 = function-level symbols: small binary, fast link, backtraces
+    # with function names. NOTE: GN_DEFINES apply to BOTH configs
+    # (cef/tools/gn_args.py merges them before the per-config split), so the
+    # Debug distribution also gets level 1 — identical to the official CDN
+    # builds (DCHECKs + function names, not full debug info). Bump to 2 here
+    # (one-off) if a full-symbol Debug build is ever needed.
+    "symbol_level": "1",
+
     # --- Goal 1: H.264 / AAC proprietary codecs ---
     "proprietary_codecs": "true",
     "ffmpeg_branding": "Chrome",
