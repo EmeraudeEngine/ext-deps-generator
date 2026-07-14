@@ -316,6 +316,32 @@ python build_cef.py --clean             # remove output/*.cef.* folders (NOT the
   of `build.py --clean` (which only touches paths inside the repo). `build.py`
   still imports `CEF_CHECKOUT_DIRNAME` to preserve any *legacy* in-repo checkout
   under `builds/`. Point `--download-dir` at a bigger disk if needed.
+- **Multi-OS checkouts on one external SSD (chosen scheme: one partition per OS)**:
+  since Chromium can't be cross-compiled, each OS needs its own ~100 GB checkout.
+  To avoid dedicating that space on every machine, the checkouts live on a shared
+  external SSD **partitioned in three** — ext4 (Linux), APFS (macOS), NTFS
+  (Windows) — one native checkout per partition, with `CEF_DOWNLOAD_DIR` (or
+  `--download-dir`) pointed at the current OS's partition on each machine.
+  **Do NOT try a single checkout shared by all three OSes**, even though gclient's
+  `target_os = ['linux', 'mac', 'win']` can fetch all three OSes' deps (and
+  automate-git.py would preserve a hand-edited `.gclient` — it only writes it when
+  absent or with `--force-config`). Three things break it:
+  1. *Filesystem*: no FS is natively writable by all three OSes AND checkout-safe.
+     exFAT has no symlinks/exec bits (hooks and git break on Linux/macOS); NTFS is
+     read-only on macOS without paid drivers; Chromium's Windows docs require NTFS
+     (git packfiles > 4 GB rule out FAT). ext4/APFS are single-OS.
+  2. *Host-specific toolchains overwrite each other*: hooks download host-OS
+     binaries into fixed paths (e.g. clang under `src/third_party/llvm-build`,
+     ~2 GB) — every OS switch re-downloads and clobbers them.
+  3. *`out/` collides*: automate-git.py names the build dir `out/Release_GN_x64`
+     on every OS, so object files from different OSes would mix — full rebuild per
+     switch at best, poisoned artifacts at worst.
+  To save re-downloading when seeding a new partition: `tar` an existing checkout's
+  download dir (tar preserves symlinks/modes in transit), untar it on the new
+  partition, delete `chromium/src/out/`, then run `build_cef.py` normally — git
+  fetches only deltas and `runhooks` swaps in the host-OS binaries. Practical
+  notes: budget ~150-200 GB per partition (checkout + build); prefer an NVMe
+  USB4/Thunderbolt enclosure (the link step is I/O-heavy).
 - **Output — matches the Spotify CDN exactly**: the produced distribution is
   copied into `output/` keeping its verbatim official name
   `cef_binary_<version>_<token>[_<flavor>]/` (e.g.
