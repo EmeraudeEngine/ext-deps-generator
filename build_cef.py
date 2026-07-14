@@ -369,6 +369,24 @@ def check_download_dir(arg: str | None, download_dir: Path) -> list[str]:
     ]
 
 
+def confirm_bootstrap(download_dir: Path, dry_run: bool) -> bool:
+    """Warn — and prompt on a TTY — before starting a brand-new checkout.
+
+    Forgetting CEF_DOWNLOAD_DIR (checkout on an unmounted/unexported external
+    disk) silently falls back to the default path and kicks off a fresh
+    ~100 GB Chromium download. An existing checkout passes straight through;
+    automation (no TTY) proceeds too, with the warning in the log.
+    """
+    if (download_dir / "automate-git.py").exists() or (download_dir / "chromium").exists():
+        return True
+    print(f"\nWARNING: no existing checkout under {download_dir}")
+    print("A FRESH Chromium checkout (~100 GB download, hours of sync) will be bootstrapped there.")
+    print("If your checkout lives elsewhere (external disk?), set CEF_DOWNLOAD_DIR or --download-dir.")
+    if dry_run or not sys.stdin.isatty():
+        return True
+    return input("Continue? [y/N] ").strip().lower() in ("y", "yes")
+
+
 def check_cross_compile(config: BuildConfig) -> list[str]:
     """Chromium can't be cross-compiled, except macOS x86_64/arm64 on Apple Silicon."""
     errors: list[str] = []
@@ -623,6 +641,10 @@ def main() -> int:
     print(f"  Download dir  : {download_dir}")
     print(f"  Output        : {cef_output_root(root_dir)}/cef_binary_<version>_{spotify_platform_token(config)}/  (Spotify layout)")
     print(f"\n  GN_DEFINES:\n    {gn_defines}\n")
+
+    if not confirm_bootstrap(download_dir, args.dry_run):
+        print("Aborted — nothing downloaded.")
+        return 1
 
     depot_tools = ensure_depot_tools(download_dir, env, args.dry_run)
     automate = ensure_automate_git(download_dir, args.dry_run)
