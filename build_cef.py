@@ -337,6 +337,27 @@ def clean_output(root_dir: Path) -> int:
     return 0
 
 
+def check_download_dir(arg: str | None, download_dir: Path) -> list[str]:
+    """Refuse to bootstrap a checkout at a dead explicit path.
+
+    When --download-dir/$CEF_DOWNLOAD_DIR points somewhere that does not exist
+    AND whose parent does not exist either, the most likely cause is an
+    unmounted removable disk (the mount point only exists while mounted).
+    Blindly mkdir-ing would silently start a fresh ~100 GB checkout on the
+    wrong disk, so explicit locations require an existing parent. The default
+    sibling-of-repo location keeps its bootstrap behavior.
+    """
+    explicit = bool(arg or os.environ.get("CEF_DOWNLOAD_DIR"))
+    if not explicit or download_dir.exists() or download_dir.parent.exists():
+        return []
+    return [
+        f"Download dir '{download_dir}' does not exist, nor does its parent. "
+        "If the checkout lives on a removable disk, mount it first (e.g. "
+        "`udisksctl mount -b /dev/disk/by-label/CEF-LINUX`); otherwise create "
+        "the parent directory. Refusing to start a fresh checkout at a dead path."
+    ]
+
+
 def check_cross_compile(config: BuildConfig) -> list[str]:
     """Chromium can't be cross-compiled, except macOS x86_64/arm64 on Apple Silicon."""
     errors: list[str] = []
@@ -563,8 +584,11 @@ def main() -> int:
         root_dir=root_dir,
     )
 
+    download_dir = resolve_download_dir(args.download_dir, root_dir)
+
     errors = config.validate()
     errors += check_cross_compile(config)
+    errors += check_download_dir(args.download_dir, download_dir)
     if args.sync_only and (args.force_build or args.archive):
         errors.append("--sync-only builds nothing: it cannot be combined with --force-build or --archive.")
     if errors:
@@ -572,7 +596,6 @@ def main() -> int:
             print(f"Error: {e}", file=sys.stderr)
         return 1
 
-    download_dir = resolve_download_dir(args.download_dir, root_dir)
     gn_defines = build_gn_defines(config.platform_name)
     env = build_environment(config, gn_defines)
 
