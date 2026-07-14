@@ -284,6 +284,7 @@ python build_cef.py                     # host platform, Release, x86_64
 python build_cef.py --branch 7827       # target another CEF branch (drops the exact-commit pin)
 python build_cef.py --arch arm64 --macos-sdk 12.0
 python build_cef.py --build-type Both   # Release + Debug in ONE run (complete Spotify layout)
+python build_cef.py --sync-only         # update the checkout to the pinned version, build nothing
 python build_cef.py --distrib minimal   # ship-ready, smaller
 python build_cef.py --archive           # also zip the dist folder for publishing
 python build_cef.py --dry-run           # print plan (env, GN_DEFINES, command), build nothing

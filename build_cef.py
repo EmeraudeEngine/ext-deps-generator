@@ -45,6 +45,7 @@ Usage:
     python build_cef.py --arch arm64 --macos-sdk 12.0    # macOS arm64
     python build_cef.py --build-type Debug               # debug distribution
     python build_cef.py --build-type Both                # Release + Debug in one run
+    python build_cef.py --sync-only                      # update the checkout, build nothing
     python build_cef.py --distrib minimal                # smaller, ship-ready distribution
     python build_cef.py --download-dir /data/chromium    # where the ~100 GB checkout lives
     python build_cef.py --dry-run                         # print the plan, build nothing
@@ -242,6 +243,15 @@ def parse_args() -> argparse.Namespace:
             "we build against) and to automate-git.py's own default ('cefclient') "
             "elsewhere. Either way libcef + the wrapper are built, which is all the "
             "binary distribution needs."
+        ),
+    )
+    parser.add_argument(
+        "--sync-only",
+        action="store_true",
+        help=(
+            "Update the CEF/Chromium checkout to the pinned version and exit "
+            "(passes --no-build --no-distrib to automate-git.py). Useful to "
+            "refresh the tree or regenerate the seed tar without compiling."
         ),
     )
     parser.add_argument(
@@ -463,6 +473,10 @@ def automate_git_command(
     if args.force_build:
         cmd.append("--force-build")
 
+    if args.sync_only:
+        # Update the checkout only: no compile, no distribution.
+        cmd += ["--no-build", "--no-distrib"]
+
     return cmd
 
 
@@ -551,6 +565,8 @@ def main() -> int:
 
     errors = config.validate()
     errors += check_cross_compile(config)
+    if args.sync_only and (args.force_build or args.archive):
+        errors.append("--sync-only builds nothing: it cannot be combined with --force-build or --archive.")
     if errors:
         for e in errors:
             print(f"Error: {e}", file=sys.stderr)
@@ -585,10 +601,18 @@ def main() -> int:
         print("\nDry run — nothing built.")
         return 0
 
-    print(f"\n{'=' * 60}\nRunning automate-git.py (this takes hours)\n{'=' * 60}\n")
+    step = "sync only" if args.sync_only else "this takes hours"
+    print(f"\n{'=' * 60}\nRunning automate-git.py ({step})\n{'=' * 60}\n")
     if subprocess.run(cmd, env=env).returncode != 0:
         print("\nError: automate-git.py failed.", file=sys.stderr)
         return 1
+
+    if args.sync_only:
+        print(f"\n{'=' * 60}")
+        print("Checkout synced — nothing built (--sync-only).")
+        print(f"  Checkout : {download_dir}")
+        print(f"{'=' * 60}\n")
+        return 0
 
     distrib = locate_distribution(download_dir)
     if distrib is None:
