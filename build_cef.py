@@ -43,6 +43,7 @@ Usage:
     python build_cef.py                                  # host platform, Release, x86_64
     python build_cef.py --branch 6478                    # target a specific CEF branch
     python build_cef.py --arch arm64 --macos-sdk 12.0    # macOS arm64
+    python build_cef.py --arch both --macos-sdk 12.0     # macOS: arm64 THEN x86_64 (two distributions)
     python build_cef.py --build-type Debug               # debug distribution
     python build_cef.py --build-type Both                # Release + Debug in one run
     python build_cef.py --sync-only                      # update the checkout, build nothing
@@ -190,9 +191,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--arch",
-        choices=["x86_64", "arm64"],
+        choices=["x86_64", "arm64", "both"],
         default="x86_64",
-        help="Target architecture (default: x86_64).",
+        help=(
+            "Target architecture (default: x86_64). 'both' builds arm64 then "
+            "x86_64 in sequence from the same checkout — macOS only (the sole "
+            "supported Chromium cross-compile), yielding the two Spotify "
+            "distributions (macosarm64 + macosx64)."
+        ),
     )
     parser.add_argument(
         "--build-type",
@@ -466,9 +472,18 @@ def ensure_automate_git(download_dir: Path, dry_run: bool) -> Path:
 
 
 def automate_git_command(
-    automate: Path, config: BuildConfig, args: argparse.Namespace, download_dir: Path
+    automate: Path,
+    config: BuildConfig,
+    args: argparse.Namespace,
+    download_dir: Path,
+    subsequent: bool = False,
 ) -> list[str]:
-    """Assemble the automate-git.py invocation."""
+    """Assemble the automate-git.py invocation.
+
+    `subsequent` marks the 2nd+ run over the same checkout in one invocation
+    (--arch both): the sync already happened, so the update phase is skipped
+    and the build forced (unchanged hashes would otherwise no-op it).
+    """
     cmd = [
         sys.executable,
         str(automate),
@@ -520,8 +535,13 @@ def automate_git_command(
     if args.force_clean:
         cmd.append("--force-clean")
 
-    if args.force_build:
+    if args.force_build or subsequent:
         cmd.append("--force-build")
+
+    if subsequent:
+        # The previous arch's run just synced this checkout; skip the whole
+        # update phase (git fetch / gclient revert+sync / hooks) outright.
+        cmd.append("--no-update")
 
     if args.sync_only:
         # Update the checkout only: no compile, no distribution.
@@ -603,43 +623,62 @@ def main() -> int:
     if args.clean:
         return clean_output(root_dir)
 
-    # BuildConfig only knows Release/Debug (the static-lib grammar); for 'Both'
-    # a Release stand-in passes validation — the real build-type selection
-    # happens in automate_git_command(), which reads args.build_type directly.
-    config = BuildConfig(
-        arch=args.arch,
-        build_type="Release" if args.build_type == "Both" else args.build_type,
-        macos_sdk=args.macos_sdk,
-        root_dir=root_dir,
-    )
+    # 'both' = arm64 then x86_64 from the same checkout (two automate-git runs,
+    # two Spotify distributions). Native arch first on Apple Silicon.
+    archs = ["arm64", "x86_64"] if args.arch == "both" else [args.arch]
+
+    # BuildConfig only knows Release/Debug and a single arch (the static-lib
+    # grammar); stand-ins pass validation — the real build-type/arch selection
+    # happens in automate_git_command(), which reads args directly.
+    configs = [
+        BuildConfig(
+            arch=arch,
+            build_type="Release" if args.build_type == "Both" else args.build_type,
+            macos_sdk=args.macos_sdk,
+            root_dir=root_dir,
+        )
+        for arch in archs
+    ]
 
     download_dir = resolve_download_dir(args.download_dir, root_dir)
 
-    errors = config.validate()
-    errors += check_cross_compile(config)
+    errors: list[str] = []
+    for cfg in configs:
+        errors += cfg.validate()
+        errors += check_cross_compile(cfg)
     errors += check_download_dir(args.download_dir, download_dir)
+    if args.arch == "both" and configs[0].platform_name != "macos":
+        errors.append(
+            "--arch both is only supported on macOS (Apple Silicon), the sole "
+            "platform where Chromium can cross-compile the second arch."
+        )
     if args.sync_only and (args.force_build or args.archive):
         errors.append("--sync-only builds nothing: it cannot be combined with --force-build or --archive.")
+    if args.sync_only and args.arch == "both":
+        errors.append("--sync-only syncs the shared checkout once: use it with a single --arch.")
     if errors:
-        for e in errors:
+        # Both configs can yield the same error: dedupe, preserving order.
+        for e in dict.fromkeys(errors):
             print(f"Error: {e}", file=sys.stderr)
         return 1
 
-    gn_defines = build_gn_defines(config.platform_name)
-    env = build_environment(config, gn_defines)
+    gn_defines = build_gn_defines(configs[0].platform_name)
+    env = build_environment(configs[0], gn_defines)
 
     build_type_display = (
         "Release + Debug" if args.build_type == "Both" else args.build_type
     )
+    arch_display = " + ".join(archs)
     print(f"\n{'=' * 60}")
-    print(f"Building CEF {args.branch} for {config.platform_name}.{config.arch} ({build_type_display})")
+    print(f"Building CEF {args.branch} for {configs[0].platform_name}.{arch_display} ({build_type_display})")
     print(f"{'=' * 60}\n")
     print(f"  CEF branch    : {args.branch}")
-    print(f"  Platform      : {config.platform_name} ({config.arch})")
+    print(f"  Platform      : {configs[0].platform_name} ({arch_display})")
     print(f"  Build type    : {build_type_display}")
     print(f"  Distribution  : {args.distrib}")
     print(f"  Download dir  : {download_dir}")
-    print(f"  Output        : {cef_output_root(root_dir)}/cef_binary_<version>_{spotify_platform_token(config)}/  (Spotify layout)")
+    for cfg in configs:
+        print(f"  Output        : {cef_output_root(root_dir)}/cef_binary_<version>_{spotify_platform_token(cfg)}/  (Spotify layout)")
     print(f"\n  GN_DEFINES:\n    {gn_defines}\n")
 
     if not confirm_bootstrap(download_dir, args.dry_run):
@@ -648,48 +687,54 @@ def main() -> int:
 
     depot_tools = ensure_depot_tools(download_dir, env, args.dry_run)
     automate = ensure_automate_git(download_dir, args.dry_run)
-    cmd = automate_git_command(automate, config, args, download_dir)
-
     print("depot_tools :", depot_tools)
-    print("Command     :", " ".join(cmd))
+
+    results: list[tuple[Path, Path | None]] = []
+    for i, cfg in enumerate(configs):
+        cmd = automate_git_command(automate, cfg, args, download_dir, subsequent=(i > 0))
+        print("Command     :", " ".join(cmd))
+
+        if args.dry_run:
+            continue
+
+        step = "sync only" if args.sync_only else "this takes hours"
+        print(f"\n{'=' * 60}\nRunning automate-git.py for {cfg.arch} ({step})\n{'=' * 60}\n")
+        if subprocess.run(cmd, env=env).returncode != 0:
+            print("\nError: automate-git.py failed.", file=sys.stderr)
+            return 1
+
+        if args.sync_only:
+            print(f"\n{'=' * 60}")
+            print("Checkout synced — nothing built (--sync-only).")
+            print(f"  Checkout : {download_dir}")
+            print(f"{'=' * 60}\n")
+            return 0
+
+        distrib = locate_distribution(download_dir)
+        if distrib is None:
+            print(
+                "\nError: no CEF binary distribution found under "
+                f"{download_dir / 'chromium' / 'src' / 'cef' / 'binary_distrib'}.",
+                file=sys.stderr,
+            )
+            return 1
+
+        # CEF version = the distribution folder name with the 'cef_binary_' prefix and
+        # the trailing platform tokens stripped (e.g. cef_binary_126.2.7+g...+chromium-126.0...._linux64).
+        dist_dir = install_distribution(distrib, cef_output_root(root_dir), args.dry_run)
+        archive_path = archive_dist(dist_dir, args.dry_run) if args.archive else None
+        results.append((dist_dir, archive_path))
 
     if args.dry_run:
         print("\nDry run — nothing built.")
         return 0
 
-    step = "sync only" if args.sync_only else "this takes hours"
-    print(f"\n{'=' * 60}\nRunning automate-git.py ({step})\n{'=' * 60}\n")
-    if subprocess.run(cmd, env=env).returncode != 0:
-        print("\nError: automate-git.py failed.", file=sys.stderr)
-        return 1
-
-    if args.sync_only:
-        print(f"\n{'=' * 60}")
-        print("Checkout synced — nothing built (--sync-only).")
-        print(f"  Checkout : {download_dir}")
-        print(f"{'=' * 60}\n")
-        return 0
-
-    distrib = locate_distribution(download_dir)
-    if distrib is None:
-        print(
-            "\nError: no CEF binary distribution found under "
-            f"{download_dir / 'chromium' / 'src' / 'cef' / 'binary_distrib'}.",
-            file=sys.stderr,
-        )
-        return 1
-
-    # CEF version = the distribution folder name with the 'cef_binary_' prefix and
-    # the trailing platform tokens stripped (e.g. cef_binary_126.2.7+g...+chromium-126.0...._linux64).
-    dist_dir = install_distribution(distrib, cef_output_root(root_dir), args.dry_run)
-    archive_path = archive_dist(dist_dir, args.dry_run) if args.archive else None
-
     print(f"\n{'=' * 60}")
     print("CEF build completed successfully!")
-    print(f"  Source      : {distrib}")
-    print(f"  Dist folder : {dist_dir}  (Spotify-named: Release/Debug + shared dirs)")
-    if archive_path:
-        print(f"  Archive     : {archive_path}")
+    for dist_dir, archive_path in results:
+        print(f"  Dist folder : {dist_dir}  (Spotify-named: Release/Debug + shared dirs)")
+        if archive_path:
+            print(f"  Archive     : {archive_path}")
     print(f"{'=' * 60}\n")
     print(
         "The folder/archive name matches the Spotify CDN exactly "

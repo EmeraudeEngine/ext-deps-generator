@@ -283,6 +283,7 @@ final app must run on a distro older than the build host.
 python build_cef.py                     # host platform, Release, x86_64
 python build_cef.py --branch 7827       # target another CEF branch (drops the exact-commit pin)
 python build_cef.py --arch arm64 --macos-sdk 12.0
+python build_cef.py --arch both --macos-sdk 12.0   # macOS only: arm64 THEN x86_64 (two Spotify distributions)
 python build_cef.py --build-type Both   # Release + Debug in ONE run (complete Spotify layout)
 python build_cef.py --sync-only         # update the checkout to the pinned version, build nothing
 python build_cef.py --distrib minimal   # ship-ready, smaller
@@ -348,6 +349,30 @@ python build_cef.py --clean             # remove output/*.cef.* folders (NOT the
   fetches only deltas and `runhooks` swaps in the host-OS binaries. Practical
   notes: budget ~150-200 GB per partition (checkout + build); prefer an NVMe
   USB4/Thunderbolt enclosure (the link step is I/O-heavy).
+- **Arriving on a new machine with the seed (Windows/macOS quick-start)**: the
+  seed tar lives on the NTFS `CEF-WIN` partition (readable by all three OSes;
+  macOS mounts NTFS read-only natively, which suffices to extract).
+  1. Extract the tar to the machine's build location — the OS's SSD partition,
+     or a faster internal/VM disk if space allows. **Windows: extraction MUST
+     preserve symlinks** — use a symlink-capable tar from an elevated Git Bash,
+     or enable Windows Developer Mode first; a symlink-blind extraction leaves
+     a subtly broken checkout.
+  2. Point `--download-dir` (or `$CEF_DOWNLOAD_DIR`) at the extracted
+     `cef-chromium/` and run `build_cef.py` **with `--force-build`**: the
+     seeded checkout is already at the pinned git hashes, so automate-git.py
+     considers it unchanged and would otherwise no-op the build (see the
+     `--force-build` bullet above). The first run still downloads a few GB of
+     host-OS hook artifacts (clang, GCS/CIPD objects) — normal.
+  3. Windows prerequisites for CEF (distinct from the static-libs list in
+     § Prerequisites): Visual Studio 2022 and a recent Windows 11 SDK
+     (Chromium 150 requires 10.0.26100+); `build_cef.py` already sets
+     `DEPOT_TOOLS_WIN_TOOLCHAIN=0` / `GYP_MSVS_VERSION=2022`. No MSYS2 needed
+     for CEF. macOS: full Xcode (not just the Command Line Tools).
+  4. macOS ships two archs: `--arch both --macos-sdk <ver>` builds arm64 then
+     x86_64 from the same checkout (second run auto-forces the build and skips
+     the re-sync). Disk note: 2 archs x 2 configs of `out/` can crowd the
+     310 GiB partition — if `df` gets tight, archive the first arch then delete
+     its `chromium/src/out/*_GN_arm64` dirs before the second run.
 - **Output — matches the Spotify CDN exactly**: the produced distribution is
   copied into `output/` keeping its verbatim official name
   `cef_binary_<version>_<token>[_<flavor>]/` (e.g.
