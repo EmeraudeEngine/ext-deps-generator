@@ -429,6 +429,11 @@ def build_environment(config: BuildConfig, gn_defines: str) -> dict[str, str]:
         # Use the locally installed Visual Studio, not Google's internal toolchain.
         env["DEPOT_TOOLS_WIN_TOOLCHAIN"] = "0"
         env.setdefault("GYP_MSVS_VERSION", "2022")
+        # Only GN-gen the configs we build. Without this, CEF's gclient_hook
+        # also generates the x86 configs, whose `gn gen` fails unless the SDK's
+        # x86 "Debugging Tools for Windows" (dbghelp.dll) are installed.
+        cpu = "arm64" if config.arch == "arm64" else "x64"
+        env.setdefault("GN_OUT_CONFIGS", f"Debug_GN_{cpu},Release_GN_{cpu}")
     elif config.platform_name == "macos":
         if config.macos_sdk:
             env["MACOSX_DEPLOYMENT_TARGET"] = config.macos_sdk
