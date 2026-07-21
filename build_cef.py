@@ -437,6 +437,15 @@ def build_environment(config: BuildConfig, gn_defines: str) -> dict[str, str]:
     elif config.platform_name == "macos":
         if config.macos_sdk:
             env["MACOSX_DEPLOYMENT_TARGET"] = config.macos_sdk
+        # CEF's gn_args.py generates GN configs only for the HOST cpu by default
+        # (machine == 'arm64' on Apple Silicon), so cross-compiling the other
+        # arch needs CEF_ENABLE_{AMD64,ARM64}=1 to make it a "supported_cpu" —
+        # otherwise gclient_hook never writes out/Debug_GN_x64/args.gn and
+        # automate-git.py dies reading it. GN_OUT_CONFIGS then restricts gn gen
+        # to just the target configs (skips a wasteful gen of the host arch).
+        cpu = "arm64" if config.arch == "arm64" else "x64"
+        env.setdefault("GN_OUT_CONFIGS", f"Debug_GN_{cpu},Release_GN_{cpu}")
+        env.setdefault("CEF_ENABLE_ARM64" if cpu == "arm64" else "CEF_ENABLE_AMD64", "1")
 
     return env
 
