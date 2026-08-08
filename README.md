@@ -348,6 +348,24 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Dependencies: zlib
 - Usage: Audio meta-data library.
 
+## tinyusdz
+[v0.9.4, dc7684519883358379964a9e6f925969d7477df3]
+
+- URL: https://github.com/lighttransport/tinyusdz.git
+- Version: 0.9.4
+- Dependencies: None (C++ STL only)
+- Usage: OpenUSD reader (USDA / USDC crate / USDZ) for the engine's SceneLoaders. Built with
+  `TINYUSDZ_CXX_EXCEPTIONS=Off` (the cascade is `-fno-exceptions`); MaterialX, audio, the C API,
+  the pxr-compat shim and the side importers (obj/vox/fbx/gltf) are all disabled. Tydra is kept
+  for material-binding and GeomSubset resolution.
+- Patch: upstream installs ONLY its optional C API shared library, so a stock build exports
+  nothing at all while reporting success. `patches/tinyusdz.patch` adds the install rules for
+  the static library, the header tree (layout preserved — headers include one another by
+  relative path) and a CMake package config.
+- Note: pinned to the last non-rc RELEASE tag by owner decision. Upstream's newer line is
+  `v0.9.9-rc*`; v1.0.0 has not landed. Move the pin forward first if crate coverage or
+  composition turns out to be short.
+
 ## ufbx
 [main, 5c3494fb9a0f1b2e9fb5fb90ddf83ea6b676ebbb]
 

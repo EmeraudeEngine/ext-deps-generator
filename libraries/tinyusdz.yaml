@@ -1,0 +1,56 @@
+name: tinyusdz
+source_dir: repositories/tinyusdz
+languages: [c, cxx]
+
+# OpenUSD reader (USDA / USDC crate / USDZ) with no third-party dependency beyond the STL.
+# Pinned to the v0.9.4 RELEASE tag (owner decision: no release candidates), not the newer
+# v0.9.9-rc* line. If crate coverage or composition turns out to be short, moving the pin
+# forward is the first thing to try.
+#
+# ⚠️ EXCEPTIONS: the engine cascade is built with -fno-exceptions. Upstream defaults this
+# option to Off on POSIX and On for MSVC, whose CMakeLists states "it looks it is hard to
+# disable C++ exception for MSVC". It is forced Off here on EVERY platform so nothing depends
+# on a per-platform default — the Windows build is where that assumption gets tested.
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  TINYUSDZ_BUILD_SHARED_LIBS: false
+  CMAKE_POSITION_INDEPENDENT_CODE: true
+
+  TINYUSDZ_CXX_EXCEPTIONS: false
+
+  # ccache would make the generator's output depend on the host's cache state.
+  TINYUSDZ_USE_CCACHE: false
+
+  # Nothing but the library itself.
+  TINYUSDZ_BUILD_TESTS: false
+  TINYUSDZ_BUILD_BENCHMARKS: false
+  TINYUSDZ_BUILD_EXAMPLES: false
+  TINYUSDZ_BUILD_TOOLS: false
+  TINYUSDZ_WITH_PYTHON: false
+  TINYUSDZ_WITH_C_API: false
+  TINYUSDZ_WITH_MCP_SERVER: false
+
+  # The pxr-compatible shim exists to ease porting from OpenUSD; the engine talks to the
+  # tinyusdz API directly, so it is dead surface here.
+  TINYUSDZ_WITH_PXR_COMPAT_API: false
+
+  # Import/export side formats the engine already covers with its own loaders, or does not want.
+  TINYUSDZ_WITH_USD_TO_GLTF: false
+  TINYUSDZ_WITH_USDOBJ: false
+  TINYUSDZ_WITH_USDVOX: false
+  TINYUSDZ_WITH_USDFBX: false
+  TINYUSDZ_WITH_AUDIO: false
+
+  # MaterialX is off on purpose: the reference asset (Intel Jungle Ruins) uses only
+  # UsdPreviewSurface / UsdUVTexture / UsdPrimvarReader_float2 — measured, not assumed.
+  # Turn it on the day an asset actually needs it.
+  TINYUSDZ_WITH_USDMTLX: false
+
+  # Tydra resolves material bindings and GeomSubsets into a renderer-friendly form. Kept ON:
+  # the engine still does its own translation into native scene logic (absorption rule), but
+  # re-deriving binding resolution from raw prims would be duplicated work.
+  TINYUSDZ_WITH_TYDRA: true
+
+  TINYUSDZ_WITH_MODULE_USDA_READER: true
+  TINYUSDZ_WITH_MODULE_USDC_READER: true

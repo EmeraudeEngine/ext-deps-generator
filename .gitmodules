@@ -115,3 +115,6 @@
 [submodule "repositories/ufbx"]
 	path = repositories/ufbx
 	url = https://github.com/ufbx/ufbx.git
+[submodule "repositories/tinyusdz"]
+	path = repositories/tinyusdz
+	url = https://github.com/lighttransport/tinyusdz.git

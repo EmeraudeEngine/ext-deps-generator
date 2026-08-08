@@ -1,0 +1,120 @@
+# target-commit: dc7684519883358379964a9e6f925969d7477df3
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index da471edab..6ef4649ca 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1983,3 +1983,56 @@ if(WIN32)
+                                            "${CMAKE_CURRENT_SOURCE_DIR}")
+   endif()
+ endif()
++
++#
++# ---- Installation rules (added by the ext-deps-generator patch system) ----
++#
++# Upstream only installs the optional C API shared library. This build disables the C API, so a
++# stock configure/build/install cycle produces libtinyusdz_static.a and exports NOTHING — the
++# install step reports success while writing no library, no header and no package config.
++#
++# The block below installs the static library, the public header tree and a CMake package
++# config, so consumers can `find_package(tinyusdz CONFIG)` like every other ext-deps library.
++#
++include(GNUInstallDirs)
++
++# The headers include one another by relative path ("core/prim.hh", "nonstd/expected.hpp"),
++# so the source tree layout MUST be preserved on install and BOTH the root and external/
++# directories must land on the consumer's include path.
++target_include_directories(${TINYUSDZ_TARGET_STATIC}
++  PUBLIC
++    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
++    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/external>
++    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/tinyusdz>
++    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/tinyusdz/external>
++)
++
++install(TARGETS ${TINYUSDZ_TARGET_STATIC}
++  EXPORT tinyusdzTargets
++  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
++  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
++)
++
++# `attic` holds superseded code kept for reference; it is not part of the public surface.
++install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/
++  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/tinyusdz
++  FILES_MATCHING
++    PATTERN "*.hh"
++    PATTERN "*.h"
++    PATTERN "*.hpp"
++    PATTERN "*.inc"
++    PATTERN "attic" EXCLUDE
++)
++
++install(EXPORT tinyusdzTargets
++  FILE tinyusdzTargets.cmake
++  NAMESPACE tinyusdz::
++  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/tinyusdz
++)
++
++file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/tinyusdzConfig.cmake
++"include(\"\${CMAKE_CURRENT_LIST_DIR}/tinyusdzTargets.cmake\")\n")
++
++install(FILES ${CMAKE_CURRENT_BINARY_DIR}/tinyusdzConfig.cmake
++  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/tinyusdz
++)
+diff --git a/src/composition.cc b/src/composition.cc
+index 8ba93d0a0..45b87b57d 100644
+--- a/src/composition.cc
++++ b/src/composition.cc
+@@ -230,6 +230,37 @@ bool LoadAsset(AssetResolutionResolver &resolver,
+   }
+ 
+   // TODO: Use std::stack to manage AssetResolutionResolver state?
++  //
++  // ---- ext-deps-generator patch ----
++  // The resolver below is mutated and, upstream, never restored. `CompositeSublayersRec()`
++  // resolves each subLayer of a layer in a loop, and every iteration calls in here; once the
++  // recursion has descended into one subLayer, the resolver still points at THAT child's
++  // directory, so every following sibling is resolved from the wrong place.
++  //
++  // Concretely, on a root layer whose first subLayer is `./cameras/defaultCam.usda`, the next
++  // sibling `./elements/Anthurium/PI_Anthurium.usd` is looked up in `<root>/cameras` and the
++  // whole composition fails. Saving and restoring the state around the mutation is the "stack"
++  // the TODO above asks for, in its minimal form.
++  struct ResolverStateGuard {
++    AssetResolutionResolver &resolver_ref;
++    std::string saved_cwp;
++    std::vector<std::string> saved_search_paths;
++
++    explicit ResolverStateGuard(AssetResolutionResolver &r)
++        : resolver_ref(r),
++          saved_cwp(r.current_working_path()),
++          saved_search_paths(r.search_paths()) {}
++
++    ~ResolverStateGuard() {
++      resolver_ref.set_current_working_path(saved_cwp);
++      resolver_ref.set_search_paths(saved_search_paths);
++    }
++
++    ResolverStateGuard(const ResolverStateGuard &) = delete;
++    ResolverStateGuard &operator=(const ResolverStateGuard &) = delete;
++  } resolver_state_guard(resolver);
++  // ---- end of patch ----
++
+   if (current_working_path.size()) {
+     resolver.set_current_working_path(current_working_path);
+   }
+diff --git a/src/tydra/shape-to-mesh.hh b/src/tydra/shape-to-mesh.hh
+index 2cf558436..96dbec60e 100644
+--- a/src/tydra/shape-to-mesh.hh
++++ b/src/tydra/shape-to-mesh.hh
+@@ -11,8 +11,8 @@
+ #include <cmath>
+ #include <array>
+ 
+-#include "../../src/math-util.inc"
+-#include "../../src/value-types.hh"
++#include "../math-util.inc"
++#include "../value-types.hh"
+ 
+ namespace tinyusdz {
+ namespace tydra {
