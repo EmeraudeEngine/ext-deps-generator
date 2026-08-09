@@ -118,3 +118,6 @@
 [submodule "repositories/tinyusdz"]
 	path = repositories/tinyusdz
 	url = https://github.com/lighttransport/tinyusdz.git
+[submodule "repositories/libtiff"]
+	path = repositories/libtiff
+	url = https://gitlab.com/libtiff/libtiff.git

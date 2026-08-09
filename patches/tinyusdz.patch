@@ -61,6 +61,49 @@ index da471edab..6ef4649ca 100644
 +install(FILES ${CMAKE_CURRENT_BINARY_DIR}/tinyusdzConfig.cmake
 +  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/tinyusdz
 +)
+diff --git a/src/composition-reconstruct.cc b/src/composition-reconstruct.cc
+index 66075f100..ad2f0f689 100644
+--- a/src/composition-reconstruct.cc
++++ b/src/composition-reconstruct.cc
+@@ -56,6 +56,12 @@ RECONSTRUCT_PRIM_DECL(GeomSphere);
+ RECONSTRUCT_PRIM_DECL(GeomBasisCurves);
+ RECONSTRUCT_PRIM_DECL(GeomCamera);
+ RECONSTRUCT_PRIM_DECL(GeomSubset);
++RECONSTRUCT_PRIM_DECL(GeomPointInstancer);
++RECONSTRUCT_PRIM_DECL(DomeLight_1);
++RECONSTRUCT_PRIM_DECL(GeometryLight);
++RECONSTRUCT_PRIM_DECL(PortalLight);
++RECONSTRUCT_PRIM_DECL(LightFilter);
++RECONSTRUCT_PRIM_DECL(PluginLightFilter);
+ RECONSTRUCT_PRIM_DECL(SphereLight);
+ RECONSTRUCT_PRIM_DECL(DomeLight);
+ RECONSTRUCT_PRIM_DECL(DiskLight);
+@@ -140,6 +146,25 @@ static nonstd::optional<Prim> ReconstructPrimFromPrimSpec(
+   RECONSTRUCT_PRIM(GeomBasisCurves)
+   RECONSTRUCT_PRIM(GeomCamera)
+   RECONSTRUCT_PRIM(GeomSubset)
++  // ---- ext-deps-generator patch ----
++  // GeomPointInstancer was missing from this table although
++  // ReconstructPrim<GeomPointInstancer> is fully implemented in prim-reconstruct.cc.
++  // A PrimSpec this function cannot reconstruct returns nullopt, and the caller
++  // (ReconstructPrimFromPrimSpecRec) then drops the prim WITH ITS ENTIRE SUBTREE — the
++  // only trace being a warning most callers never print. Measured on Intel's Jungle
++  // Ruins: every PointInstancer read correctly from the crate file, present in the
++  // Layer with its positions/orientations/scales/protoIndices, and absent from the
++  // Stage. The whole vegetation of the scene silently disappeared here.
++  // ---- end of patch ----
++  RECONSTRUCT_PRIM(GeomPointInstancer)
++  // The same omission, with the same consequence, for the UsdLux types upstream
++  // implements but never listed here. Untested for lack of an asset using them;
++  // their ABSENCE is what is known to be harmful.
++  RECONSTRUCT_PRIM(DomeLight_1)
++  RECONSTRUCT_PRIM(GeometryLight)
++  RECONSTRUCT_PRIM(PortalLight)
++  RECONSTRUCT_PRIM(LightFilter)
++  RECONSTRUCT_PRIM(PluginLightFilter)
+   RECONSTRUCT_PRIM(SphereLight)
+   RECONSTRUCT_PRIM(DomeLight)
+   RECONSTRUCT_PRIM(CylinderLight)
 diff --git a/src/composition.cc b/src/composition.cc
 index 8ba93d0a0..45b87b57d 100644
 --- a/src/composition.cc

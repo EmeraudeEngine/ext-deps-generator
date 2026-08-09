@@ -1,0 +1,56 @@
+name: libtiff
+source_dir: repositories/libtiff
+
+# TIFF reader/writer. Pinned to the v4.7.2 RELEASE tag (owner rule: no release candidates).
+#
+# Why it exists at all: Intel's Jungle Ruins stores the BASE COLOUR AND TRANSLUCENCY OF ITS
+# WHOLE VEGETATION as 4096x4096 16-bit TIFF — 10 files, every one of them under textures/Plants.
+# Without a TIFF codec the plants render lit, detailed and pure WHITE, whatever else is fixed.
+# Pre-converting the asset was excluded by an owner rule: a load failure is an engine defect to
+# fix, never an asset to pre-chew.
+
+depends_on:
+  - zlib
+  - libjpeg-turbo
+  - xz
+  - zstd
+
+use_install_prefix_as_find_root: true
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  tiff-static: true
+  CMAKE_POSITION_INDEPENDENT_CODE: true
+
+  # The library only. Tools, tests, contrib and docs are dead weight for a consumer.
+  tiff-tools: false
+  tiff-tests: false
+  tiff-contrib: false
+  tiff-docs: false
+  tiff-deprecated: false
+  tiff-install: true
+
+  # Codecs. Deflate, LZMA, Zstd and JPEG ride on libraries the cascade already links; WebP and
+  # JBIG do NOT, and enabling them makes the engine fail to link on WebPGetFeaturesInternal and
+  # jbg_dec_in. LERC is not built here either. None of them is needed by the reference asset,
+  # whose TIFFs are uncompressed.
+  webp: false
+  jbig: false
+  lerc: false
+  libdeflate: false
+
+  # ⚠️ 12-bit JPEG needs a SEPARATE 12-bit libjpeg build, which this generator does not produce.
+  # libtiff turns it on by itself when it thinks it can, and the link then fails on
+  # jpeg12_read_scanlines & co. The cascade's shared library never pulled that object in, so the
+  # breakage only surfaced when linking the emeraude-base UNIT TEST executable — which is the
+  # whole reason the verification is done in two steps.
+  jpeg12: false
+  old-jpeg: false
+
+  # ⚠️⚠️ AND the detection itself must be short-circuited. libtiff probes jpeglib.h with
+  # check_symbol_exists(); libjpeg-turbo 3.x DECLARES jpeg12_read_scanlines there while the
+  # archive we build does not EXPORT it. libtiff then believes it has 8/12-bit dual mode,
+  # compiles tif_jpeg_12.c, and the link dies on jpeg12_*. Seeding the cache entry keeps the
+  # probe from ever running — `jpeg12: false` alone does NOT help, that option guards the OTHER
+  # branch (a separate 12-bit libjpeg).
+  HAVE_JPEGTURBO_DUAL_MODE_12: false
