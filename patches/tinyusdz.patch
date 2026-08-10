@@ -146,6 +146,33 @@ index 8ba93d0a0..45b87b57d 100644
    if (current_working_path.size()) {
      resolver.set_current_working_path(current_working_path);
    }
+diff --git a/src/nonstd/expected.hpp b/src/nonstd/expected.hpp
+index 5b19bf0d7..608cf8ed0 100644
+--- a/src/nonstd/expected.hpp
++++ b/src/nonstd/expected.hpp
+@@ -255,6 +255,22 @@ namespace nonstd {
+ 
+ #if nsel_CONFIG_NO_EXCEPTIONS
+ # if nsel_CONFIG_NO_EXCEPTIONS_SEH
++// ---- ext-deps-generator patch ----
++// <windows.h> defines the min/max macros unless NOMINMAX is set first, and they shred
++// every `std::numeric_limits<T>::max()` the compiler meets afterwards. This header is
++// reached on MSVC as soon as exceptions are off: value-types.hh only tests __EXCEPTIONS
++// and __cpp_exceptions (GNU/Clang macros), so under /EHs-c- it force-defines
++// nsel_CONFIG_NO_EXCEPTIONS=1, and the SEH default below is (that && _MSC_VER).
++// Guarding here rather than on the compiler command line also covers consumers of the
++// installed headers, who reach this same include from their own -fno-exceptions TUs.
++// src/external/tinyexr.h guards its own <windows.h> exactly this way.
++#  ifndef WIN32_LEAN_AND_MEAN
++#   define WIN32_LEAN_AND_MEAN
++#  endif
++#  ifndef NOMINMAX
++#   define NOMINMAX
++#  endif
++// ---- end of patch ----
+ #  include <windows.h>   // for ExceptionCodes
+ # else
+ // already included: <cassert>
 diff --git a/src/tydra/shape-to-mesh.hh b/src/tydra/shape-to-mesh.hh
 index 2cf558436..96dbec60e 100644
 --- a/src/tydra/shape-to-mesh.hh

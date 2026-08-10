@@ -54,3 +54,9 @@ cmake_options:
 
   TINYUSDZ_WITH_MODULE_USDA_READER: true
   TINYUSDZ_WITH_MODULE_USDC_READER: true
+
+# Windows note: turning exceptions off above is what makes expected-lite pull <windows.h>
+# in on MSVC, whose min/max macros then break every std::numeric_limits<T>::max() in the
+# codebase. Fixed in patches/tinyusdz.patch (NOMINMAX guard in src/nonstd/expected.hpp),
+# not here — the header is installed, so consumers hit the same include from their own
+# -fno-exceptions translation units and need the guard to travel with it.
