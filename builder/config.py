@@ -161,7 +161,7 @@ class Library:
     @classmethod
     def from_yaml(cls, yaml_path: Path) -> "Library":
         """Load a library configuration from a YAML file."""
-        with open(yaml_path, "r") as f:
+        with open(yaml_path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         return cls(
@@ -381,7 +381,7 @@ class LibraryRegistry:
         if not order_file.exists():
             return
 
-        with open(order_file, "r") as f:
+        with open(order_file, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         if data and "order" in data:

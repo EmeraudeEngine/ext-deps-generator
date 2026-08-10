@@ -33,7 +33,7 @@ def parse_gitmodules(path: Path) -> dict[str, str]:
     """Return {submodule_path: url} from a .gitmodules file."""
     modules: dict[str, str] = {}
     cur_path: str | None = None
-    for raw in path.read_text().splitlines():
+    for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if line.startswith("path"):
             cur_path = line.split("=", 1)[1].strip()

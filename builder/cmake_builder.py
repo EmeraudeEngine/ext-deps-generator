@@ -31,7 +31,7 @@ class PatchManager:
         Returns None if no header is present (patch is unguarded). Reading
         stops at the first `diff ` line — anything past that is patch content.
         """
-        with patch_file.open() as f:
+        with patch_file.open(encoding="utf-8", errors="replace") as f:
             for line in f:
                 if line.startswith("diff "):
                     return None

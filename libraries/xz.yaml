@@ -2,6 +2,7 @@ name: xz
 source_dir: repositories/xz
 
 cmake_options:
+  BUILD_TESTING: false
   XZ_ASM_I386: false
   XZ_NLS: false
   BUILD_SHARED_LIBS: false
