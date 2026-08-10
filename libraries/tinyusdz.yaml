@@ -60,3 +60,61 @@ cmake_options:
 # codebase. Fixed in patches/tinyusdz.patch (NOMINMAX guard in src/nonstd/expected.hpp),
 # not here — the header is installed, so consumers hit the same include from their own
 # -fno-exceptions translation units and need the guard to travel with it.
+#
+# ─────────────────────────────────────────────────────────────────────────────────────────
+# COMPOSITION AND MATERIAL NETWORK PATCHES (2026-08-10)
+#
+# Seven upstream defects, all found while loading a real Omniverse Kit export
+# (projet-alpha.data/data-stores/USD/WorldLobby.usdz, 1.6 GB, 353 entries). Each one was
+# isolated and measured before its fix; none is speculative. Before the patch the stage
+# composed to 10 prims — five cameras, a DomeLight and empty Xforms — and reported SUCCESS.
+# After it: 2806 prims, 942 meshes, 141 materials, 348 textures, 10 000 199 triangles.
+#
+# ⚠️ Four of the seven fail SILENTLY or report success. This is why the composition path is
+# never trusted on a "no error" — only on a prim/mesh/texture COUNT.
+#
+#  1. src/security-policy.hh — ValidateAndNormalizeAssetPath() rejects any path holding
+#     '..', which is legal USD for an asset path resolved against its layer's directory.
+#     A NEW function is added for composition rather than relaxing the shared one, because
+#     IsSafeUSDZAssetPath() is a genuine CONTAINMENT check and must stay strict.
+#
+#  2. src/composition.cc, LoadAsset() — the subLayers of a layer reached through a
+#     reference or a payload were never composed. On this asset that IS the scene: the root
+#     payloads an assembly whose body is eight subLayers carrying every mesh and material.
+#
+#  3. src/composition.cc, CompositeAllArcs() — references and payloads were resolved in ONE
+#     pass, so only the first level of arcs was ever reached. Now iterated to closure,
+#     bounded at 64 passes, on the shared arc_visited set. Measured: this asset needs 2.
+#     ⚠️ The loop condition MUST force-check. HasReferences(layer)/HasPayload(layer) default
+#     to a cached flag that a freshly composed layer does not maintain — the flag stays set
+#     and the loop never terminates.
+#
+#  4. src/composition.cc, EffectiveArcSourcePrefix() — an arc with no explicit prim path
+#     targets the asset's defaultPrim, but the callers passed the arc's EMPTY prim path as
+#     the prefix to rewrite, so nothing in the spliced sub-tree was re-rooted. Symptom:
+#     155 dangling `material:binding` and a hard "Cannot find path" from Tydra.
+#
+#  5. src/tydra/shader-network.cc — a `material:binding` with no target (DefineOnly, or
+#     `= None` which deliberately BLOCKS an inherited binding) is legal USD and was turned
+#     into a fatal error. ConvertToRenderScene() aborts on the first offender, so ONE
+#     unbound mesh discarded all 942. The sibling GetDirectCollectionMaterialBinding()
+#     already treated the same condition as "not bound".
+#
+#  6. src/tydra/render-data-mesh.cc — `st` authored as float2[] was refused; only
+#     texCoord2f[] was accepted, next to upstream's own `// TODO: allow float2?`. float2[]
+#     is what UsdPrimvarReader_float2 reads and what Kit / Blender / Substance write. The
+#     two types are the same layout and differ by a role tag. Without it: no UVs at all.
+#
+#  7. src/tydra/render-data-material.cc — THE texture defect, on four sites.
+#     is_connection() is `_paths.size() && !has_value()`, so an input authored as BOTH a
+#     fallback value and a `.connect` — the normal UsdPreviewSurface idiom, and Kit's —
+#     reported "not a connection". The UsdUVTexture was never visited and every material
+#     came back as flat 0.18 grey: the UsdPreviewSurface DEFAULT, which reads as "this
+#     asset has no textures" while all 285 of them sit in the archive. A connection wins
+#     over a fallback value; the sites now test has_connections().
+#
+# USDZ note: SetupUSDZAssetResolution() registers handlers for IMAGES ONLY (png/jpg/exr/hdr)
+# — its own TODO says so — and USDZResolveAsset() matches the archive table VERBATIM, with
+# no join against the current working path. Both are handled on the ENGINE side
+# (EmEn::Scenes::Loaders::USDLoader registers its own handlers over the archive), so they
+# are deliberately NOT patched here.
