@@ -22,6 +22,14 @@ cmake_options:
   # ccache would make the generator's output depend on the host's cache state.
   TINYUSDZ_USE_CCACHE: false
 
+  # Upstream builds with -Weverything -Werror on clang, which encodes "compiles warning-free
+  # on the exact toolchain upstream tested" — every compiler bump surfaces new -Weverything
+  # warnings (upstream already special-cases clang 17 and 18 for that reason). AppleClang 21
+  # is the current offender: its libc++ annotates std::mutex for thread-safety analysis, so
+  # -Wthread-safety-negative fires all over logger.hh and -Werror turns it fatal. Warnings on
+  # this pinned third-party code stay visible in the log; they just no longer fail the build.
+  TINYUSDZ_NO_WERROR: true
+
   # Nothing but the library itself.
   TINYUSDZ_BUILD_TESTS: false
   TINYUSDZ_BUILD_BENCHMARKS: false
