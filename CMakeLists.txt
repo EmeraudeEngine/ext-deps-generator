@@ -203,6 +203,7 @@ if(WIN32)
         ZMQ_STATIC          # ZeroMQ static linking
         TAGLIB_STATIC       # TagLib static linking
         FLAC__NO_DLL        # FLAC static linking (avoid __declspec(dllimport))
+        KHRONOS_STATIC      # libktx static linking (avoid __declspec(dllimport))
     )
 endif()
 
@@ -226,6 +227,9 @@ if(WIN32)
         set(TURBOJPEG_LIB "turbojpeg-static")
         set(ZLIB_LIB "zlibstaticd")
         set(ZSTD_LIB "zstd_static")
+        # libtiff appends "d" on Windows only (cmake/WindowsSupport.cmake)
+        set(TIFF_LIB "tiffd")
+        set(TIFFXX_LIB "tiffxxd")
     else()
         set(FREETYPE_LIB "freetype")
         set(PNG_LIB "libpng16_static")
@@ -233,6 +237,8 @@ if(WIN32)
         set(TURBOJPEG_LIB "turbojpeg-static")
         set(ZLIB_LIB "zlibstatic")
         set(ZSTD_LIB "zstd_static")
+        set(TIFF_LIB "tiff")
+        set(TIFFXX_LIB "tiffxx")
     endif()
     set(WEBP_LIB "libwebp")
     set(SHARPYUV_LIB "libsharpyuv")
@@ -277,9 +283,14 @@ if(WIN32)
     # Other
     set(UFBX_LIB "ufbx")
     set(BC7ENC_LIB "bc7enc_rdo")
+    # ktx / meshoptimizer / tinyusdz keep their basenames in Debug (no "d" postfix)
+    set(KTX_LIB "ktx")
+    set(MESHOPT_LIB "meshoptimizer")
+    set(TINYUSDZ_LIB "tinyusdz_static")
     # lib3mf (static): static archive name matches the CMake target name.
     set(LIB3MF_LIB "lib3mf")
-    # pthread-win32: SHARED build by default produces pthreadVC3 import lib.
+    # pthread-win32: static build; pthreadVC3 is the C/setjmp flavor (VCE3/VSE3
+    # are the C++ EH and SEH variants, also installed but not linked here).
     set(PTHREADWIN32_LIB "pthreadVC3")
 else()
     # Unix library names
@@ -292,6 +303,9 @@ else()
     endif()
     set(JPEG_LIB "jpeg")
     set(TURBOJPEG_LIB "turbojpeg")
+    # libtiff's "d" debug postfix is Windows-only
+    set(TIFF_LIB "tiff")
+    set(TIFFXX_LIB "tiffxx")
     set(WEBP_LIB "webp")
     set(SHARPYUV_LIB "sharpyuv")
     set(OPENAL_LIB "openal")
@@ -319,10 +333,27 @@ else()
     # Other
     set(UFBX_LIB "ufbx")
     set(BC7ENC_LIB "bc7enc_rdo")
+    set(KTX_LIB "ktx")
+    set(MESHOPT_LIB "meshoptimizer")
+    set(TINYUSDZ_LIB "tinyusdz_static")
     # lib3mf sets PREFIX "" on its target, so the archive is "lib3mf.a"
     # (not "liblib3mf.a"). Use a full path to bypass the `-l` short-name search,
     # which would otherwise look for "liblib3mf.{a,so,dylib}".
     set(LIB3MF_LIB "${LIBS_ROOT}/lib/lib3mf.a")
+endif()
+
+# libktx's static build also installs the astc-encoder archive it vendors, whose
+# basename encodes the SIMD ISA it was compiled for (astcenc-avx2-static on x86_64,
+# astcenc-neon-static on arm64) — locate it by glob instead of hardcoding the ISA.
+if(WIN32)
+    file(GLOB ASTCENC_LIB "${LIBS_ROOT}/lib/astcenc-*-static.lib")
+else()
+    file(GLOB ASTCENC_LIB "${LIBS_ROOT}/lib/libastcenc-*-static.a")
+endif()
+if(NOT ASTCENC_LIB)
+    message(FATAL_ERROR
+        "astc-encoder archive not found in ${LIBS_ROOT}/lib "
+        "(installed alongside libktx; see libraries/ktx.yaml)")
 endif()
 
 # Use library names only - CMake won't validate existence at configure time.
@@ -335,8 +366,9 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     lunasvg plutovg
     # Fonts (freetype depends on harfbuzz, png, brotli, bzip2, zlib)
     ${FREETYPE_LIB} harfbuzz
-    # Images (png depends on zlib)
-    ${PNG_LIB} ${JPEG_LIB} ${TURBOJPEG_LIB} ${WEBP_LIB} ${SHARPYUV_LIB}
+    # Images (png depends on zlib; tiff depends on jpeg, zlib, lzma, zstd, so it —
+    # and its C++ stream wrapper tiffxx — must precede them all)
+    ${PNG_LIB} ${TIFFXX_LIB} ${TIFF_LIB} ${JPEG_LIB} ${TURBOJPEG_LIB} ${WEBP_LIB} ${SHARPYUV_LIB}
     # Video
     ${VPX_LIB}
     # 3D model formats (lib3mf depends on libzip -> zlib/bzip2/lzma/zstd, so it
@@ -350,6 +382,12 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     # Audio codecs (flac/vorbis depend on ogg)
     ${FLAC_LIB} ${VORBISFILE_LIB} ${VORBISENC_LIB} ${VORBIS_LIB} ${OGG_LIB}
     ${OPUS_LIB} ${MPG123_LIB} ${LAME_LIB}
+    # Texture containers (libktx VENDORS an unprefixed zstd — see libraries/ktx.yaml.
+    # It must come BEFORE the cascade's zstd: on single-pass Unix linkers libktx's own
+    # zstd object is always pulled in to satisfy its internal ZSTD_* references, so
+    # every other ZSTD_* reference must resolve from that same archive or the two
+    # copies collide with multiple-definition errors.)
+    ${KTX_LIB} ${ASTCENC_LIB}
     # Compression (dependencies of above)
     brotlienc brotlidec brotlicommon ${ZSTD_LIB} lzma bz2_static ${ZLIB_LIB}
     # System
@@ -366,7 +404,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     # Process control
     ${REPROC_CPP_LIB} ${REPROC_LIB}
     # Data formats
-    fastgltf jsoncpp ${UFBX_LIB}
+    fastgltf jsoncpp ${UFBX_LIB} ${MESHOPT_LIB} ${TINYUSDZ_LIB}
     # Texture compression
     ${BC7ENC_LIB}
 )

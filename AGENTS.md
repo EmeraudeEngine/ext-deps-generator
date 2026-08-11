@@ -131,6 +131,17 @@ After each library build, `dumpbin /directives` validates .lib files:
 
 Build fails immediately if wrong CRT detected.
 
+**LTCG rejection (infallible-by-construction):** a lib containing `/GL` (LTCG)
+objects is rejected outright, BEFORE the directive scan. LTCG compilands store
+their `/DEFAULTLIB` directives in opaque metadata that `dumpbin /directives`
+cannot read — such a lib used to sail through validation as "no CRT directives
+found" while silently pulling the wrong CRT (seen with libvpx: a `/GL` `/MD`
+Release lib inside the Debug-MD package → LNK4098 in every consumer Debug
+link). Detection scans the archive for the MSVC anonymous-object ClassID
+(`{0CB3FE38-D9A5-4DAB-AC9B-D6B6222653C2}`) stamped on every `/GL` compiland
+(`WindowsPlatform._contains_ltcg_objects`). `/GL` is forbidden in shipped
+archives anyway: it ties the .lib to the exact producing MSVC toolset.
+
 ### Post-build assertions
 A library YAML can declare post-install checks that abort the build when the
 artifact is structurally valid but functionally broken (e.g. OpenAL-soft
@@ -183,7 +194,9 @@ Some libraries need modifications to build correctly (e.g., forced C++ standard,
 
 **Examples**:
 - `patches/jsoncpp.patch`: allows overriding `CMAKE_CXX_STANDARD` (jsoncpp forces C++11, but headers expose `std::string_view` requiring C++17+).
-- `patches/libvpx.patch`: replaces `ar` with `libtool -static` on macOS. macOS `ar` creates fat Mach-O archives from cross-arch objects that it cannot update, breaking cross-compilation from ARM to x86_64.
+- `patches/libvpx.patch` (two hunks):
+  1. Replaces `ar` with `libtool -static` on macOS. macOS `ar` creates fat Mach-O archives from cross-arch objects that it cannot update, breaking cross-compilation from ARM to x86_64.
+  2. Strips `WholeProgramOptimization` (`/GL`) from the generated Release `.vcxproj` (`gen_msvs_vcxproj.sh`). LTCG objects hide their CRT directives from `dumpbin` (defeating CRT validation) and tie the static lib to the exact producing MSVC toolset — unacceptable for a redistributable archive.
 
 **Creating a patch**:
 ```bash
@@ -198,6 +211,15 @@ For libraries like libvpx that use their own configure/make system (not CMake, n
 - Configure uses `--target=x86_64-win64-vs17` to generate `.vcxproj` files
 - `make` invokes `msbuild.exe` internally (requires Windows PATH to be preserved)
 - `--enable-static-msvcrt` is passed for MT runtime builds
+- `--enable-debug-libs` is passed for Debug builds: libvpx's `make` builds BOTH
+  msbuild configurations, but `make install` only ships the Release lib
+  (`vpxmt.lib`/`vpxmd.lib`) unless `CONFIG_DEBUG_LIBS` is set (`libs.mk`) —
+  without it a "Debug" package silently contains a Release-CRT library
+- Debug installs then purge the Release-CRT twin that `make install` ships
+  unconditionally, so a Debug package only contains `vpxmtd.lib`/`vpxmdd.lib`
+  (`_purge_release_libs`)
+- libvpx lib naming: `vpx{mt|md}[d].lib` — runtime in the name, `d` appended
+  for the Debug configuration
 - Post-install flattens `lib/x64/` subdirectories to `lib/` for consistency
 - CRT validation runs after install
 

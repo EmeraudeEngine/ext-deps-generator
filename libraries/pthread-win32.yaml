@@ -2,6 +2,15 @@ name: pthread-win32
 source_dir: repositories/pthread-win32
 languages: [c, cxx]
 
+# ⚠️ patches/pthread-win32.patch — upstream sets CMAKE_ARCHIVE_OUTPUT_DIRECTORY to
+# "${CMAKE_SOURCE_DIR}/built", i.e. INSIDE the shared source tree. Every build config
+# (MD/MT × Release/Debug) then links its archives into the same path: a later MD build
+# overwrites the file, and the next MT build sees an output newer than its objects,
+# skips the relink, and installs the /MD archive into the MT output — poisoning it with
+# the wrong CRT (surfaced as __imp__mbsnbcat_s LNK2001 when DependenciesTest linked MT).
+# The patch redirects BUILD_DIR and CMAKE_ARCHIVE_OUTPUT_DIRECTORY to CMAKE_BINARY_DIR,
+# which is per-config, so builds can no longer cross-contaminate.
+
 # Only needed on Windows
 disabled_platforms:
   - linux

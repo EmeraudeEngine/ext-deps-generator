@@ -21,6 +21,18 @@ class WindowsPlatform(Platform):
     _dumpbin_path: Optional[Path] = None
     _dumpbin_searched: bool = False
     _validated_libs: set[str] = set()  # Track already validated .lib files
+
+    # ClassID of the MSVC "anonymous object" header used by /GL (LTCG)
+    # compilands ({0CB3FE38-D9A5-4DAB-AC9B-D6B6222653C2}, little-endian).
+    # LTCG objects store their /DEFAULTLIB directives in opaque LTCG
+    # metadata that `dumpbin /directives` cannot read, so a lib containing
+    # them would sail through CRT validation as "no directives found"
+    # while silently pulling the wrong CRT (seen with libvpx: a /GL /MD
+    # Release lib inside a Debug-MD package → LNK4098 downstream).
+    _LTCG_ANON_OBJ_GUID = bytes((
+        0x38, 0xFE, 0xB3, 0x0C, 0xA5, 0xD9, 0xAB, 0x4D,
+        0xAC, 0x9B, 0xD6, 0xB6, 0x22, 0x26, 0x53, 0xC2,
+    ))
     _msvc_env_cache: dict[str, Optional[dict[str, str]]] = {}
 
     @property
@@ -339,6 +351,23 @@ class WindowsPlatform(Platform):
             print(f"Copying {pdb_file.name} to {pdb_dest_dir}")
             shutil.copy2(pdb_file, dest_file)
 
+    @classmethod
+    def _contains_ltcg_objects(cls, lib_file: Path) -> bool:
+        """Return True if the .lib archive contains /GL (LTCG) object members.
+
+        Detection scans for the anonymous-object header ClassID that MSVC
+        stamps on every /GL compiland. False negatives are not possible —
+        the GUID is mandatory in the format; false positives would require
+        the 16-byte sequence to appear in ordinary section data, which is
+        practically nil and errs on the safe side anyway.
+        """
+        try:
+            data = lib_file.read_bytes()
+        except OSError:
+            # Unreadable lib: let dumpbin report the real error downstream.
+            return False
+        return data.find(cls._LTCG_ANON_OBJ_GUID) != -1
+
     def _get_expected_crt(self, config: "BuildConfig") -> str:
         """Get the expected CRT directive based on configuration.
 
@@ -399,6 +428,20 @@ class WindowsPlatform(Platform):
         print(f"\n{'=' * 20} Validating CRT linkage (expected: {expected_crt}) {'=' * 20}\n")
 
         for lib_file in new_lib_files:
+            # /GL (LTCG) objects hide their /DEFAULTLIB directives from
+            # dumpbin, making CRT validation blind. Reject them outright:
+            # a redistributable static lib must not contain LTCG objects
+            # anyway (they tie the archive to the exact producing toolset).
+            if self._contains_ltcg_objects(lib_file):
+                error = (
+                    f"{lib_file.name}: contains /GL (LTCG) objects — CRT directives "
+                    f"are not verifiable and the lib is tied to the producing MSVC "
+                    f"toolset. Rebuild this library without /GL."
+                )
+                errors.append(error)
+                print(f"  FAIL: {error}")
+                continue
+
             try:
                 result = subprocess.run(
                     [str(dumpbin), "/directives", str(lib_file)],

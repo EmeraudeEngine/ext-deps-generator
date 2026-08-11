@@ -30,3 +30,21 @@ index 39dff825b..a2a121572 100644
  
  # Don't use -Wl,-z,defs with Clang's sanitizers.
  #
+diff --git a/build/make/gen_msvs_vcxproj.sh b/build/make/gen_msvs_vcxproj.sh
+index 1e1db05bb..23783f9ec 100755
+--- a/build/make/gen_msvs_vcxproj.sh
++++ b/build/make/gen_msvs_vcxproj.sh
+@@ -366,9 +366,10 @@ generate_vcxproj() {
+                 fi
+             fi
+             tag_content CharacterSet Unicode
+-            if [ "$config" = "Release" ]; then
+-                tag_content WholeProgramOptimization true
+-            fi
++            # WholeProgramOptimization (/GL) deliberately NOT emitted: LTCG
++            # objects hide their DEFAULTLIB directives from dumpbin (breaking
++            # CRT validation) and tie the static lib to the exact MSVC toolset
++            # that produced it — unacceptable for a redistributable archive.
+             close_tag PropertyGroup
+         done
+     done

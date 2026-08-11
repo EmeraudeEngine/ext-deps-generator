@@ -8,6 +8,10 @@
 #include <iostream>
 #include <cstdlib>
 #include <cstdint>
+#include <cstring>
+#include <sstream>
+#include <string>
+#include <vector>
 
 // ============================================================================
 // Compression libraries
@@ -43,6 +47,10 @@
 // libwebp
 #include "webp/encode.h"
 #include "webp/decode.h"
+
+// libtiff (C API + C++ stream API from the tiffxx archive)
+#include "tiffio.h"
+#include "tiffio.hxx"
 
 // ============================================================================
 // Video libraries
@@ -182,6 +190,12 @@
 // ufbx
 #include "ufbx/ufbx.h"
 
+// meshoptimizer (EXT_meshopt_compression codec)
+#include "meshoptimizer.h"
+
+// tinyusdz (OpenUSD reader)
+#include "tinyusdz/tinyusdz.hh"
+
 // lib3mf (shared library, C ABI)
 #include "Bindings/C/lib3mf.h"
 
@@ -209,6 +223,9 @@
 
 // bc7enc_rdo
 #include "bc7enc_rdo/bc7enc.h"
+
+// ktx (KHRONOS_STATIC must be set on Windows to use the static lib)
+#include "ktx.h"
 
 
 // ============================================================================
@@ -269,6 +286,65 @@ static bool test_libwebp()
     int version = WebPGetEncoderVersion();
     std::cout << "  libwebp version: " << (version >> 16) << "."
               << ((version >> 8) & 0xFF) << "." << (version & 0xFF) << "\n";
+    return true;
+}
+
+static bool test_libtiff()
+{
+    // TIFFGetVersion() returns a multi-line banner; keep the first line only.
+    std::string version = TIFFGetVersion();
+    const size_t eol = version.find('\n');
+    if (eol != std::string::npos)
+        version.resize(eol);
+    std::cout << "  " << version << "\n";
+
+    // Write a 2x2 grayscale TIFF compressed with LZMA through the C++ stream API,
+    // then read it back. This deliberately exercises the libtiff <-> lzma boundary:
+    // tif_lzma.obj is only pulled in when the LZMA codec is used, and on MSVC a
+    // libtiff built without LZMA_API_STATIC leaves it referencing __imp_lzma_* that
+    // the static lzma.lib cannot satisfy (see libraries/libtiff.yaml). The stream
+    // API also validates the tiffxx archive (TIFFStreamOpen).
+    const uint8_t pixels[4] = {0x00, 0x42, 0x84, 0xFF};
+
+    std::ostringstream output;
+    TIFF* wtif = TIFFStreamOpen("memory-out", &output);
+    if (wtif == nullptr)
+        return false;
+    TIFFSetField(wtif, TIFFTAG_IMAGEWIDTH, 2);
+    TIFFSetField(wtif, TIFFTAG_IMAGELENGTH, 2);
+    TIFFSetField(wtif, TIFFTAG_BITSPERSAMPLE, 8);
+    TIFFSetField(wtif, TIFFTAG_SAMPLESPERPIXEL, 1);
+    TIFFSetField(wtif, TIFFTAG_ROWSPERSTRIP, 2);
+    TIFFSetField(wtif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_MINISBLACK);
+    TIFFSetField(wtif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+    TIFFSetField(wtif, TIFFTAG_COMPRESSION, COMPRESSION_LZMA);
+    bool written = true;
+    for (uint32_t row = 0; row < 2 && written; ++row)
+        written = TIFFWriteScanline(wtif, const_cast< uint8_t* >(&pixels[row * 2]), row) == 1;
+    TIFFClose(wtif);
+    if (!written || output.str().empty())
+    {
+        std::cerr << "  libtiff: LZMA-compressed write failed\n";
+        return false;
+    }
+
+    std::istringstream input(output.str());
+    TIFF* rtif = TIFFStreamOpen("memory-in", &input);
+    if (rtif == nullptr)
+        return false;
+    uint8_t readback[4] = {};
+    bool read = true;
+    for (uint32_t row = 0; row < 2 && read; ++row)
+        read = TIFFReadScanline(rtif, &readback[row * 2], row) == 1;
+    TIFFClose(rtif);
+    if (!read || std::memcmp(readback, pixels, sizeof(pixels)) != 0)
+    {
+        std::cerr << "  libtiff: LZMA round-trip mismatch\n";
+        return false;
+    }
+
+    std::cout << "  libtiff: OK (LZMA round-trip, " << output.str().size()
+              << "-byte in-memory TIFF)\n";
     return true;
 }
 
@@ -506,6 +582,65 @@ static bool test_ufbx()
     return true;
 }
 
+static bool test_meshoptimizer()
+{
+    // Round-trip a tiny vertex buffer through the codec behind
+    // EXT_meshopt_compression (the decoder is the part the engine needs).
+    const float vertices[4][3] = {
+        {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
+    const size_t vertexCount = 4;
+    const size_t vertexSize = sizeof(vertices[0]);
+
+    std::vector< unsigned char > encoded(meshopt_encodeVertexBufferBound(vertexCount, vertexSize));
+    const size_t encodedSize =
+        meshopt_encodeVertexBuffer(encoded.data(), encoded.size(), vertices, vertexCount, vertexSize);
+    if (encodedSize == 0)
+        return false;
+
+    float decoded[4][3] = {};
+    if (meshopt_decodeVertexBuffer(decoded, vertexCount, vertexSize, encoded.data(), encodedSize) != 0)
+        return false;
+    if (std::memcmp(decoded, vertices, sizeof(vertices)) != 0)
+        return false;
+
+    std::cout << "  meshoptimizer version: " << (MESHOPTIMIZER_VERSION / 1000) << "."
+              << (MESHOPTIMIZER_VERSION % 1000 / 10) << " (vertex codec round-trip, "
+              << encodedSize << " bytes)\n";
+    return true;
+}
+
+static bool test_tinyusdz()
+{
+    static const char usda[] =
+        "#usda 1.0\n"
+        "\n"
+        "def Xform \"root\"\n"
+        "{\n"
+        "    def Mesh \"quad\"\n"
+        "    {\n"
+        "    }\n"
+        "}\n";
+
+    tinyusdz::Stage stage;
+    std::string warn, err;
+    if (!tinyusdz::LoadUSDAFromMemory(reinterpret_cast< const uint8_t* >(usda), sizeof(usda) - 1,
+                                      "", &stage, &warn, &err))
+    {
+        std::cerr << "  tinyusdz: USDA parse failed: " << err << "\n";
+        return false;
+    }
+    if (stage.root_prims().size() != 1)
+    {
+        std::cerr << "  tinyusdz: expected 1 root prim, got " << stage.root_prims().size() << "\n";
+        return false;
+    }
+
+    std::cout << "  tinyusdz version: " << tinyusdz::version_major << "."
+              << tinyusdz::version_minor << "." << tinyusdz::version_micro
+              << " (parsed in-memory USDA, " << stage.root_prims().size() << " root prim)\n";
+    return true;
+}
+
 static bool test_lib3mf()
 {
     Lib3MF_uint32 major = 0, minor = 0, micro = 0;
@@ -578,6 +713,43 @@ static bool test_bc7enc_rdo()
     return true;
 }
 
+static bool test_ktx()
+{
+    ktxTextureCreateInfo createInfo = {};
+    createInfo.vkFormat = 37; // VK_FORMAT_R8G8B8A8_UNORM (ktx.h takes a raw ktx_uint32_t)
+    createInfo.baseWidth = 4;
+    createInfo.baseHeight = 4;
+    createInfo.baseDepth = 1;
+    createInfo.numDimensions = 2;
+    createInfo.numLevels = 1;
+    createInfo.numLayers = 1;
+    createInfo.numFaces = 1;
+    createInfo.isArray = KTX_FALSE;
+    createInfo.generateMipmaps = KTX_FALSE;
+
+    ktxTexture2* texture = nullptr;
+    const KTX_error_code result =
+        ktxTexture2_Create(&createInfo, KTX_TEXTURE_CREATE_ALLOC_STORAGE, &texture);
+    if (result != KTX_SUCCESS || texture == nullptr)
+    {
+        std::cerr << "  ktx: ktxTexture2_Create failed: " << ktxErrorString(result) << "\n";
+        return false;
+    }
+
+    const bool needsTranscoding = ktxTexture2_NeedsTranscoding(texture);
+    const ktx_size_t dataSize = ktxTexture_GetDataSize(ktxTexture(texture));
+    ktxTexture_Destroy(ktxTexture(texture));
+
+    if (needsTranscoding) // an uncompressed RGBA8 texture never needs transcoding
+    {
+        std::cerr << "  ktx: unexpected NeedsTranscoding on RGBA8\n";
+        return false;
+    }
+
+    std::cout << "  ktx: OK (created 4x4 RGBA8 ktxTexture2, dataSize=" << dataSize << ")\n";
+    return true;
+}
+
 
 // ============================================================================
 // Main
@@ -619,6 +791,7 @@ int main(int /*argc*/, char* /*argv*/[])
     run_test("libpng", test_libpng);
     run_test("libjpeg-turbo", test_libjpeg);
     run_test("libwebp", test_libwebp);
+    run_test("libtiff", test_libtiff);
 
     std::cout << "\n--- Video Libraries ---\n";
     run_test("libvpx", test_libvpx);
@@ -670,6 +843,8 @@ int main(int /*argc*/, char* /*argv*/[])
     run_test("fastgltf", test_fastgltf);
     run_test("jsoncpp", test_jsoncpp);
     run_test("ufbx", test_ufbx);
+    run_test("meshoptimizer", test_meshoptimizer);
+    run_test("tinyusdz", test_tinyusdz);
     run_test("lib3mf", test_lib3mf);
 
     std::cout << "\n--- SVG Libraries ---\n";
@@ -681,6 +856,7 @@ int main(int /*argc*/, char* /*argv*/[])
 
     std::cout << "\n--- Texture Compression Libraries ---\n";
     run_test("bc7enc_rdo", test_bc7enc_rdo);
+    run_test("ktx", test_ktx);
 
     std::cout << "\n========================================\n";
     std::cout << "   Results: " << passed << " passed, " << failed << " failed\n";

@@ -76,6 +76,12 @@ class Msys2Builder:
         # Post-install: flatten lib subdirectories (libvpx puts .lib in lib/x64/)
         self._flatten_lib_dir(install_dir)
 
+        # Debug packages must not carry the Release-CRT twin that
+        # `make install` ships unconditionally (libs.mk installs
+        # vpxmt/vpxmd.lib regardless of CONFIG_DEBUG_LIBS).
+        if self.config.build_type == "Debug":
+            self._purge_release_libs(install_dir)
+
         # CRT validation (Windows only)
         if hasattr(self.platform, "validate_crt_linkage"):
             success, errors = self.platform.validate_crt_linkage(self.config, install_dir)
@@ -253,6 +259,13 @@ class Msys2Builder:
         if self.config.runtime_lib == "MT":
             args.append("--enable-static-msvcrt")
 
+        # Debug builds: libvpx's `make` builds BOTH msbuild configurations,
+        # but `make install` only ships the Release lib (vpxmt/vpxmd.lib)
+        # unless CONFIG_DEBUG_LIBS is set (libs.mk). Without this flag a
+        # "Debug" package silently contains a Release-CRT library.
+        if self.config.build_type == "Debug":
+            args.append("--enable-debug-libs")
+
         # Add options from YAML
         for key, value in options.items():
             if isinstance(value, bool):
@@ -271,6 +284,26 @@ class Msys2Builder:
     def _run_make_install(self, bash: Path, build_dir: Path) -> bool:
         """Run make install."""
         return self._run_bash("make install", build_dir, bash)
+
+    def _purge_release_libs(self, install_dir: Path) -> None:
+        """Remove Release-runtime libvpx libs from a Debug install.
+
+        libvpx's `make install` always installs the Release lib
+        (vpxmt.lib or vpxmd.lib); with --enable-debug-libs the Debug lib
+        (vpxmtd.lib / vpxmdd.lib) is installed alongside it. A Debug
+        package must only ship the Debug-CRT variant — a leftover
+        Release-CRT lib is exactly the kind of landmine the CRT
+        validation exists to prevent.
+        """
+        lib_dir = install_dir / "lib"
+        if not lib_dir.exists():
+            return
+
+        for name in ("vpxmt.lib", "vpxmd.lib"):
+            release_lib = lib_dir / name
+            if release_lib.exists():
+                print(f"  Purging Release-CRT lib from Debug package: {name}")
+                release_lib.unlink()
 
     def _flatten_lib_dir(self, install_dir: Path) -> None:
         """Flatten platform subdirectories inside lib/.

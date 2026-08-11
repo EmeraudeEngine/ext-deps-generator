@@ -54,3 +54,11 @@ cmake_options:
   # probe from ever running — `jpeg12: false` alone does NOT help, that option guards the OTHER
   # branch (a separate 12-bit libjpeg).
   HAVE_JPEGTURBO_DUAL_MODE_12: false
+
+platforms:
+  windows:
+    # ⚠️ Same trap as libzip: our xz build is STATIC, but without LZMA_API_STATIC lzma.h
+    # declares the whole API __declspec(dllimport). tif_lzma.obj then references
+    # __imp_lzma_code & co. that the static lzma.lib cannot satisfy, and the consumer link
+    # dies with LNK2001 — only on MSVC, only when the LZMA codec objects get pulled in.
+    extra_c_flags: "-DLZMA_API_STATIC"
