@@ -6,6 +6,7 @@ Thumbs.db
 .vs
 .yarn
 .claude/settings.local.json
+.venv
 
 # Files backup
 *.orig
