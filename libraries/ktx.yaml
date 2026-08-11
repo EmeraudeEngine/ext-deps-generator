@@ -1,0 +1,79 @@
+name: ktx
+source_dir: repositories/ktx
+languages: [c, cxx]
+
+# Khronos KTX-Software (libktx). Pinned to the v4.4.2 RELEASE tag (owner rule: no
+# release candidates).
+#
+# Why it exists: KHR_texture_basisu is the only sanctioned way to put anything other
+# than PNG/JPEG inside a GLB, and it accepts ETC1S or UASTC — never raw BC7. fastgltf
+# reports `MimeType::KTX2` and hands over the bytes; it transcodes nothing. libktx turns
+# a UASTC payload into BC7 blocks (`ktxTexture2_TranscodeBasis` with `KTX_TTF_BC7_RGBA`),
+# which land directly in the existing `CompressedMipLevel` / `createFromCompressed()`
+# path, and can target `KTX_TTF_RGBA32` instead when the device reports no
+# `textureCompressionBC`. After transcoding, the `vkFormat` FIELD of the ktxTexture2
+# struct (ktx.h:751 — there is no ktxTexture2_GetVkFormat() accessor) holds the exact
+# VK_FORMAT_BC7_{SRGB,UNORM}_BLOCK, which beats guessing from a per-resource sRGB flag
+# since the transfer function lives in the KTX2 DFD.
+#
+# Runtime call sequence, all present in the archive:
+#   ktxTexture2_CreateFromMemory(bytes, len, KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &t)
+#   ktxTexture2_NeedsTranscoding(t)
+#   ktxTexture2_TranscodeBasis(t, KTX_TTF_BC7_RGBA, 0)
+#   t->vkFormat / t->numLevels / ktxTexture2_GetImageOffset(t, level, 0, 0, &off)
+#   ktxTexture_GetData(t) + ktxTexture2_GetImageSize(t, level)
+#   ktxTexture2_Destroy(t)
+#
+# This does NOT replace the runtime BC7 encoder: bc7enc_rdo stays the path for every
+# PNG/JPEG asset. libktx only serves textures that already arrive pre-compressed.
+#
+# ⚠️ ZSTD IS VENDORED AND UNPREFIXED. `external/basisu/zstd/zstd.c` is hardcoded in the
+# target's source list (CMakeLists.txt:392), so libktx.a defines its own ZSTD_* symbols
+# next to the cascade's zstd. There is no upstream switch to link an external zstd. This
+# is harmless as long as the linker resolves every ZSTD_* reference from a single
+# archive; if a link ever dies on duplicate definitions, the fix is a patch removing
+# that source file and linking the cascade's zstd — not a builder change. Note that KTX2
+# supercompression is zstd, so the codec cannot simply be disabled.
+#
+# ⚠️ `ktx_read` — the read-only target, i.e. exactly the runtime need — IS BUILT but
+# NOT INSTALLED: `KTX_INSTALL_TARGETS` is hardcoded to `ktx` at CMakeLists.txt:1339.
+# Extracting it would take a patch; not worth it for a static archive whose unused
+# writer objects the linker drops anyway.
+#
+# ⚠️ A static build also installs the astc-encoder archive (CMakeLists.txt:1340), so
+# expect a second .a in the output directory alongside libktx.a.
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  CMAKE_POSITION_INDEPENDENT_CODE: true
+
+  # Consumer only. Tools drag in cxxopts/fmt and a pile of CLI executables, the test
+  # suite wants the CTS submodule, and the docs need doxygen.
+  KTX_FEATURE_TESTS: false
+  KTX_FEATURE_TOOLS: false
+  KTX_FEATURE_TOOLS_CTS: false
+  KTX_FEATURE_DOC: false
+  KTX_FEATURE_JNI: false
+  KTX_FEATURE_PY: false
+
+  # The engine owns its Vulkan upload (Vulkan::Image::createFromCompressed) and never
+  # touches OpenGL. Leaving VK_UPLOAD on would make libktx probe for a Vulkan SDK it
+  # does not need to build against.
+  KTX_FEATURE_GL_UPLOAD: false
+  KTX_FEATURE_VK_UPLOAD: false
+
+  # ⚠️ KTX1 MUST STAY ON, however useless the format is to us. Turning it off in 4.4.2
+  # yields a structurally broken static archive: lib/texture.c is compiled regardless
+  # (it holds the generic ktxTexture_* dispatchers the KTX2 path needs — GetData,
+  # GetImageSize) and its ktxTexture_CreateFromStream still calls
+  # ktxTexture1_constructFromStreamAndHeader, whose translation unit has been excluded.
+  # Any consumer pulling texture.c.o dies on that undefined reference at link time, even
+  # when it never touches a KTX1 file. Verified by link test, not assumed.
+  KTX_FEATURE_KTX1: true
+  KTX_FEATURE_KTX2: true
+
+  # Kept ON deliberately: ETC unpacking is the software fallback used when a transcode
+  # target is unavailable on the device.
+  KTX_FEATURE_ETC_UNPACK: true
+
+  KTX_WERROR: false

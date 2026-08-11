@@ -57,6 +57,13 @@ order:
   # Texture compression (BC7)
   - bc7enc_rdo
 
+  # KTX2 container + Basis Universal transcoder (KHR_texture_basisu).
+  # Self-contained: vendors its own basisu, astc-encoder and zstd.
+  - ktx
+
+  # Vertex/index codec (EXT_meshopt_compression)
+  - meshoptimizer
+
   # FBX parsing
   - ufbx
 

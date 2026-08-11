@@ -121,3 +121,9 @@
 [submodule "repositories/libtiff"]
 	path = repositories/libtiff
 	url = https://gitlab.com/libtiff/libtiff.git
+[submodule "repositories/meshoptimizer"]
+	path = repositories/meshoptimizer
+	url = https://github.com/zeux/meshoptimizer.git
+[submodule "repositories/ktx"]
+	path = repositories/ktx
+	url = https://github.com/KhronosGroup/KTX-Software.git

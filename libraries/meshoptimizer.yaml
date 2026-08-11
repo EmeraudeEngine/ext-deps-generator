@@ -1,0 +1,30 @@
+name: meshoptimizer
+source_dir: repositories/meshoptimizer
+languages: [cxx]
+
+# Vertex/index buffer codec behind EXT_meshopt_compression. Pinned to the v1.2 RELEASE
+# tag (owner rule: no release candidates).
+#
+# Why it exists: fastgltf PARSES the extension but never decodes it. It fills a
+# `fastgltf::CompressedBufferView` (mode, filter, byteStride, count) per buffer view and
+# validates the field ranges (src/fastgltf.cpp:1075), yet there is not a single
+# `meshopt_decode*` call anywhere in the library. A GLB carrying the extension therefore
+# feeds `iterateAccessor()` raw compressed bytes — silently, as noise rather than an
+# error. Every meshopt buffer view must be decoded before any accessor is read.
+#
+# Only the DECODER is needed at runtime: `meshopt_decodeVertexBuffer` for
+# MeshoptCompressionMode::Attributes, `meshopt_decodeIndexBuffer` for Triangles/Indices,
+# then the matching inverse filter (`meshopt_decodeFilterOct` for octahedral normals and
+# tangents, `meshopt_decodeFilterQuat`, `meshopt_decodeFilterExp`). The encoder rides in
+# the same archive at no extra cost and the linker prunes it.
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  MESHOPT_BUILD_SHARED_LIBS: false
+  CMAKE_POSITION_INDEPENDENT_CODE: true
+
+  # Consumer only: the demo pulls in a main(), gltfpack a whole CLI.
+  MESHOPT_BUILD_DEMO: false
+  MESHOPT_BUILD_GLTFPACK: false
+  MESHOPT_INSTALL: true
+  MESHOPT_WERROR: false
