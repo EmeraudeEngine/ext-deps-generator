@@ -149,6 +149,27 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Dependencies: None
 - Usage: JSON parser.
 
+## ktx (KTX-Software / libktx)
+[v4.4.2, 4d6fc70eaf62ad0558e63e8d97eb9766118327a6]
+
+- URL: https://github.com/KhronosGroup/KTX-Software.git
+- Version: 4.4.2
+- Dependencies: None (vendors its own basisu, astc-encoder and zstd)
+- Usage: KTX2 container reader + Basis Universal transcoder, i.e. the `KHR_texture_basisu`
+  path. fastgltf only reports `MimeType::KTX2` and hands over the bytes; libktx transcodes
+  the UASTC/ETC1S payload to BC7 (`ktxTexture2_TranscodeBasis` + `KTX_TTF_BC7_RGBA`), or to
+  `KTX_TTF_RGBA32` when the device reports no `textureCompressionBC`. Does **not** replace
+  bc7enc_rdo, which stays the runtime encoder for PNG/JPEG assets.
+- Notes: built consumer-only (no tools, tests, docs, JNI, Python, GL/VK upload).
+  `KTX_FEATURE_KTX1` MUST stay ON even though the format is unused: turning it off in 4.4.2
+  yields a broken archive (`lib/texture.c` still calls `ktxTexture1_constructFromStreamAndHeader`,
+  whose translation unit gets excluded — verified by link test).
+- Warning: zstd is **vendored and unprefixed** (`external/basisu/zstd/zstd.c` is hardcoded in
+  the target sources), so `libktx.a` defines its own `ZSTD_*` symbols next to the cascade's
+  zstd. Harmless while the linker resolves them from a single archive; if a link ever dies on
+  duplicate definitions, patch out that source file rather than changing the builder. A static
+  build also installs the astc-encoder archive, so expect a second `.a` in the output dir.
+
 ## lame
 [master, 1f5cc9487284d5950343aa5d4f70de433468070a]
 
@@ -228,6 +249,24 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Usage: Audio file I/O library (WAV, FLAC, Ogg/Vorbis, Opus, MP3, etc.).
 - Notes: MP3 write support requires lame, so it is disabled on Windows.
 
+## libtiff
+[v4.7.2, d01a94be176f5f6a87f7ee1c0b32e65416aa2b4d]
+
+- URL: https://gitlab.com/libtiff/libtiff.git
+- Version: 4.7.2
+- Dependencies: zlib, libjpeg-turbo, xz, zstd
+- Usage: TIFF reader/writer. Needed because reference assets store whole vegetation
+  albedo/translucency sets as 4096x4096 16-bit TIFF; without a TIFF codec those materials
+  render pure white.
+- Notes: library only (tools, tests, contrib, docs and deprecated APIs are off). WebP, JBIG,
+  LERC and libdeflate codecs are disabled — they are not in the cascade and enabling them
+  breaks the engine link on `WebPGetFeaturesInternal` / `jbg_dec_in`.
+- Warning: 12-bit JPEG must be off **and** its detection short-circuited
+  (`HAVE_JPEGTURBO_DUAL_MODE_12=false`). libjpeg-turbo 3.x *declares* `jpeg12_read_scanlines`
+  in `jpeglib.h` while our archive does not export it, so libtiff's `check_symbol_exists`
+  probe believes in dual 8/12-bit mode, compiles `tif_jpeg_12.c`, and the link dies on
+  `jpeg12_*`. `jpeg12: false` alone does NOT help (it guards the other branch).
+
 ## libvorbis
 [v1.3.7, 0657aee69dec8508a0011f47f3b69d7538e9d262]
 
@@ -287,6 +326,21 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Version: 3.5.0~
 - Dependencies: None
 - Usage: Image format library.
+
+## meshoptimizer
+[v1.2, 9d9890c73011d75920af614485296d1e03e95448]
+
+- URL: https://github.com/zeux/meshoptimizer.git
+- Version: 1.2
+- Dependencies: None
+- Usage: Vertex/index buffer codec behind `EXT_meshopt_compression`. fastgltf *parses* the
+  extension (it fills a `fastgltf::CompressedBufferView` per buffer view) but never decodes
+  it — there is no `meshopt_decode*` call anywhere in it — so a GLB using the extension feeds
+  `iterateAccessor()` raw compressed bytes, silently. Every meshopt buffer view must be
+  decoded before any accessor is read.
+- Notes: only the decoder is used at runtime (`meshopt_decodeVertexBuffer`,
+  `meshopt_decodeIndexBuffer`, plus the inverse filters `meshopt_decodeFilterOct/Quat/Exp`);
+  the encoder ships in the same archive and the linker prunes it. Demo and gltfpack are off.
 
 ## mpg123
 [master, b18fd7c648aad2420cd49bbb948c91d53b4164b3]
@@ -367,10 +421,10 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   composition turns out to be short.
 
 ## ufbx
-[main, 5c3494fb9a0f1b2e9fb5fb90ddf83ea6b676ebbb]
+[v0.23.0, fcc5d6ba444cfd3eb80677dba5e37e493941abe5]
 
 - URL: https://github.com/ufbx/ufbx.git
-- Version: 0.21.5
+- Version: 0.23.0
 - Dependencies: None (links libm on Unix)
 - Usage: Single-translation-unit FBX 7.x parser. Used for skeletal mesh/animation import.
 - Notes: Upstream is header + single `.c`, no CMakeLists.txt. The patch adds a minimal one that builds a static library and installs `ufbx.h` under `include/ufbx/`.
