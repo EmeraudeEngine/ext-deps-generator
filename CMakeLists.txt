@@ -179,10 +179,19 @@ endif()
 # Include directories
 ########################################################################
 
+# NOTE: order matters. "${LIBS_ROOT}/include" MUST come first: tinyusdz vendors its own
+# zstd.h under external/, and the cascade's real zstd.h has to win.
 target_include_directories(${PROJECT_NAME} PRIVATE
     "${LIBS_ROOT}/include"
     "${LIBS_ROOT}/include/freetype2"
     "${LIBS_ROOT}/include/libpng16"
+    # tinyusdz headers include one another by paths relative to the ROOT of its source
+    # tree ("nonstd/optional.hpp", "core/path.hh", "value-types.hh"), which the patch
+    # preserves on install. Reaching tinyusdz.hh through "${LIBS_ROOT}/include" alone is
+    # therefore not enough — both dirs below must be on the include path (they mirror the
+    # $<INSTALL_INTERFACE:...> entries exported by patches/tinyusdz.patch).
+    "${LIBS_ROOT}/include/tinyusdz"
+    "${LIBS_ROOT}/include/tinyusdz/external"
 )
 
 ########################################################################
