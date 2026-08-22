@@ -72,6 +72,8 @@ import sys
 import tarfile
 from pathlib import Path
 
+from builder.chromium_patches import apply_all as apply_chromium_patches
+from builder.chromium_patches import discover_patches as discover_chromium_patches
 from builder.config import BuildConfig
 
 
@@ -491,12 +493,20 @@ def automate_git_command(
     args: argparse.Namespace,
     download_dir: Path,
     subsequent: bool = False,
+    phase: str | None = None,
 ) -> list[str]:
     """Assemble the automate-git.py invocation.
 
     `subsequent` marks the 2nd+ run over the same checkout in one invocation
     (--arch both): the sync already happened, so the update phase is skipped
     and the build forced (unchanged hashes would otherwise no-op it).
+
+    `phase` splits automate-git's normally-single run in two, which is what lets
+    local source patches be applied between them (see builder/chromium_patches.py):
+      'update' -- sync the checkout, build nothing.
+      'build'  -- build the checkout as-is, without re-running the update phase
+                  (whose `gclient revert` would wipe the patches).
+    None keeps the historical single-run behaviour.
     """
     cmd = [
         sys.executable,
@@ -546,22 +556,59 @@ def automate_git_command(
     if target is not None:
         cmd.append(f"--build-target={target}")
 
-    if args.force_clean:
+    # --force-clean belongs to the update phase alone: handing it to a
+    # build-only run would wipe out/ (and the freshly applied patches) right
+    # before compiling.
+    if args.force_clean and phase != "build":
         cmd.append("--force-clean")
 
-    if args.force_build or subsequent:
+    if args.force_build or subsequent or phase == "build":
         cmd.append("--force-build")
 
-    if subsequent:
-        # The previous arch's run just synced this checkout; skip the whole
-        # update phase (git fetch / gclient revert+sync / hooks) outright.
+    if subsequent or phase == "build":
+        # The update phase already ran -- either the previous arch's run, or
+        # this run's own 'update' phase. Skip git fetch / gclient revert+sync /
+        # hooks outright. For a patched build this is mandatory rather than an
+        # optimization: `gclient revert` would drop the patches applied between
+        # the two phases.
         cmd.append("--no-update")
 
-    if args.sync_only:
+    if args.sync_only or phase == "update":
         # Update the checkout only: no compile, no distribution.
         cmd += ["--no-build", "--no-distrib"]
 
     return cmd
+
+
+def run_automate(
+    automate: Path,
+    config: BuildConfig,
+    args: argparse.Namespace,
+    env: dict[str, str],
+    download_dir: Path,
+    subsequent: bool,
+    phase: str | None,
+) -> bool:
+    """Print, then run, one automate-git.py invocation. False on failure."""
+    cmd = automate_git_command(
+        automate, config, args, download_dir, subsequent=subsequent, phase=phase
+    )
+    print("Command     :", " ".join(cmd))
+
+    if args.dry_run:
+        return True
+
+    step = {
+        "update": "sync only, patches applied next",
+        "build": "build only, patched checkout -- this takes hours",
+    }.get(phase, "sync only" if args.sync_only else "this takes hours")
+    print(f"\n{'=' * 60}\nRunning automate-git.py for {config.arch} ({step})\n{'=' * 60}\n")
+
+    if subprocess.run(cmd, env=env).returncode != 0:
+        print("\nError: automate-git.py failed.", file=sys.stderr)
+        return False
+
+    return True
 
 
 def locate_distribution(download_dir: Path) -> Path | None:
@@ -679,6 +726,12 @@ def main() -> int:
     gn_defines = build_gn_defines(configs[0].platform_name)
     env = build_environment(configs[0], gn_defines)
 
+    # Local source patches (Chromium, ANGLE, ...). Their mere presence forces
+    # the two-phase automate-git run: they can only be applied between the
+    # update and the build. See builder/chromium_patches.py.
+    chromium_patches = discover_chromium_patches(root_dir)
+    split_run = bool(chromium_patches) and not args.sync_only
+
     build_type_display = (
         "Release + Debug" if args.build_type == "Both" else args.build_type
     )
@@ -691,6 +744,10 @@ def main() -> int:
     print(f"  Build type    : {build_type_display}")
     print(f"  Distribution  : {args.distrib}")
     print(f"  Download dir  : {download_dir}")
+    if chromium_patches:
+        print(f"  Local patches : {len(chromium_patches)} (patches/chromium/)")
+        for patch in chromium_patches:
+            print(f"                  - {patch.name} -> {patch.target_dir}")
     for cfg in configs:
         print(f"  Output        : {cef_output_root(root_dir)}/cef_binary_<version>_{spotify_platform_token(cfg)}/  (Spotify layout)")
     print(f"\n  GN_DEFINES:\n    {gn_defines}\n")
@@ -705,17 +762,33 @@ def main() -> int:
 
     results: list[tuple[Path, Path | None]] = []
     for i, cfg in enumerate(configs):
-        cmd = automate_git_command(automate, cfg, args, download_dir, subsequent=(i > 0))
-        print("Command     :", " ".join(cmd))
+        subsequent = i > 0
+        # A subsequent arch builds from the checkout the first config already
+        # synced AND patched, so it only ever needs the build phase -- which is
+        # exactly what `subsequent` already produces on its own.
+        phases: list[str | None] = (
+            ["update", "build"] if (split_run and not subsequent) else [None]
+        )
+
+        for phase in phases:
+            if not run_automate(automate, cfg, args, env, download_dir, subsequent, phase):
+                return 1
+
+            # Patch between the two phases: the update phase's `gclient revert`
+            # wipes local modifications, so anything applied before it is gone.
+            if phase == "update" or args.sync_only:
+                if not apply_chromium_patches(root_dir, download_dir, dry_run=args.dry_run):
+                    print(
+                        "\nError: a local Chromium patch did not apply — refusing to build.\n"
+                        "  Building an unpatched tree would silently ship the very bugs those\n"
+                        "  patches exist to fix. Resolve the mismatch reported above, then\n"
+                        "  re-run.",
+                        file=sys.stderr,
+                    )
+                    return 1
 
         if args.dry_run:
             continue
-
-        step = "sync only" if args.sync_only else "this takes hours"
-        print(f"\n{'=' * 60}\nRunning automate-git.py for {cfg.arch} ({step})\n{'=' * 60}\n")
-        if subprocess.run(cmd, env=env).returncode != 0:
-            print("\nError: automate-git.py failed.", file=sys.stderr)
-            return 1
 
         if args.sync_only:
             print(f"\n{'=' * 60}")

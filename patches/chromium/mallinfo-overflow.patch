@@ -1,0 +1,65 @@
+# target-dir: .
+# target-commit: 25f5b661e5b08141ec24b17d1ce96c5ceb5828da
+# description: mallinfo: saturate instead of CHECK-failing past 2 GiB of heap (silent SIGILL)
+#
+# Authored against Chromium 150.0.7871.115 (CEF 150.0.11+gb887805).
+#
+# Linux-only by construction: CEF's own tools/gn_args.py forces
+# use_partition_alloc_as_malloc=false on Linux (CEF issues #3061, #3095), which
+# selects ReportMallinfoStats() over ReportPartitionAllocStats(). The bundled
+# Debian bullseye sysroot predates glibc 2.33, so the legacy `struct mallinfo`
+# (all ten fields `int`) is what actually gets compiled: every field wraps
+# negative once the process heap passes 2 GiB, and checked_cast<size_t>
+# CHECK-fails on a bare `ud2`. Any renderer crossing 2 GiB therefore dies with a
+# silent SIGILL -- no FATAL line, no log entry, nothing, in an official build.
+#
+# Windows and macOS are unaffected: they take ReportWinHeapStats() /
+# ReportAppleAllocStats() and never reach this code.
+#
+# Upstream still uses checked_cast here. Re-verify on every CEF bump: if the
+# target-commit guard fires, check whether the code still needs the fix before
+# refreshing the SHA.
+#
+# Verify the shipped binary -- no `ud2` may remain in the function
+# (ReportMallinfoStats is inlined into OnMemoryDump, which is why field
+# backtraces pointed there):
+#
+#   gdb -batch -ex "disassemble base::trace_event::MallocDumpProvider::OnMemoryDump" \
+#       <dist>/Release/libcef.so | grep ud2
+#
+# Root cause, field incidents and the full verification method:
+# app_system docs/arraybuffer-manager.md, section
+# "UPSTREAM: Chromium MallocDumpProvider SIGILL under multi-GB renderer heaps".
+diff --git base/trace_event/malloc_dump_provider.cc base/trace_event/malloc_dump_provider.cc
+index bf6a3f68b6706..87e1596c09fb9 100644
+--- base/trace_event/malloc_dump_provider.cc
++++ base/trace_event/malloc_dump_provider.cc
+@@ -211,8 +211,26 @@ void ReportMallinfoStats(ProcessMemoryDump* pmd,
+   // In case of Android's jemalloc |arena| is 0 and the outer pages size is
+   // reported by |hblkhd|. In case of dlmalloc the total is given by
+   // |arena| + |hblkhd|. For more details see link: http://goo.gl/fMR8lF.
+-  *total_virtual_size += checked_cast<size_t>(info.arena + info.hblkhd);
+-  size_t total_allocated_size = checked_cast<size_t>(info.uordblks);
++  //
++  // NOTE: the legacy glibc |struct mallinfo| declares every field as |int|, so
++  // all of these values wrap negative once the process heap grows past 2 GiB.
++  // |mallinfo2| (size_t fields) fixes that upstream, but it only exists since
++  // glibc 2.33 while the bundled Debian bullseye sysroot predates it, so the
++  // legacy struct is what actually gets compiled here. Feeding a wrapped,
++  // negative value to checked_cast<size_t> fails its CHECK and kills the
++  // process on a bare |ud2| -- a silent SIGILL, with no log line whatsoever in
++  // an official build. Widen before summing (int + int would be
++  // signed-overflow UB) and saturate rather than CHECK: these figures only
++  // feed memory-infra tracing dumps, so a clamped number is strictly
++  // preferable to crashing a renderer that is merely using a lot of memory.
++  //
++  // This path is reachable on Linux official builds because GetConfigArgs() in
++  // //cef/tools/gn_args.py forces use_partition_alloc_as_malloc=false there
++  // (CEF issues #3061, #3095), selecting ReportMallinfoStats() instead of
++  // ReportPartitionAllocStats().
++  *total_virtual_size += saturated_cast<size_t>(
++      static_cast<int64_t>(info.arena) + static_cast<int64_t>(info.hblkhd));
++  size_t total_allocated_size = saturated_cast<size_t>(info.uordblks);
+   *resident_size += total_allocated_size;
+ 
+   // Total allocated space is given by |uordblks|.
