@@ -465,7 +465,7 @@ the 150 archives were published, so the four CEF archives on release `v013` are
 
 | Archive | State |
 |---|---|
-| `linux64` | **rebuilt + patched 2026-08-24** (180 ANGLE objects recompiled per config, `libcef.so` relinked, glibc floor 2.25) |
+| `linux64` | **done — patched 2026-08-24 and uploaded to `v014`** (180 ANGLE objects recompiled per config, `libcef.so` relinked, glibc floor 2.25) |
 | `windows64` | to rebuild |
 | `macosx64` + `macosarm64` | to rebuild |
 
