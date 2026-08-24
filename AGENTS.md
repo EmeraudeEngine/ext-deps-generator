@@ -301,6 +301,39 @@ Caveat: the sysroot pins the floor of `libcef.so` and Chromium's own code only.
 your own code still follow the host toolchain — that is the link to watch if the
 final app must run on a distro older than the build host.
 
+**Local Chromium source patches (`patches/chromium/`)** — the third way our build
+differs from Spotify's, alongside H.264 and the disabled V8 sandbox. These target
+the ~100 GB Chromium/ANGLE checkout itself, not a submodule (the flat
+`patches/*.patch` files one level up are a different mechanism entirely — see
+§ Patch System). `patches/chromium/README.md` holds the file format, the rationale
+of each patch and the regeneration procedure: read it before touching one. What
+matters when *running* a build:
+
+- Their mere presence **splits the automate-git run in two** (`update` → apply
+  patches → `build`), because the update phase's `gclient revert` would otherwise
+  wipe them. `build_cef.py` decides this on its own — nothing to pass.
+- The build phase therefore already carries `--force-build`. With patches present
+  you no longer need to pass it by hand on a freshly-seeded checkout.
+- Every patch carries a `# target-commit:` guard compared against the target
+  repo's actual `HEAD`. **A mismatch — or a missing header — fails the build**
+  instead of silently shipping an unpatched binary. Expect it to fire on every CEF
+  version bump: re-verify that the fix is still needed and still correct against
+  the new source, regenerate the diff, update the SHA. Never just delete the patch.
+- **No platform filter**: every patch is applied on every OS. A platform-specific
+  fix must be inert elsewhere by construction — e.g. `mallinfo-overflow` sits under
+  `#if defined(__GLIBC__)`, so it compiles away on Windows/macOS.
+- **Verify the patch reached the binary, not just the tree.** A rebuild over an
+  already-complete `out/` is incremental and can finish in minutes, which looks
+  indistinguishable from a no-op. Check that the relevant objects were actually
+  recompiled and that `libcef.so` was relinked:
+  ```bash
+  # <date> = the day the run started, e.g. 2026-08-24
+  find out/Release_GN_x64/obj/third_party/angle -name '*.o' -newermt <date> | wc -l
+  ls -la out/Release_GN_x64/libcef.so
+  ```
+  A patched ANGLE rebuild recompiles ~180 objects per configuration; zero means
+  the patch never reached the compiler.
+
 ```bash
 python build_cef.py                     # host platform, Release, x86_64
 python build_cef.py --branch 7827       # target another CEF branch (drops the exact-commit pin)
@@ -324,6 +357,8 @@ python build_cef.py --clean             # remove output/*.cef.* folders (NOT the
   failure: the compile simply never ran. Re-run with `--force-build` to compile the
   already-synced tree (building implies `--force-distrib` upstream). Use `--force-clean`
   only to wipe and re-fetch the whole tree from scratch.
+  **Moot while `patches/chromium/` is non-empty**: the split run already passes
+  `--force-build` on its build phase, so an unchanged checkout still compiles.
 - **Linux build target is `cefsimple`, not `cefclient`**: automate-git.py defaults
   to building the `cefclient` sample, but on Linux its sources
   (`cefclient_sources_linux` in `cef_paths2.gypi`) unconditionally `#include
@@ -380,11 +415,13 @@ python build_cef.py --clean             # remove output/*.cef.* folders (NOT the
      or enable Windows Developer Mode first; a symlink-blind extraction leaves
      a subtly broken checkout.
   2. Point `--download-dir` (or `$CEF_DOWNLOAD_DIR`) at the extracted
-     `cef-chromium/` and run `build_cef.py` **with `--force-build`**: the
-     seeded checkout is already at the pinned git hashes, so automate-git.py
-     considers it unchanged and would otherwise no-op the build (see the
-     `--force-build` bullet above). The first run still downloads a few GB of
-     host-OS hook artifacts (clang, GCS/CIPD objects) — normal.
+     `cef-chromium/`. While `patches/chromium/` is non-empty you can run
+     `build_cef.py` plainly — the split run forces the build phase on its own.
+     Only on a patch-free tree do you need `--force-build` by hand, because the
+     seeded checkout is already at the pinned git hashes and automate-git.py
+     would consider it unchanged and no-op the build (see the `--force-build`
+     bullet above). The first run still downloads a few GB of host-OS hook
+     artifacts (clang, GCS/CIPD objects) — normal.
   3. Windows prerequisites for CEF (distinct from the static-libs list in
      § Prerequisites): Visual Studio 2022 and a recent Windows 11 SDK
      (Chromium 150 requires 10.0.26100+); `build_cef.py` already sets
@@ -412,6 +449,56 @@ python build_cef.py --clean             # remove output/*.cef.* folders (NOT the
   (`include`, `Resources`, `libcef_dll`, `cmake`, `*.txt`). Add `--archive` to
   also produce `output/cef_binary_<version>_<token>.tar.bz2` (the Spotify archive
   format) for upload as a GitHub release asset.
+
+### Publishing a CEF archive (and the patched-150 rollout)
+
+**CEF does not follow the ext-deps release numbering.** The static-lib zips are
+versioned `vNNN` and re-cut together; a CEF archive is just an *annex asset* that
+rides along on the current deps release tag. The patched CEF 150 set therefore
+goes onto **`v014`** (which already holds the 12 static-lib zips), not onto a tag
+of its own.
+
+**Why a rebuild is needed at all**: both `patches/chromium/` fixes landed *after*
+the 150 archives were published, so the four CEF archives on release `v013` are
+**unpatched**. Same version string, same filename, different content — the
+`150.0.11+gb887805+chromium-150.0.7871.115` name cannot distinguish them.
+
+| Archive | State |
+|---|---|
+| `linux64` | **rebuilt + patched 2026-08-24** (180 ANGLE objects recompiled per config, `libcef.so` relinked, glibc floor 2.25) |
+| `windows64` | to rebuild |
+| `macosx64` + `macosarm64` | to rebuild |
+
+Per-OS command (same pins everywhere — `DEFAULT_CEF_BRANCH=7871`,
+`DEFAULT_CEF_CHECKOUT=b887805`; both patch guards match a checkout seeded at that
+version, and `mallinfo-overflow` is inert outside glibc):
+
+```bash
+# Windows (VS 2022 + Win11 SDK 10.0.26100+)
+python build_cef.py --build-type Both --archive --download-dir <CEF-WIN>/cef-chromium
+# macOS (full Xcode) — arm64 then x86_64 from the same checkout
+python build_cef.py --arch both --macos-sdk 12.0 --build-type Both --archive --download-dir <CEF-MACOS>/cef-chromium
+```
+
+Then upload the produced `.tar.bz2` alongside the existing v014 assets:
+
+```bash
+gh release upload v014 "output/cef_binary_<version>_<token>.tar.bz2"
+```
+
+**`app_system` flips only once all four are uploaded.** It has a single
+`CEF_DOWNLOAD_BASE_URL` for every platform (`cmake/InstallCEF.cmake`), so a
+partial v014 would 404 the missing platforms — caught by its bzip2-magic check,
+but still a hard configure failure. When the moment comes, change
+`…/releases/download/v013` → `…/releases/download/v014` there.
+
+*Switch-time caveat (known, disappears on the next custom CEF, which will carry a
+higher version string):* `InstallCEF.cmake` only tests whether the archive file
+*exists*, and the filename is byte-identical to the v013 one. A stale
+`app_system/vendors/cef_binary_150.….tar.bz2` — and its extracted `CEF_ROOT` —
+must be deleted by hand, otherwise the unpatched binary silently wins. The WebGL
+texture-ceiling probe page in app_system's `dev-check` is the runtime check that
+the patched build is really the one loaded.
 
 ## Common Issues
 

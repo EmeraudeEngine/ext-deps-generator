@@ -66,6 +66,10 @@ When the guard fires after a CEF version bump, the correct move is never to
 delete the patch. It is to re-verify that the fix is *still needed* and *still
 correct* against the new source, regenerate the diff, and update the SHA.
 
+Which platforms have already been rebuilt with these patches, and how the
+resulting archive is published, is tracked in
+[`AGENTS.md`](../../AGENTS.md) § CEF → "Publishing a CEF archive".
+
 ## Current patches
 
 | File | Target | Platform | Summary |
