@@ -427,6 +427,21 @@ python build_cef.py --clean             # remove output/*.cef.* folders (NOT the
      (Chromium 150 requires 10.0.26100+); `build_cef.py` already sets
      `DEPOT_TOOLS_WIN_TOOLCHAIN=0` / `GYP_MSVS_VERSION=2022`. No MSYS2 needed
      for CEF. macOS: full Xcode (not just the Command Line Tools).
+     **Windows CRLF gotcha**: the seeded checkout is all-LF (tarred on Linux),
+     but Git for Windows defaults to `core.autocrlf=true` (system gitconfig) —
+     every repo then shows hundreds of phantom "local changes" and
+     `update_depot_tools.bat` aborts on its `git checkout`. Fix without touching
+     the user's git config: export the `GIT_CONFIG_*` env override before
+     running `build_cef.py` (inherited by every git spawned by gclient/depot_tools):
+     ```powershell
+     $env:GIT_CONFIG_COUNT='2'
+     $env:GIT_CONFIG_KEY_0='core.autocrlf';  $env:GIT_CONFIG_VALUE_0='false'
+     $env:GIT_CONFIG_KEY_1='core.filemode';  $env:GIT_CONFIG_VALUE_1='false'
+     ```
+     (The companion pitfall — `patches/chromium/*.patch` themselves getting
+     CRLF-converted in *this* repo's working tree and refusing to apply — is
+     fixed for good by `.gitattributes` (`*.patch -text`); re-checkout the
+     patch files if they were checked out before that file existed.)
   4. macOS ships two archs: `--arch both --macos-sdk <ver>` builds arm64 then
      x86_64 from the same checkout (second run auto-forces the build and skips
      the re-sync). Disk note: 2 archs x 2 configs of `out/` can crowd the
@@ -466,7 +481,7 @@ the 150 archives were published, so the four CEF archives on release `v013` are
 | Archive | State |
 |---|---|
 | `linux64` | **done — patched 2026-08-24 and uploaded to `v014`** (180 ANGLE objects recompiled per config, `libcef.so` relinked, glibc floor 2.25) |
-| `windows64` | to rebuild |
+| `windows64` | **done — patched 2026-08-25 and uploaded to `v014`** (232 ANGLE objects recompiled per config, `libcef.dll` relinked in both) |
 | `macosx64` + `macosarm64` | to rebuild |
 
 Per-OS command (same pins everywhere — `DEFAULT_CEF_BRANCH=7871`,
