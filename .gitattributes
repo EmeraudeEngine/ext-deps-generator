@@ -1,0 +1,5 @@
+# Patch files must keep their committed (LF) line endings: they are applied
+# with `git apply` against LF checkouts (Chromium tree, library submodules).
+# A CRLF-converted working copy (Windows autocrlf=true) makes every context
+# line mismatch and the patch silently un-appliable.
+*.patch -text
