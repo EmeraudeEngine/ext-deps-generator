@@ -232,6 +232,19 @@ For libraries that use Meson as their build system (e.g., harfbuzz). The builder
 - Runs `meson compile` and `meson install`
 - Post-install validation (CRT on Windows, architecture on macOS) runs after install
 
+## Open work — `docs/todo/`, one file per idea
+
+> [!IMPORTANT]
+> **Project-wide rule (all repositories).** Open work lives in `docs/todo/`, **one file per idea
+> to do**; there is no root `TODO.md`. **Done = the file is deleted** — no `[x]`, no "DONE"
+> section, no `done/` archive. The knowledge that must survive the work (measurements, traps,
+> decisions) goes to the documentation, written **before** the item file is deleted.
+> Every item file carries a YAML front-matter: `id` (== file name, kebab-case), `title`,
+> `status` (`open` | `in-progress` | `blocked` | `parked`), `priority`
+> (`high` | `medium` | `low` | `unranked`), `scope`, `opened` (`YYYY-MM-DD` or `unknown`),
+> plus optional `blocked-by` / `tags`. An ambiguous inherited item is **asked about**, never
+> guessed.
+
 ## CLI Usage
 ```bash
 python build.py                              # Build all
