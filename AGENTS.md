@@ -482,7 +482,11 @@ the 150 archives were published, so the four CEF archives on release `v013` are
 |---|---|
 | `linux64` | **done — patched 2026-08-24 and uploaded to `v014`** (180 ANGLE objects recompiled per config, `libcef.so` relinked, glibc floor 2.25) |
 | `windows64` | **done — patched 2026-08-25 and uploaded to `v014`** (232 ANGLE objects recompiled per config, `libcef.dll` relinked in both) |
-| `macosx64` + `macosarm64` | to rebuild |
+| `macosx64` | **done — patched 2026-08-25 and uploaded to `v014`** (454 ANGLE objects recompiled per config, both frameworks relinked, `lipo -archs` = x86_64) |
+| `macosarm64` | **done — patched 2026-08-26 and uploaded to `v014`** (454 ANGLE objects per config, both frameworks relinked, `lipo -archs` = arm64) |
+
+**The four patched archives are complete on `v014`** — `app_system` can now flip its
+`CEF_DOWNLOAD_BASE_URL` from `…/download/v013` to `…/download/v014`.
 
 Per-OS command (same pins everywhere — `DEFAULT_CEF_BRANCH=7871`,
 `DEFAULT_CEF_CHECKOUT=b887805`; both patch guards match a checkout seeded at that
@@ -494,6 +498,28 @@ python build_cef.py --build-type Both --archive --download-dir <CEF-WIN>/cef-chr
 # macOS (full Xcode) — arm64 then x86_64 from the same checkout
 python build_cef.py --arch both --macos-sdk 12.0 --build-type Both --archive --download-dir <CEF-MACOS>/cef-chromium
 ```
+
+**macOS re-build lessons (2026-08-25/26 patched-150 run)** — a *patch* rebuild is
+cheap on Linux (~180 ANGLE objects) but was ~full on macOS, twice over:
+- **An Xcode update between the two runs invalidates almost the whole graph.** The
+  macOS build uses the *system* SDK (unlike Linux's hermetic clang + sysroot), so
+  Xcode 26 → 26.6 forced all 46.9k objects per config to recompile even though only
+  2 source files changed. Budget a from-scratch build after any Xcode bump.
+- **An Xcode update also purges the Metal Toolchain** (seed-blocker #7 in
+  [[cef-seed-toolchain-gotcha]]): re-run `xcodebuild -downloadComponent MetalToolchain`
+  *before* launching, or ninja dies on ANGLE's Metal shaders hours in. Verify with
+  `echo 'kernel void k(){}' | xcrun metal -x metal -c - -o /tmp/t.air`.
+- **Deleting `out/*_GN_<arch>` to free disk costs a full rebuild of that arch later.**
+  With the x64 archive published, the partition had room for all four `out/` dirs
+  (~86 GiB free after both) — keep them if another patch is plausible.
+- **Run one arch at a time, not `--arch both`, when you need one archive early**:
+  `--arch both` does arm64 first, so the Intel archive would have waited a full
+  arm64 build. Two sequential single-arch runs give the same result, first archive
+  sooner. Each run's update phase re-applies the patches (cheap, guards re-checked).
+- **Launch detached and keep the Mac awake**: two runs were killed mid-compile by
+  session-level signals, and a sleep cycle stalled a third. Use
+  `nohup python build_cef.py … & disown` plus `caffeinate -ims -w <pid>`. Kills are
+  recoverable — ninja resumes incrementally — but each costs hours of wall clock.
 
 Then upload the produced `.tar.bz2` alongside the existing v014 assets:
 
