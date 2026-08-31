@@ -92,6 +92,46 @@ CMakeLists.txt              # Test project to validate all libs link correctly
 > that gets two of them right and documents the other two is fine; a library that quietly
 > gets one wrong costs a debugging session in the engine.
 
+**Audited 2026-08-31, whole cascade.** Every C++ library now pins `CMAKE_CXX_STANDARD: 20`
+(`cpp_std: c++20` for the Meson build, harfbuzz) except where upstream refuses it, and the exception/RTTI switches that exist upstream are set
+explicitly rather than left on a default. The C-only libraries (zlib, bzip2, xz, brotli,
+libpng, libjpeg-turbo, libwebp, libtiff, libvpx, the audio codecs, freetype, hwloc,
+cpu_features, libressl, ufbx, spirv-headers, libzip, lib3mf) are out of scope for points 2 to
+4. Four standing deviations, each argued in its own YAML header:
+
+| library | deviation | why |
+|---|---|---|
+| `glslang` | C++17 | `set(CMAKE_CXX_STANDARD 17)` unguarded (CMakeLists.txt:229) — a `-D` is silently ignored; lifting it needs a patch |
+| `taglib` | C++17 | same unguarded `set()` at the top of its CMakeLists |
+| `tinyusdz` | C++17 | sets the standard inside its own branches; the only C++20 branch is gated on a *feature* switch (coroutines) |
+| `bc7enc_rdo` | C++17 | sets the `CXX_STANDARD` **target property**, which outranks the cache variable |
+| `lunasvg` | C++17 | same, target property (CMakeLists.txt:57) |
+| `reproc` | C++11 / C99 | same, target property set on every target it creates (cmake/reproc.cmake:111) |
+| `onnxruntime` | shared library | the static form is not installable upstream — measured, see § Shared-library artifact |
+
+⚠️ Two override mechanisms defeat `-DCMAKE_CXX_STANDARD`, and both do it **silently** — no
+warning, no error, the build simply uses the other standard. An unguarded
+`set(CMAKE_CXX_STANDARD …)` in the upstream CMakeLists shadows the cache entry, and a
+`CXX_STANDARD` *target property* outranks it entirely. So never trust the YAML to describe
+what was compiled: read the standard back from the generated `build.ninja`
+(`grep -o '\-std=[a-z+0-9]*' builds/<config>/<lib>/build.ninja | sort -u`), which is how the
+six rows above were found. Where a library overrides, the option is left OUT of the YAML
+rather than kept as a decorative no-op, and the deviation is written in its header.
+Subdirectory scopes count too: `ktx` builds at C++20 while the astc-encoder it vendors and
+installs alongside builds at C++14, because that subdirectory sets its own.
+
+Four libraries declare `languages: [c, cxx]` but compile no C++ translation unit today
+(`zstd`, `flac`, `libsndfile`, `cppzmq` — the latter is header-only): they carry the standard
+option dormant, which costs nothing and starts working the day upstream adds C++ sources.
+`pthread-win32` carries it untested, being Windows-only.
+
+Only three upstreams offer an exception switch (`glslang`, `SPIRV-Tools` on MSVC,
+`tinyusdz`) and two an RTTI switch (`glslang`, `SPIRV-Tools`); all are set the policy way.
+Note what that does *not* buy on Windows: the builder passes `/EHsc` in `CMAKE_CXX_FLAGS` for
+every library (`builder/platforms/windows.py`), so the MSVC compile line still enables
+exceptions regardless of those per-library switches. Making the Windows builds
+exception-free is a builder-wide change, not a per-library one, and nobody has needed it yet.
+
 ## Key Concepts
 
 ### Build Configuration String

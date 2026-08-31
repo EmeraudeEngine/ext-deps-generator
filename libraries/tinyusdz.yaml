@@ -12,6 +12,14 @@ languages: [c, cxx]
 # disable C++ exception for MSVC". It is forced Off here on EVERY platform so nothing depends
 # on a per-platform default — the Windows build is where that assumption gets tested.
 
+# ⚠️ DEVIATION from the build policy (AGENTS.md § Build policy) — the C++ standard:
+# tinyusdz sets `CMAKE_CXX_STANDARD` unconditionally inside its own branches (17 in the
+# configuration used here), so a `-DCMAKE_CXX_STANDARD=20` from the builder is silently
+# overridden. The one branch that yields C++20 is gated on TINYUSDZ_WITH_COROUTINE, a
+# feature switch, not a standard switch — do not turn a feature on just to move the
+# standard. Exceptions are already off (see above), which is the policy point that matters
+# most here; RTTI has no upstream switch.
+
 cmake_options:
   BUILD_SHARED_LIBS: false
   TINYUSDZ_BUILD_SHARED_LIBS: false

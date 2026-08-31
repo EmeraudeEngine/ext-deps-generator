@@ -3,6 +3,12 @@ source_dir: repositories/reproc
 languages: [c, cxx]
 
 cmake_options:
+  # ⚠️ DEVIATION from the build policy (AGENTS.md § Build policy) — the C++ standard.
+  # No CMAKE_CXX_STANDARD here on purpose: it would be inert. reproc sets
+  # `CXX_STANDARD 11` as a target property for every target it creates
+  # (cmake/reproc.cmake:111), which beats the cache variable — the C API is pinned to C99 the
+  # same way. The reproc++ wrapper is a thin RAII layer over the C API, identical under both
+  # standards. Verified in the generated build.ninja: -std=c++11 and -std=c99.
   REPROC++: true
   REPROC_MULTITHREADED: true
   REPROC_TEST: false

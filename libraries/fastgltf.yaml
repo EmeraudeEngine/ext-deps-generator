@@ -3,6 +3,11 @@ source_dir: repositories/fastgltf
 languages: [c, cxx]
 
 cmake_options:
+  # Project build policy (AGENTS.md § Build policy): pin the standard, otherwise the build
+  # takes the host compiler's default (gnu++17 on gcc 14 today, something else tomorrow) and
+  # the archive's API can change with the build machine.
+  CMAKE_CXX_STANDARD: 20
+  CMAKE_CXX_STANDARD_REQUIRED: true
   BUILD_SHARED_LIBS: false
   FASTGLTF_ENABLE_TESTS: false
   FASTGLTF_ENABLE_EXAMPLES: false

@@ -12,6 +12,19 @@ use_install_prefix_as_find_root: true
 # file, not the libraries' own release tags, is what decides this trio's pins (16.5.0 asks
 # for SPIRV-Tools b707790a, which happens to be the v2026.3 tag, and SPIRV-Headers 29981f65,
 # tag vulkan-sdk-1.4.357.0). Bump the three together, always from known_good.json.
+#
+# Build policy (AGENTS.md § Build policy): static, exceptions and RTTI off — glslang is one
+# of the few upstreams that offers both switches, and they already default to OFF; they are
+# pinned below so a change of default cannot flip them silently.
+#
+# ⚠️ DEVIATION — the archive's C++ standard: glslang forces `set(CMAKE_CXX_STANDARD 17)`
+# unconditionally (CMakeLists.txt:229), with no guard, so a `-DCMAKE_CXX_STANDARD=20` from
+# the builder is silently overridden. This library is therefore compiled as C++17 while its
+# consumers are C++20. Left as is on purpose: lifting it would take a patch on upstream's
+# CMakeLists, and the two standards present the same API here (glslang exposes no
+# std::string_view / char8_t surface that differs between them). If a patch is ever written,
+# it must make the `set()` conditional the way clipper2 and SPIRV-Tools already do
+# (`if(NOT DEFINED CMAKE_CXX_STANDARD)`), never just bump the literal.
 
 cmake_options:
   # Use the standalone SPIRV-Tools we built instead of looking under External/.

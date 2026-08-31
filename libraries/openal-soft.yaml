@@ -4,6 +4,11 @@ languages: [c, cxx]
 
 # Common options for all platforms
 cmake_options:
+  # Project build policy (AGENTS.md § Build policy): pin the standard, otherwise the build
+  # takes the host compiler's default (gnu++17 on gcc 14 today, something else tomorrow) and
+  # the archive's API can change with the build machine.
+  CMAKE_CXX_STANDARD: 20
+  CMAKE_CXX_STANDARD_REQUIRED: true
   # CMake compatibility (OpenAL-Soft uses cmake_minimum_required 3.0.2)
   CMAKE_POLICY_VERSION_MINIMUM: "3.5"
 

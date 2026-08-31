@@ -48,6 +48,15 @@ laptop).
 - Both: the configure step downloads ~1 GiB from `cmake/deps.txt`. A machine behind a proxy or
   offline will fail there, not in the build.
 
+## Also worth one look while the packages are open
+
+The README entries for `zlib` and `zstd` warn that upstream builds the static *and* the
+shared library ("beware when linking"). On Linux that is no longer true — neither build
+generates a shared target, and `output/<config>/lib` holds no `.so` but onnxruntime's — but
+the install rules differ on Windows and macOS, so check there that no unexpected
+`.dll`/`.dylib` rides along, and drop the warnings from the README if they are stale
+everywhere.
+
 ## Done when
 Each platform has produced its Release and Debug packages with the four libraries in them,
 and `DependenciesTest` passes on each. Record whatever surprises appear in the library YAML

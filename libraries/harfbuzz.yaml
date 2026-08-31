@@ -4,6 +4,13 @@ build_system: meson
 languages: [c, cxx]
 
 meson_options:
+  # Project build policy (AGENTS.md § Build policy). harfbuzz's meson.build declares
+  # `cpp_std=c++11` in its default_options, which is a default and not a hard requirement, so
+  # the command line wins. Note upstream keys a couple of compiler probes on the value being
+  # exactly c++11 (meson.build:40) — those are skipped here by design, they exist to emulate
+  # C++11 on old toolchains.
+  cpp_std: c++20
+
   glib: disabled
   cairo: disabled
   freetype: disabled

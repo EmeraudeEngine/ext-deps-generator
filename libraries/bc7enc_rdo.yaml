@@ -8,5 +8,12 @@ languages: [cxx]
 # which is all downstream Vulkan engines consume.
 
 cmake_options:
+  # ⚠️ DEVIATION from the build policy (AGENTS.md § Build policy) — the C++ standard.
+  # No CMAKE_CXX_STANDARD here on purpose: it would be inert. Upstream sets the
+  # `CXX_STANDARD 17` TARGET PROPERTY (CMakeLists.txt:18), and a target property beats the
+  # CMAKE_CXX_STANDARD cache variable, so the archive is C++17 whatever the builder passes.
+  # Lifting it needs a patch; the codec's API is plain C-style structs and free functions,
+  # identical under both standards, so it was left alone. Verified in the generated
+  # build.ninja: -std=gnu++17.
   BUILD_SHARED_LIBS: false
   CMAKE_POSITION_INDEPENDENT_CODE: true

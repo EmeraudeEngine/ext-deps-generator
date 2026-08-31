@@ -8,6 +8,11 @@ depends_on:
 use_install_prefix_as_find_root: true
 
 cmake_options:
+  # Project build policy (AGENTS.md § Build policy): pin the standard, otherwise the build
+  # takes the host compiler's default (gnu++17 on gcc 14 today, something else tomorrow) and
+  # the archive's API can change with the build machine.
+  CMAKE_CXX_STANDARD: 20
+  CMAKE_CXX_STANDARD_REQUIRED: true
   # SPIRV-Tools' external/CMakeLists.txt only uses SPIRV-Headers_SOURCE_DIR to
   # derive the include path (${SPIRV_HEADER_DIR}/include). Pointing it at the
   # install prefix where SPIRV-Headers was just installed makes spirv-headers
@@ -23,3 +28,14 @@ cmake_options:
   # gate so we can suppress it for static-only distributions.
   SPIRV_TOOLS_BUILD_SHARED: false
   CMAKE_POSITION_INDEPENDENT_CODE: true
+
+  # Build policy, exceptions and RTTI. Both already default the right way upstream
+  # (ENABLE_RTTI is OFF, and the MSVC switch only adds /EHs on top of the flags the builder
+  # already passes), but they are pinned here so a change of upstream default cannot flip
+  # them silently.
+  # ⚠️ ENABLE_EXCEPTIONS_ON_MSVC=OFF does NOT make the Windows build exception-free: the
+  # builder passes /EHsc in CMAKE_CXX_FLAGS for every library (builder/platforms/windows.py),
+  # and this option only controls an extra per-target /EHs. Removing exceptions from the
+  # Windows compile line is a builder-wide decision, not a per-library one.
+  ENABLE_RTTI: false
+  ENABLE_EXCEPTIONS_ON_MSVC: false

@@ -50,6 +50,11 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Dependencies: None
 - Usage: BC7 texture block encoder/decoder. Required by engines doing GPU-side compressed texture upload.
 - Notes: Upstream targets a standalone `bc7enc` executable with RDO tooling. The patch replaces the CMakeLists with a minimal static-library build exposing only the core encoder/decoder (`bc7enc.cpp` + `bc7decomp.cpp`); the RDO optimizer and lodepng/utils helpers are not needed downstream and are excluded.
+- Warning: **compiled as C++17, not C++20**, in deviation from the build policy: upstream sets
+  the `CXX_STANDARD 17` *target property* (CMakeLists.txt:18), which beats the
+  `CMAKE_CXX_STANDARD` cache variable, so passing the standard from the YAML would be inert.
+  Lifting it needs a patch; the codec's API is C-style structs and free functions, identical
+  under both standards.
 
 ## brotli 
 [v1.2.0, 028fb5a23661f123017c060daa546b55cf4bde29]
@@ -157,6 +162,13 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Dependencies: spirv-tools (which itself depends on spirv-headers)
 - Usage: GLSL/HLSL front-end and SPIR-V code generator. Required to compile GLSL shaders to SPIR-V at runtime in Vulkan engines.
 - Notes: Built with `ALLOW_EXTERNAL_SPIRV_TOOLS=ON` and `BUILD_EXTERNAL=OFF` so the SPIR-V optimizer is consumed from the standalone spirv-tools package via `find_package` instead of glslang's bundled `update_glslang_sources.py` fetch. Commits of spirv-tools and spirv-headers are aligned with glslang's `known_good.json` to stay ABI-compatible.
+- Notes: exceptions and RTTI are off (`ENABLE_EXCEPTIONS`, `ENABLE_RTTI`), which is both
+  upstream's default and the build policy; they are pinned in the YAML so a change of default
+  cannot flip them silently.
+- Warning: **compiled as C++17, not C++20**, in deviation from the build policy: glslang does
+  `set(CMAKE_CXX_STANDARD 17)` unconditionally (CMakeLists.txt:229), so the builder's
+  `-DCMAKE_CXX_STANDARD=20` is silently overridden. Lifting it would take a patch making that
+  `set()` conditional; the two standards present the same API here, so it was left alone.
 
 ## harfbuzz 
 [14.2.0, b0ffab42d473eb380ad0fcf42730e0f1868cbc97]
@@ -370,6 +382,10 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Version: 3.5.0~
 - Dependencies: None
 - Usage: Image format library.
+- Warning: **compiled as C++17, not C++20**, in deviation from the build policy: upstream sets
+  the `CXX_STANDARD 17` *target property* (CMakeLists.txt:57), which beats the
+  `CMAKE_CXX_STANDARD` cache variable. Lifting it needs a patch; the API (Document, Bitmap)
+  is the same under both standards.
 
 ## meshoptimizer
 [v1.2, 9d9890c73011d75920af614485296d1e03e95448]
@@ -467,6 +483,10 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Version: 14.2.7
 - Dependencies: None
 - Usage: Cross-platform process control library (C `reproc` + C++ `reproc++`). Both static libraries are built and installed.
+- Warning: **compiled as C++11 (and C99), not C++20**, in deviation from the build policy:
+  reproc sets `CXX_STANDARD 11` as a target property on every target it creates
+  (cmake/reproc.cmake:111), which beats the cache variable. reproc++ is a thin RAII layer over
+  the C API and presents the same surface either way.
 
 ## simdjson
 [v4.6.9, 0a2e33f345f49cb6e24401d5b16dbdbc9650921a]
@@ -554,6 +574,10 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Version: 2.3
 - Dependencies: zlib
 - Usage: Audio meta-data library.
+- Warning: **compiled as C++17, not C++20**, in deviation from the build policy: taglib does
+  `set(CMAKE_CXX_STANDARD 17)` unconditionally at the top of its CMakeLists, so the builder's
+  `-DCMAKE_CXX_STANDARD=20` is silently overridden. Lifting it needs a patch; the API
+  (TagLib::String, FileRef) is the same under both standards.
 
 ## tinyusdz
 [v0.9.4, dc7684519883358379964a9e6f925969d7477df3]
@@ -572,6 +596,10 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Note: pinned to the last non-rc RELEASE tag by owner decision. Upstream's newer line is
   `v0.9.9-rc*`; v1.0.0 has not landed. Move the pin forward first if crate coverage or
   composition turns out to be short.
+- Warning: **compiled as C++17, not C++20**, in deviation from the build policy: tinyusdz sets
+  `CMAKE_CXX_STANDARD` unconditionally inside its own branches, and the only branch yielding
+  C++20 is gated on `TINYUSDZ_WITH_COROUTINE` — a feature switch, not a standard switch, so it
+  must not be turned on just to move the standard.
 
 ## ufbx
 [v0.23.0, fcc5d6ba444cfd3eb80677dba5e37e493941abe5]

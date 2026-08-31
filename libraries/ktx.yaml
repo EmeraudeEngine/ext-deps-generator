@@ -44,6 +44,15 @@ languages: [c, cxx]
 # expect a second .a in the output directory alongside libktx.a.
 
 cmake_options:
+  # Project build policy (AGENTS.md § Build policy): pin the standard, otherwise the build
+  # takes the host compiler's default (gnu++17 on gcc 14 today, something else tomorrow) and
+  # the archive's API can change with the build machine.
+  # ⚠️ This pins libktx itself, NOT the astc-encoder archive installed beside it: the
+  # vendored external/astc-encoder/CMakeLists.txt does its own `set(CMAKE_CXX_STANDARD 14)`
+  # in its subdirectory scope. Both -std=gnu++20 and -std=c++14 therefore appear in this
+  # build, which is correct and not a mistake to "fix" by forcing the subdirectory.
+  CMAKE_CXX_STANDARD: 20
+  CMAKE_CXX_STANDARD_REQUIRED: true
   BUILD_SHARED_LIBS: false
   CMAKE_POSITION_INDEPENDENT_CODE: true
 
