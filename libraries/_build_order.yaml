@@ -48,6 +48,9 @@ order:
   # Geometry
   - clipper2
 
+  # Geometry processing (Eigen-based toolbox; fetches its own Eigen at configure time)
+  - libigl
+
   # Windows-only
   - pthread-win32
 
@@ -63,6 +66,9 @@ order:
 
   # Vertex/index codec (EXT_meshopt_compression)
   - meshoptimizer
+
+  # Mesh codec (KHR_draco_mesh_compression)
+  - draco
 
   # FBX parsing
   - ufbx
@@ -97,3 +103,10 @@ order:
 
   # ZeroMQ C++ bindings
   - cppzmq
+
+  # JSON parsing (SIMD, runtime-dispatched)
+  - simdjson
+
+  # Machine-learning inference. Last on purpose: by far the longest build of the set,
+  # and it depends on nothing else in the cascade (it vendors its own dependencies).
+  - onnxruntime

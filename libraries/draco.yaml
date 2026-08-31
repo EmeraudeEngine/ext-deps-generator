@@ -1,0 +1,67 @@
+name: draco
+source_dir: repositories/draco
+languages: [c, cxx]
+
+# Google Draco — geometry compression codec behind KHR_draco_mesh_compression.
+# Pinned to the 1.5.7 RELEASE tag (owner rule: no release candidates); upstream has cut
+# no release since 2024-01, so 1.5.7 is the head of the release line.
+#
+# Why it exists: fastgltf PARSES the extension (it fills the primitive's
+# `dracoCompression` fields) but decodes nothing — the accessors of a Draco-compressed
+# primitive point into a buffer view that holds a Draco bitstream, not vertex data.
+# Reading them without decoding first yields noise, silently. Same situation as
+# meshoptimizer for EXT_meshopt_compression, and the two extensions are the pair a glTF
+# pipeline has to cover.
+#
+# Only the DECODER is needed at runtime: `draco::Decoder::DecodeBufferToGeometry` on a
+# `draco::DecoderBuffer` wrapping the buffer-view bytes, then the per-attribute
+# `GetAttributeByUniqueId()` lookup keyed by the attribute ids the glTF extension
+# carries. The encoder ships in the same archive at no extra cost and the linker prunes
+# what the engine never calls.
+#
+# ⚠️ `make install` ALSO installs two CLI executables into `bin/` (draco_encoder,
+# draco_decoder): `draco_setup_install_target()` installs them unconditionally
+# (cmake/draco_install.cmake), with no option to opt out. Removing them would take a
+# patch; they are harmless in the archive, just unexpected.
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  CMAKE_POSITION_INDEPENDENT_CODE: true
+  DRACO_INSTALL: true
+
+  # Project build policy (AGENTS.md § Build policy). Draco declares no standard of its own
+  # outside the transcoder path, so without this it inherits the host compiler's default
+  # (gnu++17 on gcc 14) — a different standard from the engine that links it.
+  CMAKE_CXX_STANDARD: 20
+  CMAKE_CXX_STANDARD_REQUIRED: true
+
+  # Consumer only.
+  DRACO_TESTS: false
+  DRACO_UNITY_PLUGIN: false
+  DRACO_MAYA_PLUGIN: false
+  DRACO_JS_GLUE: false       # Emscripten-only, inert here; forced off so no default decides.
+  DRACO_WASM: false
+
+  # Both compressed geometry kinds stay on: a glTF primitive is a mesh, but Draco point
+  # clouds are the same bitstream family and cost little.
+  DRACO_MESH_COMPRESSION: true
+  DRACO_POINT_CLOUD_COMPRESSION: true
+
+  # ⚠️ Reading is only backwards-compatible when this is ON: it is what keeps the
+  # decoder able to read bitstreams produced by pre-1.0 encoders, which is most of the
+  # Draco content in the wild (Sketchfab, older Blender exports).
+  DRACO_BACKWARDS_COMPATIBILITY: true
+
+  # ⚠️ NOT a "build the glTF support" switch, despite the name: DRACO_GLTF_BITSTREAM
+  # RESTRICTS the build to the feature subset the glTF extension standardises, which
+  # narrows what the DECODER accepts. Left off so any Draco bitstream decodes.
+  DRACO_GLTF_BITSTREAM: false
+
+  # The transcoder (draco::Scene / draco::Mesh glTF round-trip) drags in the vendored
+  # tinygltf and eigen under third_party/ and forces C++17 on the whole build. The
+  # engine owns its glTF layer via fastgltf, so this is dead surface here.
+  DRACO_TRANSCODER_SUPPORTED: false
+
+  # Experimental upstream and unused: the engine's animation data never goes through
+  # Draco's keyframe codec.
+  DRACO_ANIMATION_ENCODING: false

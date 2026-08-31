@@ -202,6 +202,24 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     LUNASVG_BUILD_STATIC  # LunaSVG static linking
     PLUTOVG_BUILD_STATIC  # PlutoVG static linking
+    # libigl: the archive holds the explicit template instantiations and the headers
+    # only DECLARE them when this is set. Without it every include drags the
+    # implementation back in and the link dies on duplicate symbols. Upstream ships it
+    # as a PUBLIC definition on igl::core; linking the raw archive means setting it here.
+    IGL_STATIC_LIBRARY
+    # simdjson: this one is an ABI matter. It adds four data members to `document_stream`
+    # (worker thread, its parser, its error, the use_thread flag). The archive is compiled
+    # with SIMDJSON_ENABLE_THREADS=ON, so a consumer that omits the macro sees a SMALLER
+    # class than the code it links against — a silent layout mismatch, not a link error.
+    # Upstream propagates it as a PUBLIC definition on the simdjson target; the raw archive
+    # carries nothing, so it must be set here (and in the engine).
+    SIMDJSON_THREADS_ENABLED=1
+    # simdjson: the archive is built without the exception-throwing interface, because the
+    # engine consuming it compiles without exceptions. This is an API selection, not a
+    # detail — `simdjson_result<T>` no longer converts implicitly to `T`, so every access
+    # goes through `.get(out) != simdjson::SUCCESS`. Same PUBLIC-definition story as above;
+    # unlike THREADS_ENABLED, forgetting it fails at compile time rather than silently.
+    SIMDJSON_EXCEPTIONS=0
 )
 
 if(WIN32)
@@ -296,6 +314,15 @@ if(WIN32)
     set(KTX_LIB "ktx")
     set(MESHOPT_LIB "meshoptimizer")
     set(TINYUSDZ_LIB "tinyusdz_static")
+    # draco / libigl: same basenames on every platform and in Debug. On MSVC draco
+    # builds the target "draco" (draco.lib); elsewhere it is "draco_static" with
+    # OUTPUT_NAME draco, so the archive is libdraco.a either way.
+    set(DRACO_LIB "draco")
+    set(IGL_LIB "igl")
+    # onnxruntime is a SHARED library (see libraries/onnxruntime.yaml): onnxruntime.dll
+    # plus its import lib here, libonnxruntime.so elsewhere. Same short name either way.
+    set(ONNXRUNTIME_LIB "onnxruntime")
+    set(SIMDJSON_LIB "simdjson")
     # lib3mf (static): static archive name matches the CMake target name.
     set(LIB3MF_LIB "lib3mf")
     # pthread-win32: static build; pthreadVC3 is the C/setjmp flavor (VCE3/VSE3
@@ -345,6 +372,10 @@ else()
     set(KTX_LIB "ktx")
     set(MESHOPT_LIB "meshoptimizer")
     set(TINYUSDZ_LIB "tinyusdz_static")
+    set(DRACO_LIB "draco")
+    set(IGL_LIB "igl")
+    set(ONNXRUNTIME_LIB "onnxruntime")
+    set(SIMDJSON_LIB "simdjson")
     # lib3mf sets PREFIX "" on its target, so the archive is "lib3mf.a"
     # (not "liblib3mf.a"). Use a full path to bypass the `-l` short-name search,
     # which would otherwise look for "liblib3mf.{a,so,dylib}".
@@ -406,16 +437,19 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     # TLS (LibreSSL: consumers before providers — tls -> ssl -> crypto;
     # static archive basenames are identical on Unix and MSVC)
     tls ssl crypto
-    # Geometry
-    Clipper2
+    # Geometry (libigl is Eigen templates compiled once; Eigen itself is header-only)
+    Clipper2 ${IGL_LIB}
     # Networking
     ${ZMQ_LIB}
     # Process control
     ${REPROC_CPP_LIB} ${REPROC_LIB}
     # Data formats
-    fastgltf jsoncpp ${UFBX_LIB} ${MESHOPT_LIB} ${TINYUSDZ_LIB}
+    fastgltf jsoncpp ${SIMDJSON_LIB} ${UFBX_LIB} ${MESHOPT_LIB} ${DRACO_LIB} ${TINYUSDZ_LIB}
     # Texture compression
     ${BC7ENC_LIB}
+    # Machine-learning inference (shared library, self-contained: its abseil / onnx /
+    # protobuf / re2 / flatbuffers dependencies are linked inside it and export nothing)
+    ${ONNXRUNTIME_LIB}
 )
 
 # pthread-win32 is Windows-only

@@ -1,0 +1,103 @@
+name: onnxruntime
+source_dir: repositories/onnxruntime/cmake
+languages: [c, cxx]
+
+# ONNX Runtime — CPU inference engine (ONNX / ORT model formats).
+# Pinned to the v1.29.0 RELEASE tag (owner rule: no release candidates).
+#
+# ⚠️ THE CMAKE PROJECT ROOT IS `cmake/`, NOT THE REPOSITORY ROOT — hence source_dir.
+# Upstream's own `build.sh` / `build.py` are wrappers that end up running CMake there;
+# nothing in them is needed, the CMake project builds on its own.
+#
+# ⚠️ SHIPPED AS A SHARED LIBRARY — the only one in an archive of static libs (lib3mf looks
+# like a counter-example but is forced static by LIB3MF_BUILD_SHARED=false; nothing else
+# installs a .so/.dll/.dylib). Not a preference: it is what upstream supports — measured on
+# 2026-08-31 with `onnxruntime_BUILD_SHARED_LIB=Off`:
+#   * `cmake --install` lays down the ten `libonnxruntime_*.a` and NOTHING else. Abseil
+#     (50 archives), onnx, onnx_proto, protobuf-lite, flatbuffers, cpuinfo, date, utf8_range
+#     are FetchContent dependencies declared EXCLUDE_FROM_ALL: no install rule reaches them.
+#   * re2 is worse: it is never even BUILT. A static library does not link its dependencies,
+#     so nothing in the `all` target pulls the re2 archive in — yet
+#     `libonnxruntime_providers.a` references `re2::RE2` from the contrib Tokenizer kernel.
+#   * A consumer link against the installed set therefore fails on thousands of undefined
+#     abseil / onnx / protobuf / re2 symbols (verified, not assumed). Making it work would
+#     mean forcing those targets to build, installing ~46 MiB of extra archives and
+#     documenting a link order for ~87 of them.
+# The shared build, by contrast, links all of that INSIDE `libonnxruntime.so` and exports
+# only the ORT C API. Measured artifact: 29.1 MiB, and `ldd` shows libstdc++/libm/libgcc_s/
+# libc — nothing else. The C++ API (`onnxruntime_cxx_api.h`) is a header-only wrapper over
+# that C API, so there is no C++ ABI surface across the boundary either.
+#
+# ⚠️ A SECOND, TINY .so SHIPS ALONGSIDE: `libonnxruntime_providers_shared.so` (~15 KiB) is
+# the bridge ONNX Runtime uses to load out-of-tree execution providers. With only the CPU
+# provider built nothing loads it, but the install step ships it unconditionally — do not
+# mistake it for a stray artifact and do not delete it from the package.
+#
+# ⚠️ CONSUMER MUST DEPLOY THE LIBRARY next to the executable (`libonnxruntime.so.1.29.0`
+# + its two symlinks, `onnxruntime.dll`, `libonnxruntime.1.29.0.dylib`) — unlike every
+# static lib in the cascade, this one still exists at runtime, and it is the first artifact
+# of the archive for which that is true.
+#
+# ⚠️ ~1 GiB IS DOWNLOADED AT CONFIGURE TIME. `cmake/deps.txt` lists every dependency as a
+# URL + SHA1 that FetchContent fetches during configure (abseil, protobuf, onnx,
+# flatbuffers, re2, cpuinfo, eigen, GSL, mp11, json, safeint, date...). Pinned by hash, so
+# reproducible, but the build needs network access — by far the largest such fetch in the
+# cascade. deps.txt accepts local file paths as well as https URLs, which is the way out if
+# an offline build is ever required.
+#
+# ⚠️ EXCEPTIONS: the engine cascade is built with -fno-exceptions, and the ORT C++ header
+# wrapper throws `Ort::Exception`. A consumer translation unit compiled without exceptions
+# must define `ORT_NO_EXCEPTIONS` before including the header — it then calls abort() on
+# error instead of throwing (onnxruntime_cxx_api.h:41). The C API itself returns OrtStatus*
+# and never throws.
+#
+# Build cost for reference, measured on a 28-core Linux host, Release, from a clean tree:
+# ~5 min 40 s wall clock for 1200 ninja targets, plus the dependency download; ~580 MiB of
+# build intermediates, of which ~390 MiB is the fetched dependency sources. Expect a very
+# different figure on a laptop — this is the longest build of the cascade by far.
+# The Debug library is roughly 780 MiB against 29.1 MiB in Release (same host), so budget
+# the disk and the upload accordingly.
+
+cmake_options:
+  BUILD_SHARED_LIBS: false          # applies to the vendored deps; ORT has its own switch
+  CMAKE_POSITION_INDEPENDENT_CODE: true
+
+  # See the shared-vs-static discussion above.
+  onnxruntime_BUILD_SHARED_LIB: true
+
+  # vcpkg would resolve the dependencies from a manifest instead of deps.txt; this repo has
+  # no vcpkg toolchain and does not want one.
+  onnxruntime_USE_VCPKG: false
+
+  # Consumer only. Unit tests default to ON upstream and pull googletest plus a large test
+  # corpus; the language bindings need their own toolchains.
+  onnxruntime_BUILD_UNIT_TESTS: false
+  onnxruntime_BUILD_BENCHMARKS: false
+  onnxruntime_ENABLE_PYTHON: false
+  onnxruntime_BUILD_CSHARP: false
+  onnxruntime_BUILD_OBJC: false
+
+  # LTO is forbidden in shipped artifacts: on MSVC it emits /GL objects, which the CRT
+  # validation rejects outright (AGENTS.md, § Windows CRT Validation), and everywhere else
+  # it ties the output to the exact producing toolchain.
+  onnxruntime_ENABLE_LTO: false
+
+  # RTTI off, which is both upstream's own default here (a cmake_dependent_option that
+  # flips ON only for the python or CUDA builds, CMakeLists.txt:203) and what the project
+  # build policy asks for (AGENTS.md § Build policy). Safe by construction in this case:
+  # the library is shared and its boundary is the ORT C API, so no polymorphic type and no
+  # dynamic_cast ever crosses into engine code — whatever ONNX Runtime does with RTTI stays
+  # inside the .so.
+  onnxruntime_DISABLE_RTTI: true
+
+  # protobuf-lite is enough for the runtime: the full library only matters to tooling that
+  # reflects over descriptors (python bindings, test runners). It stays inside the .so
+  # either way.
+  onnxruntime_USE_FULL_PROTOBUF: false
+
+  # cpuinfo drives MLAS kernel dispatch (AVX2/AVX512 paths) at runtime.
+  onnxruntime_ENABLE_CPUINFO: true
+
+# No execution provider is enabled beyond the default CPU one: CUDA, TensorRT, DirectML,
+# CoreML, QNN, XNNPACK, WebGPU each need a vendor SDK at build time and would make the
+# artifact machine-specific. `Ort::GetAvailableProviders()` therefore reports exactly one.

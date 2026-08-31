@@ -1,0 +1,100 @@
+name: simdjson
+source_dir: repositories/simdjson
+languages: [cxx]
+
+# SIMD-accelerated JSON parser (DOM and On-Demand APIs), plus a serialisation side in 4.x
+# (`simdjson::builder`) that overlaps jsoncpp — which of the two owns which use is an
+# engine-side decision, not a build one.
+# Pinned to the v4.6.9 RELEASE tag (owner rule: no release candidates — the tagged commit
+# is titled "Release candidate 4.6.9" because that is how upstream words its release-prep
+# commit; the tag itself is the release, and `simdjson_version.h` says a bare "4.6.9").
+#
+# Built with runtime dispatch, which is simdjson's whole design: every x86 implementation
+# it can compile (fallback, westmere, haswell, icelake) goes into the archive and the CPU
+# is probed on first use. Do NOT narrow this with SIMDJSON_IMPLEMENTATION or
+# -march=native — the archive is redistributable and must run on any machine.
+#
+# ⚠️ THE ONLY INSTALLED HEADER IS THE AMALGAMATED `singleheader/simdjson.h` (7.7 MiB,
+# 187k lines), copied to `include/simdjson.h`. There is no `install(DIRECTORY include/)`
+# anywhere in upstream's CMakeLists — the header tree under `include/simdjson/` is never
+# installed. Consequence: `SIMDJSON_SINGLEHEADER` must stay ON. Turning it off (the option
+# is confusingly documented as "Disable singleheader generation") produces an install with
+# a library and NO HEADER AT ALL. The file is checked into the repository at release time,
+# so nothing is generated here and Python is not needed.
+#
+# ⚠️ TWO MACROS MUST MATCH BETWEEN THIS BUILD AND EVERY CONSUMER. simdjson passes them as
+# PUBLIC compile definitions on its CMake target, which anything linking the raw archive
+# (DependenciesTest, and the engine) never sees:
+#
+#   * `SIMDJSON_THREADS_ENABLED=1` — this one is an ABI matter, not a preference. It adds
+#     four data members to `document_stream` (`use_thread`, `stage1_thread_error`,
+#     `worker`, `stage1_thread_parser` — generic/ondemand/document_stream.h:298). A
+#     consumer that omits it sees a smaller class than the one compiled into the archive:
+#     a silent layout mismatch, not a link error. DependenciesTest defines it in
+#     CMakeLists.txt; the engine must do the same.
+#     ⚠️ THE FIX IS THE DEFINE, NEVER `SIMDJSON_ENABLE_THREADS: false` (owner ruling
+#     2026-08-31). Building the threads out would make the trap impossible, but this
+#     library is in the archive precisely because it is the fast parser: shipping it
+#     amputated of the one path where it uses a core beyond the caller's — document_stream's
+#     background stage-1 thread over NDJSON / multi-document batches — defeats the reason it
+#     was added. The macro is a consumer-side contract, so it is documented and set, not
+#     dodged.
+#
+#   * `SIMDJSON_EXCEPTIONS=0` — the archive is built WITHOUT the exception-throwing
+#     interface (owner ruling 2026-08-31: the engine consuming this archive is compiled
+#     without exceptions), so every consumer must define it too. It selects an API, not a
+#     detail: without it, `simdjson_result<T>` no longer converts implicitly to `T`, and
+#     code must go through the error-code form —
+#     `if (doc["k"].get_string().get(view) != simdjson::SUCCESS)`. A consumer that forgets
+#     the define writes the throwing form against headers that no longer offer it, so this
+#     one fails loudly at compile time rather than silently (unlike THREADS_ENABLED above).
+#     ⚠️ ON MSVC THIS ALSO CHANGES THE STL CONFIGURATION: upstream rewrites /EHsc into
+#     /EHs-c- in CMAKE_CXX_FLAGS and adds a global -D_HAS_EXCEPTIONS=0
+#     (cmake/exception-flags.cmake). That is the point here — it makes simdjson match an
+#     exception-free engine — but it also makes this the one library of the cascade built
+#     with a different STL configuration from the others, so the Windows package is where
+#     to check for ODR surprises first if a mixed-mode link ever misbehaves.
+#
+# ⚠️ `CMAKE_CXX_STANDARD` DOES NOT WORK HERE, so do not reach for it:
+# `cmake/developer-options.cmake:124` does a plain
+# `set(CMAKE_CXX_STANDARD ${SIMDJSON_CXX_STANDARD})`, and a normal variable shadows the
+# cache entry a `-D` sets — the command line is silently ignored. The knob is
+# `SIMDJSON_CXX_STANDARD` (a real cache variable, default 17), set to 20 below to match the
+# engine and the rest of the cascade's consumers. The API surface is the same either way
+# (`SIMDJSON_CPLUSPLUS20` is defined in compiler_check.h and used nowhere else; it is the
+# C++17 guards that matter, for std::string_view), so this is about compiling the archive
+# with the standard its consumers use rather than about gaining features.
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  CMAKE_POSITION_INDEPENDENT_CODE: true
+  SIMDJSON_INSTALL: true
+
+  # ⚠️ Must stay ON: it is what installs the one and only header (see above).
+  SIMDJSON_SINGLEHEADER: true
+
+  # ⚠️ The working knob — CMAKE_CXX_STANDARD is shadowed by upstream (see above).
+  SIMDJSON_CXX_STANDARD: 20
+
+  # Consumer only: developer mode adds tests, benchmarks, fuzzers, the amalgamation tooling
+  # and the cxxopts dependency. Upstream returns early from CMakeLists without it.
+  SIMDJSON_DEVELOPER_MODE: false
+
+  # Only meaningful alongside BUILD_SHARED_LIBS=ON (it builds a static twin of the shared
+  # library); with a static build it would install two identical archives.
+  SIMDJSON_BUILD_STATIC_LIB: false
+
+  # Background stage-1 thread for document_stream. See the ABI warning above.
+  SIMDJSON_ENABLE_THREADS: true
+
+  # Exception-throwing accessors OFF: the engine consuming this archive is built without
+  # exceptions. This changes the consumer-visible API — see the warning above.
+  SIMDJSON_EXCEPTIONS: false
+
+  # C++26 static reflection, experimental and clang/libc++-only (it forces -std=c++26 and
+  # -stdlib=libc++ on every consumer through PUBLIC options).
+  SIMDJSON_STATIC_REFLECTION: false
+
+  # Deprecated API kept: dropping it is a consumer-visible header change with nothing to
+  # gain in an archive.
+  SIMDJSON_DISABLE_DEPRECATED_API: false

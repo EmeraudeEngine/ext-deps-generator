@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -157,6 +158,13 @@
 // clipper2
 #include "clipper2/clipper.h"
 
+// libigl (static build: IGL_STATIC_LIBRARY is set by the build system, see CMakeLists.txt)
+#include "igl/edges.h"
+#include "igl/per_vertex_normals.h"
+
+// Eigen — installed by the libigl build, and the type system of its whole API
+#include "Eigen/Core"
+
 // ============================================================================
 // Networking libraries
 // ============================================================================
@@ -187,17 +195,35 @@
 // jsoncpp
 #include "json/json.h"
 
+// simdjson (the installed header is the 7.7 MiB amalgamation, see libraries/simdjson.yaml.
+// SIMDJSON_THREADS_ENABLED and SIMDJSON_EXCEPTIONS=0 are set by the build system: the first
+// changes document_stream's layout, the second selects the error-code API used below.)
+#include "simdjson.h"
+
 // ufbx
 #include "ufbx/ufbx.h"
 
 // meshoptimizer (EXT_meshopt_compression codec)
 #include "meshoptimizer.h"
 
+// draco (KHR_draco_mesh_compression codec)
+#include "draco/core/draco_version.h"
+#include "draco/compression/decode.h"
+#include "draco/compression/encode.h"
+#include "draco/mesh/triangle_soup_mesh_builder.h"
+
 // tinyusdz (OpenUSD reader)
 #include "tinyusdz/tinyusdz.hh"
 
-// lib3mf (shared library, C ABI)
+// lib3mf (static archive exposing the C ABI binding)
 #include "Bindings/C/lib3mf.h"
+
+// ============================================================================
+// Machine learning libraries
+// ============================================================================
+
+// onnxruntime (shared library; the C++ API is a header-only wrapper over the C API)
+#include "onnxruntime/onnxruntime_cxx_api.h"
 
 // ============================================================================
 // SVG libraries
@@ -523,6 +549,39 @@ static bool test_clipper2()
     return true;
 }
 
+static bool test_libigl()
+{
+    // One unit quad, two triangles: enough to exercise a compiled instantiation
+    // (per_vertex_normals) and a purely combinatorial one (edges).
+    Eigen::MatrixXd V(4, 3);
+    V << 0.0, 0.0, 0.0,
+         1.0, 0.0, 0.0,
+         1.0, 1.0, 0.0,
+         0.0, 1.0, 0.0;
+    Eigen::MatrixXi F(2, 3);
+    F << 0, 1, 2,
+         0, 2, 3;
+
+    Eigen::MatrixXd N;
+    igl::per_vertex_normals(V, F, N);
+    if (N.rows() != V.rows())
+        return false;
+
+    Eigen::MatrixXi E;
+    igl::edges(F, E);
+    if (E.rows() != 5)  // 4 boundary edges + 1 diagonal
+        return false;
+
+    // ⚠️ Read the triple as WORLD.MAJOR.MINOR, not as the release number: Eigen kept
+    // EIGEN_WORLD_VERSION at 3 when it moved to semver, so a future Eigen 5.0.x would
+    // print itself here as "3.5.0". Today this is Eigen 3.4.0, the version libigl v2.6.0
+    // declares and repositories/eigen is pinned to.
+    std::cout << "  libigl: OK (Eigen " << EIGEN_WORLD_VERSION << "." << EIGEN_MAJOR_VERSION
+              << "." << EIGEN_MINOR_VERSION << ", " << N.rows() << " vertex normals, "
+              << E.rows() << " edges)\n";
+    return true;
+}
+
 static bool test_libzmq()
 {
     int major, minor, patch;
@@ -572,6 +631,45 @@ static bool test_jsoncpp()
     return true;
 }
 
+static bool test_simdjson()
+{
+    // On-Demand API on a padded buffer, which is the fast path the engine would use.
+    // Also proves the runtime dispatch works: the implementation is picked from the CPU,
+    // and every x86 kernel (fallback, westmere, haswell, icelake) is inside the archive.
+    //
+    // Written in the error-code form on purpose: the archive is built with
+    // SIMDJSON_EXCEPTIONS=0, so simdjson_result<T> does not convert to T and the ergonomic
+    // `T x = doc["k"];` form no longer compiles. This is exactly the shape engine code has
+    // to take, so the test is also the API sample.
+    simdjson::ondemand::parser parser;
+    simdjson::padded_string json = R"({"engine":"EmEn","meshes":[1,2,3],"ratio":0.5})"_padded;
+
+    simdjson::ondemand::document doc;
+    if (parser.iterate(json).get(doc) != simdjson::SUCCESS)
+        return false;
+
+    std::string_view engine;
+    if (doc["engine"].get_string().get(engine) != simdjson::SUCCESS || engine != "EmEn")
+        return false;
+
+    // count_elements() is lvalue-qualified, so the value must be bound to a named variable
+    // first: `doc["meshes"].count_elements()` does not compile.
+    simdjson::ondemand::value meshes;
+    if (doc["meshes"].get(meshes) != simdjson::SUCCESS)
+        return false;
+    size_t mesh_count = 0;
+    if (meshes.count_elements().get(mesh_count) != simdjson::SUCCESS || mesh_count != 3)
+        return false;
+
+    double ratio = 0.0;
+    if (doc["ratio"].get_double().get(ratio) != simdjson::SUCCESS || ratio != 0.5)
+        return false;
+
+    std::cout << "  simdjson version: " << SIMDJSON_VERSION << " (active implementation: "
+              << simdjson::get_active_implementation()->name() << ")\n";
+    return true;
+}
+
 static bool test_ufbx()
 {
     uint32_t v = ufbx_source_version;
@@ -606,6 +704,42 @@ static bool test_meshoptimizer()
     std::cout << "  meshoptimizer version: " << (MESHOPTIMIZER_VERSION / 1000) << "."
               << (MESHOPTIMIZER_VERSION % 1000 / 10) << " (vertex codec round-trip, "
               << encodedSize << " bytes)\n";
+    return true;
+}
+
+static bool test_draco()
+{
+    // Round-trip a single triangle through the codec behind
+    // KHR_draco_mesh_compression (the decoder is the part the engine needs).
+    draco::TriangleSoupMeshBuilder builder;
+    builder.Start(1);
+    const int pos_att =
+        builder.AddAttribute(draco::GeometryAttribute::POSITION, 3, draco::DT_FLOAT32);
+    const float a[3] = {0.0f, 0.0f, 0.0f};
+    const float b[3] = {1.0f, 0.0f, 0.0f};
+    const float c[3] = {0.0f, 1.0f, 0.0f};
+    builder.SetAttributeValuesForFace(pos_att, draco::FaceIndex(0), a, b, c);
+
+    std::unique_ptr< draco::Mesh > mesh = builder.Finalize();
+    if (!mesh)
+        return false;
+
+    draco::Encoder encoder;
+    draco::EncoderBuffer encoded;
+    if (!encoder.EncodeMeshToBuffer(*mesh, &encoded).ok())
+        return false;
+
+    draco::DecoderBuffer buffer;
+    buffer.Init(encoded.data(), encoded.size());
+    draco::Decoder decoder;
+    auto decoded = decoder.DecodeMeshFromBuffer(&buffer);
+    if (!decoded.ok())
+        return false;
+    if (decoded.value()->num_faces() != 1 || decoded.value()->num_points() != 3)
+        return false;
+
+    std::cout << "  draco version: " << draco::kDracoVersion << " (mesh round-trip, "
+              << encoded.size() << " bytes)\n";
     return true;
 }
 
@@ -648,6 +782,34 @@ static bool test_lib3mf()
     if (res != 0)
         return false;
     std::cout << "  lib3mf version: " << major << "." << minor << "." << micro << "\n";
+    return true;
+}
+
+static bool test_onnxruntime()
+{
+    // No model file here: an environment, a session options object and a CPU tensor are
+    // enough to prove the shared library loads, its C API table resolves and its allocator
+    // works. Everything ONNX Runtime vendors (abseil, onnx, protobuf, re2, flatbuffers,
+    // cpuinfo) is linked inside the .so/.dll and exports nothing.
+    Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "DependenciesTest");
+
+    Ort::SessionOptions options;
+    options.SetIntraOpNumThreads(1);
+    options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_BASIC);
+
+    Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+    std::vector< float > values{1.0f, 2.0f, 3.0f, 4.0f};
+    const std::vector< int64_t > shape{2, 2};
+    Ort::Value tensor = Ort::Value::CreateTensor< float >(
+        memory_info, values.data(), values.size(), shape.data(), shape.size());
+    if (!tensor.IsTensor())
+        return false;
+    if (tensor.GetTensorTypeAndShapeInfo().GetElementCount() != values.size())
+        return false;
+
+    const std::vector< std::string > providers = Ort::GetAvailableProviders();
+    std::cout << "  onnxruntime version: " << Ort::GetVersionString() << " ("
+              << providers.size() << " execution provider(s), 2x2 CPU tensor)\n";
     return true;
 }
 
@@ -830,6 +992,7 @@ int main(int /*argc*/, char* /*argv*/[])
 
     std::cout << "\n--- Geometry Libraries ---\n";
     run_test("clipper2", test_clipper2);
+    run_test("libigl", test_libigl);
 
     std::cout << "\n--- Networking Libraries ---\n";
     run_test("libzmq", test_libzmq);
@@ -842,10 +1005,15 @@ int main(int /*argc*/, char* /*argv*/[])
     std::cout << "\n--- Data Format Libraries ---\n";
     run_test("fastgltf", test_fastgltf);
     run_test("jsoncpp", test_jsoncpp);
+    run_test("simdjson", test_simdjson);
     run_test("ufbx", test_ufbx);
     run_test("meshoptimizer", test_meshoptimizer);
+    run_test("draco", test_draco);
     run_test("tinyusdz", test_tinyusdz);
     run_test("lib3mf", test_lib3mf);
+
+    std::cout << "\n--- Machine Learning Libraries ---\n";
+    run_test("onnxruntime", test_onnxruntime);
 
     std::cout << "\n--- SVG Libraries ---\n";
     run_test("lunasvg", test_lunasvg);

@@ -56,6 +56,42 @@ CMakeLists.txt              # Test project to validate all libs link correctly
 - Meson and Ninja (e.g., `apt install meson ninja-build`, or `pip install -r requirements.txt` in the project venv)
 - PyYAML (e.g., `apt install python3-yaml`, or `pip install PyYAML` in the project venv)
 
+## Build policy — what every library in this archive must look like
+
+> [!IMPORTANT]
+> **Project-wide rule.** The archive exists to be linked into an engine with a fixed ABI
+> profile, so every library is configured toward the same four targets. Apply them when
+> adding a library, and when revisiting one. Deviating is allowed — being *silent* about it
+> is not: any deviation is written in the library's YAML header and in its README entry,
+> with the measurement or the upstream limitation that forced it.
+>
+> 1. **Static libraries.** `BUILD_SHARED_LIBS=OFF` plus whatever per-library switch upstream
+>    adds on top, and `CMAKE_POSITION_INDEPENDENT_CODE=ON` so the archives can land in a
+>    shared object later. A shared artifact is a last resort, taken only when the static form
+>    is not actually supported upstream — see § Shared-library artifact (`onnxruntime`),
+>    which is the one current exception and says how it was measured.
+> 2. **C++20.** The consuming engine and `DependenciesTest` are C++20; a library compiled to
+>    an older standard can present a different API through the same headers (the
+>    `std::string_view` guards are the classic case). Prefer `CMAKE_CXX_STANDARD: 20` in the
+>    YAML — but check that upstream honours it: simdjson, for one, overwrites it from its own
+>    cache variable and silently ignores the command line (see `libraries/simdjson.yaml`).
+> 3. **No C++ exceptions.** The engine compiles with `-fno-exceptions`, so a library whose
+>    headers can throw into engine code is a compile error waiting to happen. Turn off the
+>    exception interface wherever upstream offers a switch (`SIMDJSON_EXCEPTIONS`,
+>    `TINYUSDZ_CXX_EXCEPTIONS`) and record the consumer-side macro that must accompany it.
+>    Note the distinction: the switch usually selects an *API* (error codes instead of
+>    throws), which is what matters here; compiling the library's own sources with
+>    `-fno-exceptions` is a separate, stricter step that is not required.
+> 4. **No RTTI when it is reachable.** Hardest of the four and the one to sacrifice first:
+>    many upstreams have no switch, and some libraries need `dynamic_cast` internally. Turn
+>    it off where a switch exists and the library builds without it. RTTI confined behind a C
+>    ABI (a shared library, or an archive whose headers expose no polymorphic type) never
+>    reaches the engine and is not worth fighting.
+>
+> These four are about the *interface the engine links against*, not about taste. A library
+> that gets two of them right and documents the other two is fine; a library that quietly
+> gets one wrong costs a debugging session in the engine.
+
 ## Key Concepts
 
 ### Build Configuration String
@@ -181,6 +217,19 @@ Rules for a vendored library:
   freshness must be checked manually (https://www.libressl.org/releases.html).
 - Do not add further vendored deps without weighing the submodule alternative first; this is
   an exception, not a precedent.
+
+### Shared-library artifact (`onnxruntime`)
+Every artifact in `output/<config>/lib` is a static archive except **`libonnxruntime.so` /
+`onnxruntime.dll` / `libonnxruntime.dylib`**, which is a shared library and must be deployed
+next to the consuming executable. The reason is upstream's, not ours: a static ONNX Runtime
+installs only its own ten archives while its FetchContent dependencies (abseil, onnx,
+protobuf-lite, flatbuffers, cpuinfo — and re2, which is never even built) are neither
+installed nor linkable, so a consumer link fails on thousands of undefined symbols. Measured
+and link-tested; the full account is in `libraries/onnxruntime.yaml`. Practical consequences:
+the release zip must be made with `zip -y` so the versioned `.so` symlinks stay symlinks, and
+the Windows CRT validation only sees the import lib (an import library carries no CRT
+directives, so it reports SKIP — the DLL's own CRT comes from `CMAKE_MSVC_RUNTIME_LIBRARY`,
+which the builder passes globally).
 
 ### Patch System
 Some libraries need modifications to build correctly (e.g., forced C++ standard, macOS cross-compilation fixes). Instead of forking, use the patch system.
