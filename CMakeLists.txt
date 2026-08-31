@@ -275,13 +275,17 @@ if(WIN32)
     else()
         set(ZMQ_LIB "libzmq-v143-mt-s-4_3_6")
     endif()
-    # libvpx: library name depends on runtime (MT/MD) only — the configure
-    # script bakes the CRT into the basename and produces vpxmt.lib / vpxmd.lib
-    # for both Release and Debug builds (no "d" suffix in Debug).
+    # libvpx: the configure script bakes the CRT into the basename and appends "d"
+    # for the Debug configuration — vpx{mt|md}[d].lib (AGENTS.md § MSYS2 Builder).
+    # A Debug package contains ONLY the "d" variant (the Release-CRT twin that
+    # `make install` ships unconditionally is purged by the msys2 builder).
     if(RUNTIME_LIB STREQUAL "MT")
         set(VPX_LIB "vpxmt")
     else()
         set(VPX_LIB "vpxmd")
+    endif()
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(VPX_LIB "${VPX_LIB}d")
     endif()
     # Audio codec libs (best-effort Windows defaults; adjust if upstream produces
     # different basenames on MSVC).
@@ -291,7 +295,9 @@ if(WIN32)
     set(VORBISFILE_LIB "vorbisfile")
     set(OPUS_LIB "opus")
     set(FLAC_LIB "FLAC")
-    set(MPG123_LIB "mpg123")
+    # mpg123's cmake port forces `PREFIX lib` on the target since b41e9d9 (the v015
+    # submodule bump), so the MSVC artifact is libmpg123.lib, not mpg123.lib.
+    set(MPG123_LIB "libmpg123")
     set(LAME_LIB "mp3lame")
     set(SNDFILE_LIB "sndfile")
     # Shader / SPIR-V (SPIRV-Tools-* keep their basenames in Debug)

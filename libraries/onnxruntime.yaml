@@ -101,3 +101,29 @@ cmake_options:
 # No execution provider is enabled beyond the default CPU one: CUDA, TensorRT, DirectML,
 # CoreML, QNN, XNNPACK, WebGPU each need a vendor SDK at build time and would make the
 # artifact machine-specific. `Ort::GetAvailableProviders()` therefore reports exactly one.
+
+platforms:
+  windows:
+    # ⚠️ TWO FETCHCONTENT DEPS OVERWRITE `CMAKE_MSVC_RUNTIME_LIBRARY` — same silent-override
+    # family as the `set(CMAKE_CXX_STANDARD …)` cases in AGENTS.md, applied to the CRT. Each
+    # does a directory-scope `set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded$<$<CONFIG:Debug>:
+    # Debug>[DLL])` gated on its own option, shadowing the cache entry the builder passes —
+    # and their DEFAULTS point in opposite directions, so each runtime flavor broke on a
+    # different dep (both measured on the Release DLL link, LNK2038 RuntimeLibrary mismatch):
+    #   * abseil (CMakeLists.txt:61-68): default DLL → broke MT (2026-08-31, ~50 absl_*.lib
+    #     in MD against everything else in MT). `ABSL_MSVC_STATIC_RUNTIME` flips it — the
+    #     same knob upstream's vcpkg abseil port sets for static-CRT triplets.
+    #   * protobuf (CMakeLists.txt:70/218-223): `protobuf_MSVC_STATIC_RUNTIME` defaults ON
+    #     for a static protobuf → broke MD (2026-09-01, libprotobuf-lite.lib in MT against
+    #     everything else in MD).
+    # Both options are therefore set EXPLICITLY for both runtimes rather than trusting
+    # either default. Their $<CONFIG:Debug> genexes cover the Debug flavors (MTd/MDd).
+    # The other FetchContent deps honour the cache — onnx's Utils.cmake even documents
+    # deferring to CMAKE_MSVC_RUNTIME_LIBRARY, which is why ONNX_USE_MSVC_STATIC_RUNTIME
+    # from upstream's MT preset is NOT carried (a real no-op stays out of the YAML).
+    runtime_MT:
+      ABSL_MSVC_STATIC_RUNTIME: true
+      protobuf_MSVC_STATIC_RUNTIME: true
+    runtime_MD:
+      ABSL_MSVC_STATIC_RUNTIME: false
+      protobuf_MSVC_STATIC_RUNTIME: false

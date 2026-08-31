@@ -42,6 +42,16 @@ languages: [cxx]
 # the version keeps the two in lockstep by construction. The tag is pinned in that recipe,
 # so the build stays reproducible; it just needs network access.
 
+# ⚠️ WINDOWS NEEDS /DWIN32 RESTORED BY HAND. libigl gates its Windows paths on the
+# old-style `WIN32` macro (Timer.h's <sys/time.h> fallback, plus ~40 `#ifdef WIN32`
+# guards around explicit template instantiations in include/igl/*.cpp), which is NOT a
+# compiler built-in — MSVC only defines `_WIN32`. `WIN32` normally comes from CMake's
+# default MSVC flags (`/DWIN32 /D_WINDOWS`), but the builder overwrites CMAKE_CXX_FLAGS
+# wholesale (builder/platforms/windows.py), dropping it for every library. Every other
+# library in the cascade tests `_WIN32` and never notices; libigl is the first to care.
+# Without it the build dies on Timer.h — and even past that, the WIN32-guarded
+# instantiations would be silently missing from the archive (link errors downstream).
+
 cmake_options:
   BUILD_SHARED_LIBS: false
   CMAKE_POSITION_INDEPENDENT_CODE: true
@@ -87,3 +97,8 @@ cmake_options:
   LIBIGL_RESTRICTED_MATLAB: false
   LIBIGL_RESTRICTED_MOSEK: false
   LIBIGL_RESTRICTED_TRIANGLE: false
+
+platforms:
+  windows:
+    # See the /DWIN32 warning in the header.
+    extra_cxx_flags: "/DWIN32"
