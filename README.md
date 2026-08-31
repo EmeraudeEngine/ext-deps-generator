@@ -592,10 +592,29 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Patch: upstream installs ONLY its optional C API shared library, so a stock build exports
   nothing at all while reporting success. `patches/tinyusdz.patch` adds the install rules for
   the static library, the header tree (layout preserved — headers include one another by
-  relative path) and a CMake package config.
-- Note: pinned to the last non-rc RELEASE tag by owner decision. Upstream's newer line is
-  `v0.9.9-rc*`; v1.0.0 has not landed. Move the pin forward first if crate coverage or
-  composition turns out to be short.
+  relative path) and a CMake package config. It also fixes two build-level details: the
+  `../../src/` include paths in `tydra/shape-to-mesh.hh`, and a `NOMINMAX` / `WIN32_LEAN_AND_MEAN`
+  guard before the `<windows.h>` that `nonstd/expected.hpp` pulls in on MSVC as soon as
+  exceptions are off (its min/max macros otherwise shred every `std::numeric_limits<T>::max()`).
+- Warning: **the pin is a release candidate**, a deliberate exception to the rule that had kept
+  this library on v0.9.4. Upstream has cut no final release since 0.9.4 — as of 2026-08-31 the
+  tag line runs `v0.9.9-rc1..rc7` then `v1.0.0-rc1..rc3` — so the choice was between an RC and a
+  reader two major versions behind. Revisit when 1.0.0 final lands.
+- Warning: **the seven composition and material fixes this repository used to carry are gone**,
+  re-verified against v1.0.0-rc3 rather than assumed. Three are fixed verbatim upstream (the
+  `material:binding`-with-no-target abort, `st` authored as `float2[]`, and the
+  `is_connection()` → `has_connections()` texture defect that made every material come back
+  flat grey). One became an API option the **engine** must now set: `allow_parent_relative_paths`
+  defaults to **false** (`composition.hh:81,104,157`), and a Kit-exported stage writes its
+  subLayers as `../Source/…`, so with the default those layers are silently rejected. The last
+  three were absorbed by a rewrite of the composition engine (`src/composition-graph.cc`, a
+  task-queue prim-index builder). **Composition is therefore unmeasured on this version**: four
+  of the seven defects used to fail silently or report SUCCESS, so it is only ever trusted on a
+  prim/mesh/texture count — see `docs/todo/remeasure-tinyusdz-composition.md`.
+- Note: `TINYUSDZ_WITH_TEXTOOLS` (new in 1.0.0, ON upstream) is turned off. It builds a second
+  static library and links it into the core for KTX2 / GPU-compressed decode inside USDZ, which
+  the engine already covers with libktx and bc7enc_rdo; leaving it on would also add a second
+  archive to the package and to every consumer's link line.
 - Warning: **compiled as C++17, not C++20**, in deviation from the build policy: tinyusdz sets
   `CMAKE_CXX_STANDARD` unconditionally inside its own branches, and the only branch yielding
   C++20 is gated on `TINYUSDZ_WITH_COROUTINE` — a feature switch, not a standard switch, so it

@@ -3,9 +3,11 @@ source_dir: repositories/tinyusdz
 languages: [c, cxx]
 
 # OpenUSD reader (USDA / USDC crate / USDZ) with no third-party dependency beyond the STL.
-# Pinned to the v0.9.4 RELEASE tag (owner decision: no release candidates), not the newer
-# v0.9.9-rc* line. If crate coverage or composition turns out to be short, moving the pin
-# forward is the first thing to try.
+#
+# ⚠️ PINNED TO v1.0.0-rc3, A RELEASE CANDIDATE — a deliberate exception to the owner rule
+# that kept this library on v0.9.4 for exactly that reason. Upstream has cut no final release
+# since 0.9.4 (2026-08-31: the tag line runs v0.9.9-rc1..rc7 then v1.0.0-rc1..rc3), so the
+# choice is between an RC and a two-major-versions-old reader. Revisit when 1.0.0 final lands.
 #
 # ⚠️ EXCEPTIONS: the engine cascade is built with -fno-exceptions. Upstream defaults this
 # option to Off on POSIX and On for MSVC, whose CMakeLists states "it looks it is hard to
@@ -51,6 +53,14 @@ cmake_options:
   # tinyusdz API directly, so it is dead surface here.
   TINYUSDZ_WITH_PXR_COMPAT_API: false
 
+  # ⚠️ NEW IN v1.0.0-rc3 and ON by default: TINYUSDZ_WITH_TEXTOOLS builds a second static
+  # library (tinyusdz_textools — vendored tir/texcomp/texpipe/envmap) and links it into the
+  # core for KTX2 / GPU-compressed texture decode inside USDZ. Turned off here for the same
+  # reason as the side formats below: the engine owns texture decoding, through libktx for
+  # KTX2 and bc7enc_rdo for runtime BC7 (see libraries/ktx.yaml). Leaving it on would also
+  # add a second archive to the package and a second entry to every consumer's link line.
+  TINYUSDZ_WITH_TEXTOOLS: false
+
   # Import/export side formats the engine already covers with its own loaders, or does not want.
   TINYUSDZ_WITH_USD_TO_GLTF: false
   TINYUSDZ_WITH_USDOBJ: false
@@ -78,59 +88,37 @@ cmake_options:
 # -fno-exceptions translation units and need the guard to travel with it.
 #
 # ─────────────────────────────────────────────────────────────────────────────────────────
-# COMPOSITION AND MATERIAL NETWORK PATCHES (2026-08-10)
+# THE COMPOSITION AND MATERIAL PATCHES ARE GONE (re-verified 2026-08-31 against v1.0.0-rc3)
 #
-# Seven upstream defects, all found while loading a real Omniverse Kit export
-# (projet-alpha.data/data-stores/USD/WorldLobby.usdz, 1.6 GB, 353 entries). Each one was
-# isolated and measured before its fix; none is speculative. Before the patch the stage
-# composed to 10 prims — five cameras, a DomeLight and empty Xforms — and reported SUCCESS.
-# After it: 2806 prims, 942 meshes, 141 materials, 348 textures, 10 000 199 triangles.
+# From 2026-08-10 to the v1.0.0-rc3 bump, patches/tinyusdz.patch also carried seven fixes for
+# upstream defects found while loading a real Omniverse Kit export (WorldLobby.usdz, 1.6 GB):
+# before them the stage composed to 10 prims and reported SUCCESS, after them to 2806 prims,
+# 942 meshes, 141 materials, 348 textures. None of the seven applies any more. What became of
+# each, checked in the new source rather than assumed:
 #
-# ⚠️ Four of the seven fail SILENTLY or report success. This is why the composition path is
-# never trusted on a "no error" — only on a prim/mesh/texture COUNT.
+#  * FIXED UPSTREAM, verbatim — the material:binding-with-no-target abort
+#    (tydra/shader-network.cc now returns false there, with a comment stating the same
+#    reasoning), the `st` primvar authored as float2[] (render-data-mesh.cc accepts
+#    texCoord2f[] and the layout-identical float2[], with the same memcpy argument), and THE
+#    texture defect: is_connection() has been replaced by has_connections() throughout
+#    render-data-material.cc (22 sites), which is what made every material come back as flat
+#    0.18 grey.
 #
-#  1. src/security-policy.hh — ValidateAndNormalizeAssetPath() rejects any path holding
-#     '..', which is legal USD for an asset path resolved against its layer's directory.
-#     A NEW function is added for composition rather than relaxing the shared one, because
-#     IsSafeUSDZAssetPath() is a genuine CONTAINMENT check and must stay strict.
+#  * NOW AN API OPTION, and therefore an ENGINE responsibility — the '..' asset path.
+#    security-policy.hh gained `ValidateAndNormalizeAssetPath(path, out, allow_parent_refs)`
+#    and composition.hh an `allow_parent_relative_paths` field. ⚠️ IT DEFAULTS TO FALSE in
+#    all three option structs (composition.hh:81,104,157). A Kit-exported stage writes its
+#    subLayers as "../Source/…", so the engine MUST set that option to true or the layers are
+#    silently rejected again. Nothing in this build can set it for the consumer.
 #
-#  2. src/composition.cc, LoadAsset() — the subLayers of a layer reached through a
-#     reference or a payload were never composed. On this asset that IS the scene: the root
-#     payloads an assembly whose body is eight subLayers carrying every mesh and material.
+#  * ABSORBED BY A REWRITE, unverified here — the three composition defects (subLayers of a
+#    referenced/payloaded layer never composed, arcs resolved in a single pass, arc prefix not
+#    re-rooted). The engine is now a task-queue prim-index builder in a new file,
+#    composition-graph.cc (PrimIndexBuilder / CompositionGraph), which structurally supersedes
+#    them: arcs are re-scanned and re-enqueued as nodes are added, and SubLayer is a task type.
+#    Structure is not measurement, though.
 #
-#  3. src/composition.cc, CompositeAllArcs() — references and payloads were resolved in ONE
-#     pass, so only the first level of arcs was ever reached. Now iterated to closure,
-#     bounded at 64 passes, on the shared arc_visited set. Measured: this asset needs 2.
-#     ⚠️ The loop condition MUST force-check. HasReferences(layer)/HasPayload(layer) default
-#     to a cached flag that a freshly composed layer does not maintain — the flag stays set
-#     and the loop never terminates.
-#
-#  4. src/composition.cc, EffectiveArcSourcePrefix() — an arc with no explicit prim path
-#     targets the asset's defaultPrim, but the callers passed the arc's EMPTY prim path as
-#     the prefix to rewrite, so nothing in the spliced sub-tree was re-rooted. Symptom:
-#     155 dangling `material:binding` and a hard "Cannot find path" from Tydra.
-#
-#  5. src/tydra/shader-network.cc — a `material:binding` with no target (DefineOnly, or
-#     `= None` which deliberately BLOCKS an inherited binding) is legal USD and was turned
-#     into a fatal error. ConvertToRenderScene() aborts on the first offender, so ONE
-#     unbound mesh discarded all 942. The sibling GetDirectCollectionMaterialBinding()
-#     already treated the same condition as "not bound".
-#
-#  6. src/tydra/render-data-mesh.cc — `st` authored as float2[] was refused; only
-#     texCoord2f[] was accepted, next to upstream's own `// TODO: allow float2?`. float2[]
-#     is what UsdPrimvarReader_float2 reads and what Kit / Blender / Substance write. The
-#     two types are the same layout and differ by a role tag. Without it: no UVs at all.
-#
-#  7. src/tydra/render-data-material.cc — THE texture defect, on four sites.
-#     is_connection() is `_paths.size() && !has_value()`, so an input authored as BOTH a
-#     fallback value and a `.connect` — the normal UsdPreviewSurface idiom, and Kit's —
-#     reported "not a connection". The UsdUVTexture was never visited and every material
-#     came back as flat 0.18 grey: the UsdPreviewSurface DEFAULT, which reads as "this
-#     asset has no textures" while all 285 of them sit in the archive. A connection wins
-#     over a fallback value; the sites now test has_connections().
-#
-# USDZ note: SetupUSDZAssetResolution() registers handlers for IMAGES ONLY (png/jpg/exr/hdr)
-# — its own TODO says so — and USDZResolveAsset() matches the archive table VERBATIM, with
-# no join against the current working path. Both are handled on the ENGINE side
-# (EmEn::Scenes::Loaders::USDLoader registers its own handlers over the archive), so they
-# are deliberately NOT patched here.
+# ⚠️ COMPOSITION IS THEREFORE UNMEASURED ON THIS VERSION. The rule that produced those fixes
+# still stands: this path is never trusted on a "no error", only on a prim/mesh/texture COUNT,
+# because four of the seven defects failed silently or reported success. Re-run the reference
+# asset before relying on it — see docs/todo/.
