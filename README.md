@@ -81,10 +81,10 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Usage: A polygon clipping and offsetting library.
 
 ## cppzmq
-[master, 3bcbd9dad2f57180aacd4b4aea292a74f0de7ef4]
+[master, 7f0530688804c2b5b6b0d985773405593fd25ca8]
 
 - URL: https://github.com/zeromq/cppzmq.git
-- Version: 4.11.0
+- Version: 4.11.0~
 - Dependencies: libzmq
 - Usage: C++ wrapper for libzmq.
 - Notes: There is no compilation here, this is just some headers for libzmq.
@@ -171,27 +171,27 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   `set()` conditional; the two standards present the same API here, so it was left alone.
 
 ## harfbuzz 
-[14.2.0, b0ffab42d473eb380ad0fcf42730e0f1868cbc97]
+[14.4.0, 36cb489cb02ce4b92099669ba9f9bea348eff93f]
 
 - URL: https://github.com/harfbuzz/harfbuzz.git
-- Version: 14.2.0
+- Version: 14.4.0
 - Dependencies: None
 - Usage: Vector font library. Requested by Freetype
  
 ## hwloc 
-[v2.13, f3dc66ab3d6a523170e0c6703b0d6550a2fc830d]
+[v2.14, 51896fab7ce4244bd49334558e01c0c2bd8dc2af]
 
 - URL: https://github.com/open-mpi/hwloc
-- Version: 2.13
+- Version: 2.14
 - Dependencies: None
 - Usage: Fetch system capabilities.
 - Notes: Linux and macOS versions are using autotools instead of cmake.
 
 ## jsoncpp
-[master, d4d072177213b117fb81d4cfda140de090616161]
+[1.9.8, 8519b8381f3c741ad1421f88237b1deda0b11412]
 
 - URL: https://github.com/open-source-parsers/jsoncpp.git
-- Version: 1.9.7~
+- Version: 1.9.8
 - Dependencies: None
 - Usage: JSON parser.
 
@@ -274,10 +274,10 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   and reverted the same day for that reason.
 
 ## libjpeg-turbo 
-[3.1.4.1, 9217719d3a58633923b096af4c1d50d304768a64]
+[3.2.0, c85e6b905bf237038faa936dab160ebfc5da0344]
 
 - URL: https://github.com/libjpeg-turbo/libjpeg-turbo.git
-- Version: 3.1.4.1
+- Version: 3.2.0
 - Dependencies: NASM compiler (optional, but slower lib)
 - Usage: Image format library.
 
@@ -298,7 +298,7 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Usage: Image format library.
 
 ## libsamplerate 
-[master, 2ccde9568cca73c7b32c97fefca2e418c16ae5e3]
+[master, 0844c208f683527c08ea8a80acc13b398aa9c8bf]
 
 - URL: https://github.com/libsndfile/libsamplerate.git
 - Version: 0.2.2~
@@ -341,10 +341,10 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Usage: Vorbis audio codec. Required by libsndfile.
 
 ## libvpx
-[v1.16.0, 1024874c5919305883187e2953de8fcb4c3d7fa6]
+[v1.17.0, 6df3ec34557879fff673706f4a1d9fbd0f3a6f0e]
 
 - URL: https://github.com/webmproject/libvpx.git
-- Version: 1.16.0
+- Version: 1.17.0
 - Dependencies: None
 - Usage: VP8/VP9 video codec library.
 - Notes: Linux and macOS only (configure script requires Cygwin/MSYS2 on Windows).
@@ -368,7 +368,7 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Warning: On Windows, zstd support has been disabled.
 
 ## libzmq (ZeroMQ) 
-[master, b946c18f676760387276cd095bbdd8c0e18c09bf]
+[master, 46493370217ac135246617fa2f6ac819d8b61bfc]
 
 - URL: https://github.com/zeromq/libzmq.git
 - Version: 4.3.6~
@@ -376,7 +376,7 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Usage: Common IPC library.
 
 ## lunasvg
-[master, 09c2bd26efa29583236c82c1cab7e7977a26eb1f]
+[master, 2a6a43a54de815dc8b7ab96a29ecac1555f610bd]
 
 - URL: https://github.com/sammycage/lunasvg
 - Version: 3.5.0~
@@ -403,10 +403,10 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   the encoder ships in the same archive and the linker prunes it. Demo and gltfpack are off.
 
 ## mpg123
-[master, b18fd7c648aad2420cd49bbb948c91d53b4164b3]
+[master, b41e9d9b4f223f8173ea8c9811dd4290a434d6fb]
 
 - URL: https://github.com/madebr/mpg123.git
-- Version: 1.33.6-dev
+- Version: 1.34.0
 - Dependencies: None
 - Usage: MP3 decoder. Required by libsndfile for MP3 read support.
 - Notes: Upstream is SourceForge SVN, this is a community git mirror with no release tags, so we pin to a master SHA. Built via the CMake port in `ports/cmake/`.
@@ -477,10 +477,10 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Notes: Only for Windows.
 
 ## reproc
-[v14.2.7, 06034a7fca1ec46eddb4997f7764db89380c5216]
+[v14.2.8, 904a0dc087674729c334eccb8bafc142aa0d1c92]
 
 - URL: https://github.com/DaanDeMeyer/reproc.git
-- Version: 14.2.7
+- Version: 14.2.8
 - Dependencies: None
 - Usage: Cross-platform process control library (C `reproc` + C++ `reproc++`). Both static libraries are built and installed.
 - Warning: **compiled as C++11 (and C99), not C++20**, in deviation from the build policy:
@@ -568,10 +568,10 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   updated with every bump.
 
 ## taglib 
-[v2.3, 1b94b93762636ebe5733180c3e825be4621e4c7f]
+[v2.3.1, 54ae7d8ac45755e286a5c574280f48d5bef93aef]
 
 - URL: https://github.com/taglib/taglib.git
-- Version: 2.3
+- Version: 2.3.1
 - Dependencies: zlib
 - Usage: Audio meta-data library.
 - Warning: **compiled as C++17, not C++20**, in deviation from the build policy: taglib does
@@ -580,10 +580,10 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   (TagLib::String, FileRef) is the same under both standards.
 
 ## tinyusdz
-[v0.9.4, dc7684519883358379964a9e6f925969d7477df3]
+[v1.0.0-rc3, 7f5b62c3d32064ae0d10eaebd40d0bdf720b485a]
 
 - URL: https://github.com/lighttransport/tinyusdz.git
-- Version: 0.9.4
+- Version: 1.0.0-rc3
 - Dependencies: None (C++ STL only)
 - Usage: OpenUSD reader (USDA / USDC crate / USDZ) for the engine's SceneLoaders. Built with
   `TINYUSDZ_CXX_EXCEPTIONS=Off` (the cascade is `-fno-exceptions`); MaterialX, audio, the C API,
