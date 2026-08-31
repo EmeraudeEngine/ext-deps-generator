@@ -42,6 +42,15 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 
 # Available libraries
 
+## bc7enc_rdo
+[master, b9438627eef73a1157e84201b6fa6eb2ffd6d9f0]
+
+- URL: https://github.com/richgel999/bc7enc_rdo.git
+- Version: master (no upstream releases)
+- Dependencies: None
+- Usage: BC7 texture block encoder/decoder. Required by engines doing GPU-side compressed texture upload.
+- Notes: Upstream targets a standalone `bc7enc` executable with RDO tooling. The patch replaces the CMakeLists with a minimal static-library build exposing only the core encoder/decoder (`bc7enc.cpp` + `bc7decomp.cpp`); the RDO optimizer and lodepng/utils helpers are not needed downstream and are excluded.
+
 ## brotli 
 [v1.2.0, 028fb5a23661f123017c060daa546b55cf4bde29]
 
@@ -49,15 +58,6 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Version: 1.2.0
 - Dependencies: None
 - Usage: Lossless compression library (Huffman LZ77). Requested by Freetype.
-
-## bc7enc_rdo
-[master, dbe416d28a5530b4e8cc45b14bf034dc6b96bbde]
-
-- URL: https://github.com/richgel999/bc7enc_rdo.git
-- Version: master (no upstream releases)
-- Dependencies: None
-- Usage: BC7 texture block encoder/decoder. Required by engines doing GPU-side compressed texture upload.
-- Notes: Upstream targets a standalone `bc7enc` executable with RDO tooling. The patch replaces the CMakeLists with a minimal static-library build exposing only the core encoder/decoder (`bc7enc.cpp` + `bc7decomp.cpp`); the RDO optimizer and lodepng/utils helpers are not needed downstream and are excluded.
 
 ## bzip2 
 [master, 1ea1ac188ad4b9cb662e3f8314673c63df95a589]
@@ -75,11 +75,20 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Dependencies: None
 - Usage: A polygon clipping and offsetting library.
 
+## cppzmq
+[master, 3bcbd9dad2f57180aacd4b4aea292a74f0de7ef4]
+
+- URL: https://github.com/zeromq/cppzmq.git
+- Version: 4.11.0
+- Dependencies: libzmq
+- Usage: C++ wrapper for libzmq.
+- Notes: There is no compilation here, this is just some headers for libzmq.
+
 ## cpu_features 
-[main, d3b2440fcfc25fe8e6d0d4a85f06d68e98312f5b]
+[main, 81d13c49649f0714dd41fb56bb246398b6584085]
 
 - URL: https://github.com/google/cpu_features.git
-- Version: 0.10.1
+- Version: 0.11.0
 - Dependencies: None
 - Usage: Fetch CPU extensions and capabilities.
 
@@ -90,6 +99,31 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Version: 0.8.9~
 - Dependencies: None
 - Usage: Common cryptographic library for C++.
+
+## draco
+[1.5.7, 8786740086a9f4d83f44aa83badfbea4dce7a1b5]
+
+- URL: https://github.com/google/draco.git
+- Version: 1.5.7 (release tag; upstream has cut no release since 2024-01)
+- Dependencies: None
+- Usage: geometry compression codec behind `KHR_draco_mesh_compression`. Same situation as
+  meshoptimizer for `EXT_meshopt_compression`: fastgltf parses the extension but decodes
+  nothing, so the accessors of a compressed primitive point at a Draco bitstream instead of
+  vertex data. Only the decoder is needed at runtime
+  (`draco::Decoder::DecodeBufferToGeometry`, then `GetAttributeByUniqueId()` keyed by the
+  attribute ids the glTF extension carries); the encoder ships in the same archive and the
+  linker prunes it.
+- Notes: built consumer-only (no tests, no Unity/Maya plugins, no JS glue, no transcoder —
+  the transcoder would drag in the vendored tinygltf and eigen and force C++17 on the whole
+  build) and compiled as C++20 per the build policy, since Draco declares no standard of its
+  own and would otherwise take the host compiler's default.
+  `DRACO_BACKWARDS_COMPATIBILITY` stays ON so pre-1.0 bitstreams still decode.
+- Warning: `DRACO_GLTF_BITSTREAM` is **not** a "build glTF support" switch — it *restricts*
+  the build to the feature subset the glTF extension standardises, narrowing what the
+  decoder accepts. It is left OFF on purpose.
+- Warning: `make install` also drops two CLI executables into `bin/` (`draco_encoder`,
+  `draco_decoder`). `draco_setup_install_target()` installs them unconditionally with no
+  option to opt out; removing them would take a patch.
 
 ## fastgltf
 [v0.9.x, 0d1b67a28c4950ea2deb796702006dcbe31e02b3]
@@ -149,59 +183,6 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Dependencies: None
 - Usage: JSON parser.
 
-## simdjson
-[v4.6.9, 0a2e33f345f49cb6e24401d5b16dbdbc9650921a]
-
-- URL: https://github.com/simdjson/simdjson.git
-- Version: 4.6.9 (release tag — the tagged commit is titled "Release candidate 4.6.9"
-  because that is upstream's wording for its release-prep commit; `simdjson_version.h` on
-  that commit says a bare `4.6.9`)
-- Dependencies: None
-- Usage: SIMD-accelerated JSON parser (DOM and On-Demand APIs), for the JSON the engine
-  reads outside glTF — configuration, manifests, descriptors. 4.x also ships a serialisation
-  side (`simdjson::builder`, `include/simdjson/builder.h`), so it overlaps jsoncpp more than
-  the name suggests; which of the two owns which use is an engine-side decision, not a build
-  one.
-- Notes: built with runtime dispatch, which is the whole point of the library — every x86
-  kernel it can compile (fallback, westmere, haswell, icelake) is in the archive and the CPU
-  is probed on first use, so **never** narrow it with `SIMDJSON_IMPLEMENTATION` or
-  `-march=native`. Compiled as C++20 to match the engine, developer mode off (that is what
-  pulls tests, benchmarks, fuzzers and cxxopts).
-- Warning: **consumers must define `SIMDJSON_THREADS_ENABLED=1`** — and this one is an ABI
-  matter, not a preference. It adds four data members to `document_stream` (the worker
-  thread, its parser, its error and the `use_thread` flag), so a consumer that omits it sees
-  a smaller class than the code it links against: a silent layout mismatch, not a link
-  error. Upstream ships the macro as a PUBLIC definition on its CMake target, which anything
-  linking the raw archive never sees. `DependenciesTest` sets it in `CMakeLists.txt`, and so
-  must the engine. The fix is the define and never `SIMDJSON_ENABLE_THREADS=OFF`: this
-  library is in the archive because it is the fast parser, and building the threads out
-  would remove the one path where it uses a core beyond the caller's — `document_stream`'s
-  background stage-1 thread over NDJSON and multi-document batches.
-- Warning: **the only installed header is the amalgamated `singleheader/simdjson.h`**
-  (7.7 MiB, 187k lines) copied to `include/simdjson.h`; upstream has no
-  `install(DIRECTORY include/)` at all. So `SIMDJSON_SINGLEHEADER` must stay ON — turning it
-  off (its help text reads "Disable singleheader generation", which invites the mistake)
-  installs the library with **no header whatsoever**. The file is checked into the
-  repository at release time, so nothing is generated and Python is not needed.
-- Warning: `CMAKE_CXX_STANDARD` is ignored here, so do not reach for it —
-  `cmake/developer-options.cmake` does a plain
-  `set(CMAKE_CXX_STANDARD ${SIMDJSON_CXX_STANDARD})`, and a normal variable shadows the
-  cache entry a `-D` sets: the command line is silently dropped. The knob is
-  `SIMDJSON_CXX_STANDARD` (cache variable, default 17), set to 20 in the YAML.
-- Warning: **the archive is built without the exception-throwing interface**
-  (`SIMDJSON_EXCEPTIONS=OFF`), because the engine that consumes it compiles without
-  exceptions — so **consumers must define `SIMDJSON_EXCEPTIONS=0`** as well. This selects an
-  API, not a detail: `simdjson_result<T>` no longer converts implicitly to `T`, and every
-  access takes the error-code form, `if (doc["k"].get_string().get(view) != simdjson::SUCCESS)`.
-  See `test_simdjson()` in `src/main.cpp` for the shape. Unlike `SIMDJSON_THREADS_ENABLED`,
-  forgetting this one fails at compile time rather than silently. Verified: a consumer built
-  with `-fno-exceptions` links and runs against the archive.
-- Warning: on MSVC, turning exceptions off also rewrites `/EHsc` into `/EHs-c-` and adds a
-  global `-D_HAS_EXCEPTIONS=0` (`cmake/exception-flags.cmake`). That is intended here — it
-  is what makes simdjson match an exception-free engine — but it makes this the only library
-  of the cascade built with a different STL configuration, so the Windows package is the
-  first place to look if a mixed-mode link ever misbehaves.
-
 ## ktx (KTX-Software / libktx)
 [v4.4.2, 4d6fc70eaf62ad0558e63e8d97eb9766118327a6]
 
@@ -241,6 +222,45 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Usage: 3D model format library.
 - Notes: This library fails to compile as static.
 
+## libigl
+[v2.6.0, 40e7900ccbd767f1f360e0eb10f0f1a6432e0993]
+
+- URL: https://github.com/libigl/libigl.git
+- Version: 2.6.0 (release tag)
+- Dependencies: Eigen 3.4.0, fetched by libigl itself at configure time (see Notes)
+- Usage: geometry-processing toolbox (mesh queries, discrete differential operators,
+  remeshing and parameterisation helpers). Header-only upstream; built here as a static
+  library so the explicit template instantiations are compiled once in this archive
+  instead of in every engine translation unit that includes a header.
+- Notes: built consumer-only, core module only, compiled as C++20 per the build policy
+  (libigl only requires a *minimum* of C++17, so it would otherwise take the host default).
+  Every optional module is off — each one
+  pulls a third-party dependency libigl downloads at configure time (embree, glfw, imgui,
+  stb, predicates, spectra, tinyxml2), and the `copyleft` (CGAL, CoMISo, TetGen) and
+  `restricted` (Matlab, MOSEK, Triangle) groups are off on licensing grounds as well.
+- Warning: the **Debug archive weighs 2.3 GiB** (22 MiB in Release, Linux/gcc 14.2): 463
+  Eigen-heavy translation units with full debug info. It is the largest single file of the
+  Debug package (tinyusdz is 947 MiB, SPIRV-Tools-opt 764 MiB) and takes the Debug `lib/`
+  directory from 3.2 to 5.5 GiB. Worth knowing before uploading the Debug zip.
+- Warning: **consumers must define `IGL_STATIC_LIBRARY`**. The static build compiles
+  `include/igl/*.cpp` into `libigl.a` and the headers only *declare* the instantiations
+  when that macro is set. Upstream propagates it as a PUBLIC definition on the `igl::core`
+  CMake target; anything linking the raw archive (as `DependenciesTest` does) must set it
+  by hand, or every include drags the implementation back in and the link ends in
+  duplicate symbols.
+- Warning: **Eigen is part of libigl's ABI** — its API *is* Eigen matrices, so the archive
+  only matches the Eigen it was compiled against, which the build installs into
+  `include/Eigen` next to it. If the engine ever links its own Eigen it MUST be the same
+  version.
+- Warning: libigl downloads Eigen during configure (`cmake/recipes/external/eigen.cmake`,
+  `FetchContent` from gitlab.com at the tag libigl declares — 3.4.0 for v2.6.0). **This is
+  the only build-time network access in the whole cascade**, and it is deliberate: the Eigen
+  a given libigl needs is not the latest Eigen (upstream is already on 5.0.x), and a local
+  submodule would be taken as-is by FetchContent with nothing verifying its revision — one
+  routine bump and libigl silently builds against an Eigen it was never tested with. Letting
+  libigl's own recipe choose keeps the two in lockstep. Tried as a submodule on 2026-08-31
+  and reverted the same day for that reason.
+
 ## libjpeg-turbo 
 [3.1.4.1, 9217719d3a58633923b096af4c1d50d304768a64]
 
@@ -264,26 +284,6 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Version: 1.6.58
 - Dependencies: zlib
 - Usage: Image format library.
-
-## libressl
-[VENDORED — release tarball, NOT a git submodule]
-
-- Source: https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-4.3.2.tar.gz
-- Version: 4.3.2 (first stable of the 4.3 branch; LibreSSL convention: x.y.0/x.y.1 are
-  development snapshots, x.y.2 is the first stable of a branch)
-- SHA256: edf01aee24c65d69e6a9efcb9d44bcda682ff9d4f3bbbd95e794e1dfa90847b5
-- Dependencies: None
-- Usage: TLS/crypto provider (libtls + libssl + libcrypto). Consumed by emeraude-base's
-  HTTPS client through `asio::ssl` (OpenSSL-compatible API). Chosen over OpenSSL because
-  LibreSSL-portable builds with CMake, whereas OpenSSL's perl `Configure` would require a
-  bespoke builder plus perl/nasm build deps in this CMake-centric generator.
-- **Notes — THE ONE VENDORED DEPENDENCY.** Unlike every other library here, LibreSSL is
-  NOT a git submodule: its full release sources are committed under `repositories/libressl/`.
-  The `libressl/portable` git repo is not self-contained (crypto/ssl/tls hold only build
-  files; the real sources are pulled from OpenBSD by `update.sh` at build time), so the
-  reproducible form is the release tarball. See "Updating LibreSSL (vendored)" above and the
-  "Vendored Sources" section in `AGENTS.md`. `check_releases.py` does NOT track it (it only
-  sees `.gitmodules`) — check for new releases manually at https://www.libressl.org/releases.html
 
 ## libsamplerate 
 [master, 2ccde9568cca73c7b32c97fefca2e418c16ae5e3]
@@ -363,15 +363,6 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Dependencies: None
 - Usage: Common IPC library.
 
-## cppzmq 
-[master, 3bcbd9dad2f57180aacd4b4aea292a74f0de7ef4]
-
-- URL: https://github.com/zeromq/cppzmq.git
-- Version: 4.11.0
-- Dependencies: libzmq
-- Usage: C++ wrapper for libzmq.
-- Notes: There is no compilation here, this is just some headers for libzmq.
-
 ## lunasvg
 [master, 09c2bd26efa29583236c82c1cab7e7977a26eb1f]
 
@@ -404,6 +395,54 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Usage: MP3 decoder. Required by libsndfile for MP3 read support.
 - Notes: Upstream is SourceForge SVN, this is a community git mirror with no release tags, so we pin to a master SHA. Built via the CMake port in `ports/cmake/`.
 
+## onnxruntime (ONNX Runtime)
+[v1.29.0, 2e2543fbe9fae542f921d47a72d21d5a4ef0b710]
+
+- URL: https://github.com/microsoft/onnxruntime.git
+- Version: 1.29.0 (release tag)
+- Dependencies: None *in the cascade* — it vendors its own (abseil, onnx, protobuf, re2,
+  flatbuffers, cpuinfo, eigen, GSL, mp11, json, date), all fetched at configure time.
+- Usage: cross-platform machine-learning inference engine (ONNX and ORT model formats),
+  CPU execution provider only.
+- Notes: the CMake project root is `cmake/`, not the repository root. Built consumer-only:
+  no unit tests (ON by default upstream), no benchmarks, no python/C#/Objective-C bindings,
+  no LTO, RTTI off (upstream's own default here, and what the build policy asks; harmless
+  either way since the boundary is the ORT C API and nothing polymorphic crosses it).
+  No execution provider beyond CPU — CUDA, TensorRT, DirectML, CoreML, QNN, XNNPACK and
+  WebGPU each need a vendor SDK at build time and would make the artifact machine-specific.
+- Warning: **shipped as a shared library — the only one in the archive**, so it must be
+  deployed next to the executable, unlike every static lib here. This follows a measurement,
+  not a preference: with `onnxruntime_BUILD_SHARED_LIB=Off` the install step lays down the
+  ten `libonnxruntime_*.a` and nothing else — abseil (50 archives), onnx, protobuf-lite,
+  flatbuffers, cpuinfo and friends are `EXCLUDE_FROM_ALL` FetchContent dependencies that no
+  install rule reaches, and re2 is never even built (a static library does not link its
+  dependencies, so nothing in `all` pulls it in) although `onnxruntime_providers` references
+  `re2::RE2`. A consumer link against the installed static set fails on thousands of
+  undefined symbols — verified by link test. The shared build links all of it inside
+  `libonnxruntime.so` (30.5 MiB; `ldd` shows only libstdc++/libm/libgcc_s/libc) and exports
+  just the ORT C API; the C++ API is a header-only wrapper over it, so no C++ ABI crosses
+  the boundary either.
+- Warning: sizes to plan for — `libonnxruntime.so` is 30.5 MiB in Release but **782 MiB in
+  Debug**, and a clean build leaves ~580 MiB of intermediates (Linux, gcc 14.2).
+- Warning: **~1 GiB is downloaded at configure time**. `cmake/deps.txt` lists every
+  dependency as a URL + SHA1 fetched by FetchContent. Pinned by hash, hence reproducible,
+  but the build needs network access — by far the largest such fetch in the cascade.
+  `deps.txt` also accepts local file paths, which is the way out if an offline build is
+  ever required.
+- Warning: the engine cascade compiles with `-fno-exceptions` while the ORT C++ header
+  throws `Ort::Exception`. Such translation units must define **`ORT_NO_EXCEPTIONS`** before
+  including it (it then abort()s on error instead of throwing). The C API returns
+  `OrtStatus*` and never throws.
+
+## openal-soft
+[master, b2c48f7718ef3fcf67921a8b6534c4914e328970]
+
+- URL: https://github.com/kcat/openal-soft.git
+- Version: 1.25.2
+- Notes: This version is stable on all platforms. Beware when updating.
+- Dependencies: None
+- Usage: Audio API.
+
 ## opus
 [v1.6.1, 22244de5a79bd1d6d623c32e72bf1954b56235be]
 
@@ -412,14 +451,14 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Dependencies: None
 - Usage: Opus audio codec. Required by libsndfile.
 
-## openal-soft 
-[master, b2c48f7718ef3fcf67921a8b6534c4914e328970]
+## pthread-win32
+[master, 334dd243487013a7faa3a9b96afa5264fcfb09ba]
 
-- URL: https://github.com/kcat/openal-soft.git
-- Version: 1.25.2
-- Notes: This version is stable on all platforms. Beware when updating.
+- URL: https://github.com/GerHobbelt/pthread-win32.git
+- Version: 4.1.0.9
 - Dependencies: None
-- Usage: Audio API.
+- Usage: Thread library.
+- Notes: Only for Windows.
 
 ## reproc
 [v14.2.7, 06034a7fca1ec46eddb4997f7764db89380c5216]
@@ -429,23 +468,84 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Dependencies: None
 - Usage: Cross-platform process control library (C `reproc` + C++ `reproc++`). Both static libraries are built and installed.
 
+## simdjson
+[v4.6.9, 0a2e33f345f49cb6e24401d5b16dbdbc9650921a]
+
+- URL: https://github.com/simdjson/simdjson.git
+- Version: 4.6.9 (release tag — the tagged commit is titled "Release candidate 4.6.9"
+  because that is upstream's wording for its release-prep commit; `simdjson_version.h` on
+  that commit says a bare `4.6.9`)
+- Dependencies: None
+- Usage: SIMD-accelerated JSON parser (DOM and On-Demand APIs), for the JSON the engine
+  reads outside glTF — configuration, manifests, descriptors. 4.x also ships a serialisation
+  side (`simdjson::builder`, `include/simdjson/builder.h`), so it overlaps jsoncpp more than
+  the name suggests; which of the two owns which use is an engine-side decision, not a build
+  one.
+- Notes: built with runtime dispatch, which is the whole point of the library — every x86
+  kernel it can compile (fallback, westmere, haswell, icelake) is in the archive and the CPU
+  is probed on first use, so **never** narrow it with `SIMDJSON_IMPLEMENTATION` or
+  `-march=native`. Compiled as C++20 to match the engine, developer mode off (that is what
+  pulls tests, benchmarks, fuzzers and cxxopts).
+- Warning: **consumers must define `SIMDJSON_THREADS_ENABLED=1`** — and this one is an ABI
+  matter, not a preference. It adds four data members to `document_stream` (the worker
+  thread, its parser, its error and the `use_thread` flag), so a consumer that omits it sees
+  a smaller class than the code it links against: a silent layout mismatch, not a link
+  error. Upstream ships the macro as a PUBLIC definition on its CMake target, which anything
+  linking the raw archive never sees. `DependenciesTest` sets it in `CMakeLists.txt`, and so
+  must the engine. The fix is the define and never `SIMDJSON_ENABLE_THREADS=OFF`: this
+  library is in the archive because it is the fast parser, and building the threads out
+  would remove the one path where it uses a core beyond the caller's — `document_stream`'s
+  background stage-1 thread over NDJSON and multi-document batches.
+- Warning: **the only installed header is the amalgamated `singleheader/simdjson.h`**
+  (7.7 MiB, 187k lines) copied to `include/simdjson.h`; upstream has no
+  `install(DIRECTORY include/)` at all. So `SIMDJSON_SINGLEHEADER` must stay ON — turning it
+  off (its help text reads "Disable singleheader generation", which invites the mistake)
+  installs the library with **no header whatsoever**. The file is checked into the
+  repository at release time, so nothing is generated and Python is not needed.
+- Warning: `CMAKE_CXX_STANDARD` is ignored here, so do not reach for it —
+  `cmake/developer-options.cmake` does a plain
+  `set(CMAKE_CXX_STANDARD ${SIMDJSON_CXX_STANDARD})`, and a normal variable shadows the
+  cache entry a `-D` sets: the command line is silently dropped. The knob is
+  `SIMDJSON_CXX_STANDARD` (cache variable, default 17), set to 20 in the YAML.
+- Warning: **the archive is built without the exception-throwing interface**
+  (`SIMDJSON_EXCEPTIONS=OFF`), because the engine that consumes it compiles without
+  exceptions — so **consumers must define `SIMDJSON_EXCEPTIONS=0`** as well. This selects an
+  API, not a detail: `simdjson_result<T>` no longer converts implicitly to `T`, and every
+  access takes the error-code form, `if (doc["k"].get_string().get(view) != simdjson::SUCCESS)`.
+  See `test_simdjson()` in `src/main.cpp` for the shape. Unlike `SIMDJSON_THREADS_ENABLED`,
+  forgetting this one fails at compile time rather than silently. Verified: a consumer built
+  with `-fno-exceptions` links and runs against the archive.
+- Warning: on MSVC, turning exceptions off also rewrites `/EHsc` into `/EHs-c-` and adds a
+  global `-D_HAS_EXCEPTIONS=0` (`cmake/exception-flags.cmake`). That is intended here — it
+  is what makes simdjson match an exception-free engine — but it makes this the only library
+  of the cascade built with a different STL configuration, so the Windows package is the
+  first place to look if a mixed-mode link ever misbehaves.
+
 ## spirv-headers
-[vulkan-sdk-1.4.350.0~, 1a22b167081842915a1c78a0b5b5a353a23284aa]
+[vulkan-sdk-1.4.357.0, 29981f65241605e08b0ede4cfeb999fe3b723c6a]
 
 - URL: https://github.com/KhronosGroup/SPIRV-Headers.git
-- Version: 1.5.5
+- Version: vulkan-sdk-1.4.357.0
 - Dependencies: None
 - Usage: SPIR-V header files (enums, opcodes). Consumed by spirv-tools.
-- Notes: Commit pinned to glslang 16.3.0's `known_good.json` to keep the SPIR-V toolchain coherent.
+- Notes: Commit pinned to glslang 16.5.0's `known_good.json` to keep the SPIR-V toolchain
+  coherent. This trio (spirv-headers, spirv-tools, glslang) is bumped **together**, always
+  from that file — never library by library.
 
 ## spirv-tools
-[v2026.2.rc2~, 2ec8457ab33d539b6f1fecc998360c0b8b05ed4f]
+[v2026.3, b707790a898e44038547df54580022fc1cf89c3d]
 
 - URL: https://github.com/KhronosGroup/SPIRV-Tools.git
-- Version: 2026.2.rc2
+- Version: 2026.3 (the commit glslang 16.5.0 asks for happens to be the v2026.3 release tag,
+  where the previous pin sat on a release candidate)
 - Dependencies: spirv-headers
 - Usage: SPIR-V parsing, validation, optimization and linking. Consumed by glslang's SPIR-V optimizer (`SPIRV-Tools-opt`).
-- Notes: Built with `SPIRV_TOOLS_BUILD_STATIC=ON` and `SPIRV-Headers_SOURCE_DIR=${INSTALL_PREFIX}` so the headers from the previously installed `spirv-headers` package are reused (no `add_subdirectory` of headers). Commit pinned to glslang 16.3.0's `known_good.json`.
+- Notes: Built with `SPIRV_TOOLS_BUILD_STATIC=ON` and `SPIRV-Headers_SOURCE_DIR=${INSTALL_PREFIX}` so the headers from the previously installed `spirv-headers` package are reused (no `add_subdirectory` of headers). Commit pinned to glslang 16.5.0's `known_good.json`.
+- Notes: `patches/spirv-tools.patch` adds the `SPIRV_TOOLS_BUILD_SHARED` gate upstream lacks
+  (it always builds `libSPIRV-Tools-shared`) and fixes an upstream typo that links mimalloc
+  into the *shared* target from inside the *static* branch. Re-verified against v2026.3: the
+  patch still applies unchanged and the typo is still there. Its `# target-commit:` guard is
+  updated with every bump.
 
 ## taglib 
 [v2.3, 1b94b93762636ebe5733180c3e825be4621e4c7f]
@@ -499,15 +599,6 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Usage: Compression library.
 - Notes: This version builds the static and the shared libraries, beware when linking. An upcoming release will fix this with cmake options.
 
-## pthread-win32
-[master, 334dd243487013a7faa3a9b96afa5264fcfb09ba]
-
-- URL: https://github.com/GerHobbelt/pthread-win32.git
-- Version: 4.1.0.9
-- Dependencies: None
-- Usage: Thread library.
-- Notes: Only for Windows.
-
 ## zstd (Zstandard)
 [release, f8745da6ff1ad1e7bab384bd1f9d742439278e99]
 
@@ -517,108 +608,25 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Usage: Compression library.
 - Notes: This version builds the static and the shared libraries, beware when linking.
 
-## libigl
-[v2.6.0, 40e7900ccbd767f1f360e0eb10f0f1a6432e0993]
+## libressl
+[VENDORED — release tarball, NOT a git submodule]
 
-- URL: https://github.com/libigl/libigl.git
-- Version: 2.6.0 (release tag)
-- Dependencies: Eigen 3.4.0, fetched by libigl itself at configure time (see Notes)
-- Usage: geometry-processing toolbox (mesh queries, discrete differential operators,
-  remeshing and parameterisation helpers). Header-only upstream; built here as a static
-  library so the explicit template instantiations are compiled once in this archive
-  instead of in every engine translation unit that includes a header.
-- Notes: built consumer-only, core module only, compiled as C++20 per the build policy
-  (libigl only requires a *minimum* of C++17, so it would otherwise take the host default).
-  Every optional module is off — each one
-  pulls a third-party dependency libigl downloads at configure time (embree, glfw, imgui,
-  stb, predicates, spectra, tinyxml2), and the `copyleft` (CGAL, CoMISo, TetGen) and
-  `restricted` (Matlab, MOSEK, Triangle) groups are off on licensing grounds as well.
-- Warning: the **Debug archive weighs 2.3 GiB** (22 MiB in Release, Linux/gcc 14.2): 463
-  Eigen-heavy translation units with full debug info. It is the largest single file of the
-  Debug package (tinyusdz is 947 MiB, SPIRV-Tools-opt 764 MiB) and takes the Debug `lib/`
-  directory from 3.2 to 5.5 GiB. Worth knowing before uploading the Debug zip.
-- Warning: **consumers must define `IGL_STATIC_LIBRARY`**. The static build compiles
-  `include/igl/*.cpp` into `libigl.a` and the headers only *declare* the instantiations
-  when that macro is set. Upstream propagates it as a PUBLIC definition on the `igl::core`
-  CMake target; anything linking the raw archive (as `DependenciesTest` does) must set it
-  by hand, or every include drags the implementation back in and the link ends in
-  duplicate symbols.
-- Warning: **Eigen is part of libigl's ABI** — its API *is* Eigen matrices, so the archive
-  only matches the Eigen it was compiled against, which the build installs into
-  `include/Eigen` next to it. If the engine ever links its own Eigen it MUST be the same
-  version.
-- Warning: libigl downloads Eigen during configure (`cmake/recipes/external/eigen.cmake`,
-  `FetchContent` from gitlab.com at the tag libigl declares — 3.4.0 for v2.6.0). **This is
-  the only build-time network access in the whole cascade**, and it is deliberate: the Eigen
-  a given libigl needs is not the latest Eigen (upstream is already on 5.0.x), and a local
-  submodule would be taken as-is by FetchContent with nothing verifying its revision — one
-  routine bump and libigl silently builds against an Eigen it was never tested with. Letting
-  libigl's own recipe choose keeps the two in lockstep. Tried as a submodule on 2026-08-31
-  and reverted the same day for that reason.
-
-## onnxruntime (ONNX Runtime)
-[v1.29.0, 2e2543fbe9fae542f921d47a72d21d5a4ef0b710]
-
-- URL: https://github.com/microsoft/onnxruntime.git
-- Version: 1.29.0 (release tag)
-- Dependencies: None *in the cascade* — it vendors its own (abseil, onnx, protobuf, re2,
-  flatbuffers, cpuinfo, eigen, GSL, mp11, json, date), all fetched at configure time.
-- Usage: cross-platform machine-learning inference engine (ONNX and ORT model formats),
-  CPU execution provider only.
-- Notes: the CMake project root is `cmake/`, not the repository root. Built consumer-only:
-  no unit tests (ON by default upstream), no benchmarks, no python/C#/Objective-C bindings,
-  no LTO, RTTI off (upstream's own default here, and what the build policy asks; harmless
-  either way since the boundary is the ORT C API and nothing polymorphic crosses it).
-  No execution provider beyond CPU — CUDA, TensorRT, DirectML, CoreML, QNN, XNNPACK and
-  WebGPU each need a vendor SDK at build time and would make the artifact machine-specific.
-- Warning: **shipped as a shared library — the only one in the archive**, so it must be
-  deployed next to the executable, unlike every static lib here. This follows a measurement,
-  not a preference: with `onnxruntime_BUILD_SHARED_LIB=Off` the install step lays down the
-  ten `libonnxruntime_*.a` and nothing else — abseil (50 archives), onnx, protobuf-lite,
-  flatbuffers, cpuinfo and friends are `EXCLUDE_FROM_ALL` FetchContent dependencies that no
-  install rule reaches, and re2 is never even built (a static library does not link its
-  dependencies, so nothing in `all` pulls it in) although `onnxruntime_providers` references
-  `re2::RE2`. A consumer link against the installed static set fails on thousands of
-  undefined symbols — verified by link test. The shared build links all of it inside
-  `libonnxruntime.so` (30.5 MiB; `ldd` shows only libstdc++/libm/libgcc_s/libc) and exports
-  just the ORT C API; the C++ API is a header-only wrapper over it, so no C++ ABI crosses
-  the boundary either.
-- Warning: sizes to plan for — `libonnxruntime.so` is 30.5 MiB in Release but **782 MiB in
-  Debug**, and a clean build leaves ~580 MiB of intermediates (Linux, gcc 14.2).
-- Warning: **~1 GiB is downloaded at configure time**. `cmake/deps.txt` lists every
-  dependency as a URL + SHA1 fetched by FetchContent. Pinned by hash, hence reproducible,
-  but the build needs network access — by far the largest such fetch in the cascade.
-  `deps.txt` also accepts local file paths, which is the way out if an offline build is
-  ever required.
-- Warning: the engine cascade compiles with `-fno-exceptions` while the ORT C++ header
-  throws `Ort::Exception`. Such translation units must define **`ORT_NO_EXCEPTIONS`** before
-  including it (it then abort()s on error instead of throwing). The C API returns
-  `OrtStatus*` and never throws.
-
-## draco
-[1.5.7, 8786740086a9f4d83f44aa83badfbea4dce7a1b5]
-
-- URL: https://github.com/google/draco.git
-- Version: 1.5.7 (release tag; upstream has cut no release since 2024-01)
+- Source: https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-4.3.2.tar.gz
+- Version: 4.3.2 (first stable of the 4.3 branch; LibreSSL convention: x.y.0/x.y.1 are
+  development snapshots, x.y.2 is the first stable of a branch)
+- SHA256: edf01aee24c65d69e6a9efcb9d44bcda682ff9d4f3bbbd95e794e1dfa90847b5
 - Dependencies: None
-- Usage: geometry compression codec behind `KHR_draco_mesh_compression`. Same situation as
-  meshoptimizer for `EXT_meshopt_compression`: fastgltf parses the extension but decodes
-  nothing, so the accessors of a compressed primitive point at a Draco bitstream instead of
-  vertex data. Only the decoder is needed at runtime
-  (`draco::Decoder::DecodeBufferToGeometry`, then `GetAttributeByUniqueId()` keyed by the
-  attribute ids the glTF extension carries); the encoder ships in the same archive and the
-  linker prunes it.
-- Notes: built consumer-only (no tests, no Unity/Maya plugins, no JS glue, no transcoder —
-  the transcoder would drag in the vendored tinygltf and eigen and force C++17 on the whole
-  build) and compiled as C++20 per the build policy, since Draco declares no standard of its
-  own and would otherwise take the host compiler's default.
-  `DRACO_BACKWARDS_COMPATIBILITY` stays ON so pre-1.0 bitstreams still decode.
-- Warning: `DRACO_GLTF_BITSTREAM` is **not** a "build glTF support" switch — it *restricts*
-  the build to the feature subset the glTF extension standardises, narrowing what the
-  decoder accepts. It is left OFF on purpose.
-- Warning: `make install` also drops two CLI executables into `bin/` (`draco_encoder`,
-  `draco_decoder`). `draco_setup_install_target()` installs them unconditionally with no
-  option to opt out; removing them would take a patch.
+- Usage: TLS/crypto provider (libtls + libssl + libcrypto). Consumed by emeraude-base's
+  HTTPS client through `asio::ssl` (OpenSSL-compatible API). Chosen over OpenSSL because
+  LibreSSL-portable builds with CMake, whereas OpenSSL's perl `Configure` would require a
+  bespoke builder plus perl/nasm build deps in this CMake-centric generator.
+- **Notes — THE ONE VENDORED DEPENDENCY.** Unlike every other library here, LibreSSL is
+  NOT a git submodule: its full release sources are committed under `repositories/libressl/`.
+  The `libressl/portable` git repo is not self-contained (crypto/ssl/tls hold only build
+  files; the real sources are pulled from OpenBSD by `update.sh` at build time), so the
+  reproducible form is the release tarball. See "Updating LibreSSL (vendored)" above and the
+  "Vendored Sources" section in `AGENTS.md`. `check_releases.py` does NOT track it (it only
+  sees `.gitmodules`) — check for new releases manually at https://www.libressl.org/releases.html
 
 # Upcoming libraries
 

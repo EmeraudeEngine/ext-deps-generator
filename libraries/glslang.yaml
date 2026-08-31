@@ -7,6 +7,12 @@ depends_on:
 
 use_install_prefix_as_find_root: true
 
+# GLSL/HLSL front end producing SPIR-V. Pinned to the 16.5.0 RELEASE tag, together with the
+# SPIRV-Tools and SPIRV-Headers commits its own `known_good.json` names for that tag — that
+# file, not the libraries' own release tags, is what decides this trio's pins (16.5.0 asks
+# for SPIRV-Tools b707790a, which happens to be the v2026.3 tag, and SPIRV-Headers 29981f65,
+# tag vulkan-sdk-1.4.357.0). Bump the three together, always from known_good.json.
+
 cmake_options:
   # Use the standalone SPIRV-Tools we built instead of looking under External/.
   ALLOW_EXTERNAL_SPIRV_TOOLS: true
