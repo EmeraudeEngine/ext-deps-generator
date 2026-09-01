@@ -1,29 +1,21 @@
 ---
 id: validate-new-libs-windows-macos
-title: Validate draco, libigl, onnxruntime and simdjson on Windows and macOS
+title: Validate draco, onnxruntime and simdjson on Windows and macOS
 status: open
 priority: high
-scope: libraries/{draco,libigl,onnxruntime,simdjson}.yaml, CMakeLists.txt
+scope: libraries/{draco,onnxruntime,simdjson}.yaml, CMakeLists.txt
 opened: 2026-08-31
 tags: [new-libraries, cross-platform, release]
 ---
 
-The four libraries added for the next archive are configured and **validated on Linux only**
+The libraries added for the next archive are configured and **validated on Linux only**
 (Debian 13, gcc 14.2, glibc 2.41): Release and Debug both build, and `DependenciesTest`
-passes 47/47. Nothing has run on Windows or macOS yet. Points to watch, per library:
+passes. Nothing has run on Windows or macOS yet. (libigl was part of this batch but has
+since been removed from the archive.) Points to watch, per library:
 
 ## draco
 Lowest risk. On MSVC the target is `draco` (`draco.lib`) instead of `draco_static`, which the
 test project already handles. Watch the CRT validation output.
-
-## libigl
-- 463 heavy Eigen translation units. Upstream adds `/bigobj` and `/MP` for MSVC itself, but
-  this is the build most likely to hit a compiler limit or a long link.
-- macOS cross-compilation (arm64 host -> x86_64) is pure C++ with no assembly, so it should be
-  uneventful; confirm `validate_architecture` passes all the same.
-- The configure step clones Eigen 3.4.0 from gitlab.com (`FetchContent`), so libigl needs
-  network access and a working `git` on every build machine — the only library of the cascade
-  in that situation.
 
 ## simdjson
 Low risk on the build itself (a single translation unit, seconds), but two things to confirm:
@@ -58,6 +50,6 @@ the install rules differ on Windows and macOS, so check there that no unexpected
 everywhere.
 
 ## Done when
-Each platform has produced its Release and Debug packages with the four libraries in them,
+Each platform has produced its Release and Debug packages with the three libraries in them,
 and `DependenciesTest` passes on each. Record whatever surprises appear in the library YAML
 headers and in README.md (they are the durable documentation), then delete this file.

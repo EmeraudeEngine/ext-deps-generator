@@ -234,45 +234,6 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Usage: 3D model format library.
 - Notes: This library fails to compile as static.
 
-## libigl
-[v2.6.0, 40e7900ccbd767f1f360e0eb10f0f1a6432e0993]
-
-- URL: https://github.com/libigl/libigl.git
-- Version: 2.6.0 (release tag)
-- Dependencies: Eigen 3.4.0, fetched by libigl itself at configure time (see Notes)
-- Usage: geometry-processing toolbox (mesh queries, discrete differential operators,
-  remeshing and parameterisation helpers). Header-only upstream; built here as a static
-  library so the explicit template instantiations are compiled once in this archive
-  instead of in every engine translation unit that includes a header.
-- Notes: built consumer-only, core module only, compiled as C++20 per the build policy
-  (libigl only requires a *minimum* of C++17, so it would otherwise take the host default).
-  Every optional module is off — each one
-  pulls a third-party dependency libigl downloads at configure time (embree, glfw, imgui,
-  stb, predicates, spectra, tinyxml2), and the `copyleft` (CGAL, CoMISo, TetGen) and
-  `restricted` (Matlab, MOSEK, Triangle) groups are off on licensing grounds as well.
-- Warning: the **Debug archive weighs 2.3 GiB** (22 MiB in Release, Linux/gcc 14.2): 463
-  Eigen-heavy translation units with full debug info. It is the largest single file of the
-  Debug package (tinyusdz is 947 MiB, SPIRV-Tools-opt 764 MiB) and takes the Debug `lib/`
-  directory from 3.2 to 5.5 GiB. Worth knowing before uploading the Debug zip.
-- Warning: **consumers must define `IGL_STATIC_LIBRARY`**. The static build compiles
-  `include/igl/*.cpp` into `libigl.a` and the headers only *declare* the instantiations
-  when that macro is set. Upstream propagates it as a PUBLIC definition on the `igl::core`
-  CMake target; anything linking the raw archive (as `DependenciesTest` does) must set it
-  by hand, or every include drags the implementation back in and the link ends in
-  duplicate symbols.
-- Warning: **Eigen is part of libigl's ABI** — its API *is* Eigen matrices, so the archive
-  only matches the Eigen it was compiled against, which the build installs into
-  `include/Eigen` next to it. If the engine ever links its own Eigen it MUST be the same
-  version.
-- Warning: libigl downloads Eigen during configure (`cmake/recipes/external/eigen.cmake`,
-  `FetchContent` from gitlab.com at the tag libigl declares — 3.4.0 for v2.6.0). **This is
-  the only build-time network access in the whole cascade**, and it is deliberate: the Eigen
-  a given libigl needs is not the latest Eigen (upstream is already on 5.0.x), and a local
-  submodule would be taken as-is by FetchContent with nothing verifying its revision — one
-  routine bump and libigl silently builds against an Eigen it was never tested with. Letting
-  libigl's own recipe choose keeps the two in lockstep. Tried as a submodule on 2026-08-31
-  and reverted the same day for that reason.
-
 ## libjpeg-turbo 
 [3.2.0, c85e6b905bf237038faa936dab160ebfc5da0344]
 

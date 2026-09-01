@@ -202,11 +202,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     LUNASVG_BUILD_STATIC  # LunaSVG static linking
     PLUTOVG_BUILD_STATIC  # PlutoVG static linking
-    # libigl: the archive holds the explicit template instantiations and the headers
-    # only DECLARE them when this is set. Without it every include drags the
-    # implementation back in and the link dies on duplicate symbols. Upstream ships it
-    # as a PUBLIC definition on igl::core; linking the raw archive means setting it here.
-    IGL_STATIC_LIBRARY
     # simdjson: this one is an ABI matter. It adds four data members to `document_stream`
     # (worker thread, its parser, its error, the use_thread flag). The archive is compiled
     # with SIMDJSON_ENABLE_THREADS=ON, so a consumer that omits the macro sees a SMALLER
@@ -320,11 +315,10 @@ if(WIN32)
     set(KTX_LIB "ktx")
     set(MESHOPT_LIB "meshoptimizer")
     set(TINYUSDZ_LIB "tinyusdz_static")
-    # draco / libigl: same basenames on every platform and in Debug. On MSVC draco
+    # draco: same basename on every platform and in Debug. On MSVC draco
     # builds the target "draco" (draco.lib); elsewhere it is "draco_static" with
     # OUTPUT_NAME draco, so the archive is libdraco.a either way.
     set(DRACO_LIB "draco")
-    set(IGL_LIB "igl")
     # onnxruntime is a SHARED library (see libraries/onnxruntime.yaml): onnxruntime.dll
     # plus its import lib here, libonnxruntime.so elsewhere. Same short name either way.
     set(ONNXRUNTIME_LIB "onnxruntime")
@@ -379,7 +373,6 @@ else()
     set(MESHOPT_LIB "meshoptimizer")
     set(TINYUSDZ_LIB "tinyusdz_static")
     set(DRACO_LIB "draco")
-    set(IGL_LIB "igl")
     set(ONNXRUNTIME_LIB "onnxruntime")
     set(SIMDJSON_LIB "simdjson")
     # lib3mf sets PREFIX "" on its target, so the archive is "lib3mf.a"
@@ -449,8 +442,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     # TLS (LibreSSL: consumers before providers — tls -> ssl -> crypto;
     # static archive basenames are identical on Unix and MSVC)
     tls ssl crypto
-    # Geometry (libigl is Eigen templates compiled once; Eigen itself is header-only)
-    Clipper2 ${IGL_LIB}
+    # Geometry
+    Clipper2
     # Networking
     ${ZMQ_LIB}
     # Process control

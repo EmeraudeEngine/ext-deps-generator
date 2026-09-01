@@ -158,13 +158,6 @@
 // clipper2
 #include "clipper2/clipper.h"
 
-// libigl (static build: IGL_STATIC_LIBRARY is set by the build system, see CMakeLists.txt)
-#include "igl/edges.h"
-#include "igl/per_vertex_normals.h"
-
-// Eigen — installed by the libigl build, and the type system of its whole API
-#include "Eigen/Core"
-
 // ============================================================================
 // Networking libraries
 // ============================================================================
@@ -546,39 +539,6 @@ static bool test_clipper2()
     subject.push_back(Clipper2Lib::MakePath({0, 0, 100, 0, 100, 100, 0, 100}));
     double area = Clipper2Lib::Area(subject);
     std::cout << "  clipper2: OK (test area: " << area << ")\n";
-    return true;
-}
-
-static bool test_libigl()
-{
-    // One unit quad, two triangles: enough to exercise a compiled instantiation
-    // (per_vertex_normals) and a purely combinatorial one (edges).
-    Eigen::MatrixXd V(4, 3);
-    V << 0.0, 0.0, 0.0,
-         1.0, 0.0, 0.0,
-         1.0, 1.0, 0.0,
-         0.0, 1.0, 0.0;
-    Eigen::MatrixXi F(2, 3);
-    F << 0, 1, 2,
-         0, 2, 3;
-
-    Eigen::MatrixXd N;
-    igl::per_vertex_normals(V, F, N);
-    if (N.rows() != V.rows())
-        return false;
-
-    Eigen::MatrixXi E;
-    igl::edges(F, E);
-    if (E.rows() != 5)  // 4 boundary edges + 1 diagonal
-        return false;
-
-    // ⚠️ Read the triple as WORLD.MAJOR.MINOR, not as the release number: Eigen kept
-    // EIGEN_WORLD_VERSION at 3 when it moved to semver, so a future Eigen 5.0.x would
-    // print itself here as "3.5.0". Today this is Eigen 3.4.0, the version libigl v2.6.0
-    // declares and repositories/eigen is pinned to.
-    std::cout << "  libigl: OK (Eigen " << EIGEN_WORLD_VERSION << "." << EIGEN_MAJOR_VERSION
-              << "." << EIGEN_MINOR_VERSION << ", " << N.rows() << " vertex normals, "
-              << E.rows() << " edges)\n";
     return true;
 }
 
@@ -992,7 +952,6 @@ int main(int /*argc*/, char* /*argv*/[])
 
     std::cout << "\n--- Geometry Libraries ---\n";
     run_test("clipper2", test_clipper2);
-    run_test("libigl", test_libigl);
 
     std::cout << "\n--- Networking Libraries ---\n";
     run_test("libzmq", test_libzmq);

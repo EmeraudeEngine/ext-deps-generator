@@ -127,9 +127,6 @@
 [submodule "repositories/ktx"]
 	path = repositories/ktx
 	url = https://github.com/KhronosGroup/KTX-Software.git
-[submodule "repositories/libigl"]
-	path = repositories/libigl
-	url = https://github.com/libigl/libigl.git
 [submodule "repositories/onnxruntime"]
 	path = repositories/onnxruntime
 	url = https://github.com/microsoft/onnxruntime.git

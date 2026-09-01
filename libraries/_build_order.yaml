@@ -48,9 +48,6 @@ order:
   # Geometry
   - clipper2
 
-  # Geometry processing (Eigen-based toolbox; fetches its own Eigen at configure time)
-  - libigl
-
   # Windows-only
   - pthread-win32
 
