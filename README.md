@@ -410,6 +410,18 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   throws `Ort::Exception`. Such translation units must define **`ORT_NO_EXCEPTIONS`** before
   including it (it then abort()s on error instead of throwing). The C API returns
   `OrtStatus*` and never throws.
+- Warning: `patches/onnxruntime.patch` — **the AVX-NE-CONVERT kernel is dropped when the
+  assembler predates binutils 2.40**. `onnxruntime/core/mlas/lib/x86_64/cvtfp16Avx.S` is
+  written with the `vcvtneeph2ps` / `vcvtneoph2ps` encodings, and upstream gates it on the
+  *compiler* version (`CMAKE_CXX_COMPILER_VERSION >= 13.1`) although turning those mnemonics
+  into bytes is the *assembler*'s job. A recent GCC on an old gas — gcc-14 on Ubuntu 22.04,
+  which ships binutils 2.38 — therefore fails with `no such instruction`. The patch probes
+  the assembler instead; when it cannot encode them the kernel is left out and
+  `MlasCastF16ToF32KernelAvx` (still referenced by `platform.cpp`, whose `#if` only tests
+  `__GNUC__`) is defined as a tail call to the AVX2/F16C kernel. Consequence: built on such a
+  host, the artifact loses one fp16→fp32 conversion kernel on CPUs that advertise
+  AVX_NE_CONVERT (Meteor Lake / Sierra Forest and later) and is otherwise identical; on
+  binutils >= 2.40 the probe succeeds and the kernel is built as upstream intends.
 
 ## openal-soft
 [master, b2c48f7718ef3fcf67921a8b6534c4914e328970]

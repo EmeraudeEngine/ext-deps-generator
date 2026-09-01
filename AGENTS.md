@@ -286,6 +286,9 @@ Some libraries need modifications to build correctly (e.g., forced C++ standard,
 - `patches/libvpx.patch` (two hunks):
   1. Replaces `ar` with `libtool -static` on macOS. macOS `ar` creates fat Mach-O archives from cross-arch objects that it cannot update, breaking cross-compilation from ARM to x86_64.
   2. Strips `WholeProgramOptimization` (`/GL`) from the generated Release `.vcxproj` (`gen_msvs_vcxproj.sh`). LTCG objects hide their CRT directives from `dumpbin` (defeating CRT validation) and tie the static lib to the exact producing MSVC toolset — unacceptable for a redistributable archive.
+- `patches/onnxruntime.patch`: makes MLAS's AVX-NE-CONVERT kernel conditional on the **assembler** instead of the compiler. Upstream gates `x86_64/cvtfp16Avx.S` on `CMAKE_CXX_COMPILER_VERSION >= 13.1`, but `vcvtneeph2ps` / `vcvtneoph2ps` are only known to GNU as from binutils 2.40 — gcc-14 on Ubuntu 22.04 (binutils 2.38) fails with `no such instruction`. See `libraries/onnxruntime.yaml` for the fallback and its consequence.
+
+⚠️ **A patch cannot reach outside the library's `source_dir`.** `PatchManager` runs `git apply` with `--directory=<source_dir relative to the submodule root>`, so for a library whose CMake root is a subdirectory (`onnxruntime` → `cmake/`, clipper2 → `CPP/`) the patch paths are relative to *that* subdirectory and a `../` escape is rejected outright (`invalid path`). A fix that must touch sources elsewhere in the submodule has to be expressed from inside the buildable subdirectory — this is why the onnxruntime patch synthesises a fallback translation unit from CMake rather than editing the `#if` in `core/mlas/lib/platform.cpp`.
 
 **Creating a patch**:
 ```bash

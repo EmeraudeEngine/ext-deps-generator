@@ -51,6 +51,20 @@ languages: [c, cxx]
 # error instead of throwing (onnxruntime_cxx_api.h:41). The C API itself returns OrtStatus*
 # and never throws.
 #
+# ⚠️ PATCHED — `patches/onnxruntime.patch` makes the AVX-NE-CONVERT kernel conditional on
+# the ASSEMBLER, not on the compiler. `onnxruntime/core/mlas/lib/x86_64/cvtfp16Avx.S` uses
+# the `vcvtneeph2ps` / `vcvtneoph2ps` encodings, which GNU as only learned in binutils 2.40,
+# yet upstream gates the file on `CMAKE_CXX_COMPILER_VERSION >= 13.1`. A recent GCC driving
+# an older gas — gcc-14 on Ubuntu 22.04, which is stuck on binutils 2.38, i.e. the release
+# build host — dies with `Error: no such instruction: vcvtneeph2ps`. The patch probes the
+# assembler with a `check_cxx_source_compiles` inline-asm snippet; when it fails, the kernel
+# is left out and `MlasCastF16ToF32KernelAvx` — still referenced by `platform.cpp`, whose
+# `#if` only tests `__GNUC__`, so the link would break on an undefined symbol — is defined
+# as a tail call to the AVX2/F16C kernel (any CPU advertising AVX_NE_CONVERT has F16C, so
+# the dispatch stays correct). Deviation to know about: built on binutils < 2.40, the
+# artifact loses that one fp16→fp32 conversion kernel on Meteor Lake / Sierra Forest and
+# later; on binutils >= 2.40 the probe succeeds and the build is upstream's, unchanged.
+#
 # Build cost for reference, measured on a 28-core Linux host, Release, from a clean tree:
 # ~5 min 40 s wall clock for 1200 ninja targets, plus the dependency download; ~580 MiB of
 # build intermediates, of which ~390 MiB is the fetched dependency sources. Expect a very
