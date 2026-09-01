@@ -391,12 +391,18 @@ endif()
 # libktx's static build also installs the astc-encoder archive it vendors, whose
 # basename encodes the SIMD ISA it was compiled for (astcenc-avx2-static on x86_64,
 # astcenc-neon-static on arm64) — locate it by glob instead of hardcoding the ISA.
-if(WIN32)
+# EXCEPT on Apple: there upstream merges the astcenc objects INTO libktx.a itself
+# and its install() is gated `NOT APPLE` (KTX-Software CMakeLists.txt:1340), so no
+# separate archive exists and none is needed — libktx.a is self-contained
+# (verified: nm shows every astcenc_* reference resolved within the archive).
+if(APPLE)
+    set(ASTCENC_LIB "")
+elseif(WIN32)
     file(GLOB ASTCENC_LIB "${LIBS_ROOT}/lib/astcenc-*-static.lib")
 else()
     file(GLOB ASTCENC_LIB "${LIBS_ROOT}/lib/libastcenc-*-static.a")
 endif()
-if(NOT ASTCENC_LIB)
+if(NOT APPLE AND NOT ASTCENC_LIB)
     message(FATAL_ERROR
         "astc-encoder archive not found in ${LIBS_ROOT}/lib "
         "(installed alongside libktx; see libraries/ktx.yaml)")

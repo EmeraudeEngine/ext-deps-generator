@@ -40,8 +40,12 @@ languages: [c, cxx]
 # Extracting it would take a patch; not worth it for a static archive whose unused
 # writer objects the linker drops anyway.
 #
-# ⚠️ A static build also installs the astc-encoder archive (CMakeLists.txt:1340), so
-# expect a second .a in the output directory alongside libktx.a.
+# ⚠️ A static build also installs the astc-encoder archive on Windows/Linux — the
+# install is gated `if(NOT BUILD_SHARED_LIBS AND NOT APPLE)` (CMakeLists.txt:1340) —
+# so expect a second lib (astcenc-<isa>-static) alongside libktx there. On APPLE no
+# separate archive is installed and none is missing: upstream merges the astcenc
+# objects into libktx.a itself (ar -t shows astcenc_*.cpp.o; nm resolves every
+# astcenc_* reference within the archive). DependenciesTest links accordingly.
 
 cmake_options:
   # Project build policy (AGENTS.md § Build policy): pin the standard, otherwise the build

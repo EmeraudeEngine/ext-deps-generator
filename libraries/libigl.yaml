@@ -102,3 +102,15 @@ platforms:
   windows:
     # See the /DWIN32 warning in the header.
     extra_cxx_flags: "/DWIN32"
+  macos:
+    # WORKAROUND for an Apple clang 21.0.0 (Xcode 26.x, clang-2100.1.1.101) crash:
+    # compiling Eigen-heavy TUs for x86_64 at -O1 or higher segfaults the compiler in
+    # LLVM's VectorCombine pass (null deref in VectorCombine::foldSelectShuffle —
+    # backtrace read from the .ips crash report; first seen on include/igl/unproject.cpp,
+    # 2026-09-01). Neither -fno-vectorize nor -fno-slp-vectorize helps because the pass
+    # runs on the vector IR that Eigen's SSE intrinsics produce directly; disabling the
+    # single buggy pass does, and keeps -O3 and Eigen vectorization intact. The arm64
+    # target does not crash, but extra_cxx_flags is per-platform, and losing one peephole
+    # pass there is cheaper than teaching the builder per-arch flags. Remove when a fixed
+    # Xcode ships (re-test: compile igl/unproject.cpp -arch x86_64 -O3 without the flag).
+    extra_cxx_flags: "-mllvm -disable-vector-combine"
