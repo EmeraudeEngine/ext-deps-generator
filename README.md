@@ -473,6 +473,15 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   `libonnxruntime.so` (30.5 MiB; `ldd` shows only libstdc++/libm/libgcc_s/libc) and exports
   just the ORT C API; the C++ API is a header-only wrapper over it, so no C++ ABI crosses
   the boundary either.
+- Warning: **on Windows the DLL must sit next to the executable, or Windows' own wins.**
+  Windows 11 ships an inbox `C:\Windows\System32\onnxruntime.dll` (Windows ML, ORT 1.17.x)
+  and our import lib records the plain name `onnxruntime.dll`, so the loader picks the system
+  one whenever the .exe directory has none. `GetApi(ORT_API_VERSION)` then returns nullptr —
+  a single stderr line, *"The requested API version [29] is not available, only API versions
+  [1, 17] are supported in this build"* — and the header dereferences it: access violation
+  `0xC0000005` at the first `Ort::Env`, looking for all the world like a broken build.
+  `DependenciesTest` copies the DLL as a POST_BUILD step; a consumer must do the same. On
+  Linux/macOS the equivalent is an RPATH pointing at `output/<config>/lib`.
 - Warning: sizes to plan for — `libonnxruntime.so` is 30.5 MiB in Release but **782 MiB in
   Debug**, and a clean build leaves ~580 MiB of intermediates (Linux, gcc 14.2).
 - Warning: **~1 GiB is downloaded at configure time**. `cmake/deps.txt` lists every

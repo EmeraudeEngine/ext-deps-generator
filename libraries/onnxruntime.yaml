@@ -38,6 +38,15 @@ languages: [c, cxx]
 # static lib in the cascade, this one still exists at runtime, and it is the first artifact
 # of the archive for which that is true.
 #
+# ⚠️ ON WINDOWS, FORGETTING THAT DEPLOYMENT IS NOT A "DLL NOT FOUND" ERROR — IT IS A CRASH.
+# Windows 11 carries an inbox `C:\Windows\System32\onnxruntime.dll` (Windows ML, ORT 1.17.x)
+# and our import lib records the plain name, so the loader silently binds to the system copy
+# when the .exe directory has none. `OrtGetApiBase()->GetApi(ORT_API_VERSION)` then returns
+# nullptr — one stderr line, "The requested API version [29] is not available, only API
+# versions [1, 17] are supported in this build" — and `Ort::GetApi()` dereferences it:
+# access violation 0xC0000005 at the first `Ort::Env`. Observed 2026-09-10 on
+# DependenciesTest; `CMakeLists.txt` now copies the DLL as a POST_BUILD step.
+#
 # ⚠️ ~1 GiB IS DOWNLOADED AT CONFIGURE TIME. `cmake/deps.txt` lists every dependency as a
 # URL + SHA1 that FetchContent fetches during configure (abseil, protobuf, onnx,
 # flatbuffers, re2, cpuinfo, eigen, GSL, mp11, json, safeint, date...). Pinned by hash, so

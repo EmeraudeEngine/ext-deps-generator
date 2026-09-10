@@ -560,6 +560,45 @@ else()
 endif()
 
 ########################################################################
+# Runtime deployment of the one shared library (onnxruntime)
+########################################################################
+
+# Every other artifact under output/<config>/lib is a static archive; onnxruntime is a
+# shared library (see libraries/onnxruntime.yaml) and must be found by the *loader* at
+# run time, not just by the linker. On Windows this is not a convenience — it is
+# mandatory: Windows 11 ships an INBOX C:\Windows\System32\onnxruntime.dll (the Windows
+# ML runtime, ORT 1.17.x). With no DLL beside the .exe the loader resolves the import to
+# that one, `OrtGetApiBase()->GetApi(ORT_API_VERSION)` returns nullptr — it prints
+# "The requested API version [29] is not available, only API versions [1, 17] are
+# supported in this build" — and `Ort::GetApi()` dereferences it: access violation
+# (0xC0000005) on the first `Ort::Env`, with no other symptom. Copying our DLL next to
+# the executable removes the ambiguity (the .exe directory is searched first).
+if(WIN32)
+    if(NOT EXISTS "${LIBS_ROOT}/bin/onnxruntime.dll")
+        message(FATAL_ERROR
+            "onnxruntime.dll not found in ${LIBS_ROOT}/bin\n"
+            "onnxruntime is the one shared library of the cascade; rebuild it with:\n"
+            "  python build.py --library onnxruntime --runtime-lib ${RUNTIME_LIB} "
+            "--build-type ${CMAKE_BUILD_TYPE}")
+    endif()
+    set(ORT_RUNTIME_DLLS "${LIBS_ROOT}/bin/onnxruntime.dll")
+    # Present in every build so far, but it is a provider-loading shim, not the core:
+    # copy it only if the install produced it.
+    if(EXISTS "${LIBS_ROOT}/bin/onnxruntime_providers_shared.dll")
+        list(APPEND ORT_RUNTIME_DLLS "${LIBS_ROOT}/bin/onnxruntime_providers_shared.dll")
+    endif()
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${ORT_RUNTIME_DLLS} "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+        COMMAND_EXPAND_LISTS
+        COMMENT "Deploying onnxruntime DLL(s) next to ${PROJECT_NAME}")
+else()
+    # Same requirement, different mechanism: bake the cascade's lib dir into the RPATH so
+    # libonnxruntime.so / .dylib is found without LD_LIBRARY_PATH / DYLD_LIBRARY_PATH.
+    set_target_properties(${PROJECT_NAME} PROPERTIES BUILD_RPATH "${LIBS_ROOT}/lib")
+endif()
+
+########################################################################
 # Summary
 ########################################################################
 

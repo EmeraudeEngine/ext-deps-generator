@@ -283,6 +283,20 @@ the Windows CRT validation only sees the import lib (an import library carries n
 directives, so it reports SKIP — the DLL's own CRT comes from `CMAKE_MSVC_RUNTIME_LIBRARY`,
 which the builder passes globally).
 
+⚠️ **Windows ships its own `onnxruntime.dll` and it wins by default.** Windows 11 has an
+inbox `C:\Windows\System32\onnxruntime.dll` (the Windows ML runtime, ORT **1.17.x**). Our
+import lib records the plain name `onnxruntime.dll`, so an executable with no DLL beside it
+resolves to the system one: `OrtGetApiBase()->GetApi(ORT_API_VERSION)` then returns
+**nullptr** — the only warning is one line on stderr, *"The requested API version [29] is
+not available, only API versions [1, 17] are supported in this build"* — and `Ort::GetApi()`
+dereferences it, so the process dies with an access violation (`0xC0000005`) on the first
+`Ort::Env`. It reads like a bad build of whatever library the test was on; it is a
+deployment problem. `CMakeLists.txt` therefore copies `${LIBS_ROOT}/bin/onnxruntime.dll`
+(and `onnxruntime_providers_shared.dll`) next to `DependenciesTest.exe` as a POST_BUILD
+step; the same copy is the consumer's job in the engine. Off Windows the equivalent is an
+RPATH — the test sets `BUILD_RPATH` to `${LIBS_ROOT}/lib` rather than relying on
+`LD_LIBRARY_PATH` / `DYLD_LIBRARY_PATH`.
+
 ### Static oneTBB — one module per process
 
 `onetbb` is the second archive-wide *deployment* rule, next to onnxruntime's shared library.
