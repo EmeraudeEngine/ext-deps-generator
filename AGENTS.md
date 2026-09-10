@@ -125,6 +125,18 @@ Four libraries declare `languages: [c, cxx]` but compile no C++ translation unit
 option dormant, which costs nothing and starts working the day upstream adds C++ sources.
 `pthread-win32` carries it untested, being Windows-only.
 
+**Added after that audit (2026-09-10, for v016): `manifold` and `onetbb`.** Both pin C++20
+and both verified from the generated `build.ninja`. manifold needed
+`patches/manifold.patch` for it — an unguarded `set(CMAKE_CXX_STANDARD 17)`, the same trap
+as glslang and taglib, patched here rather than accepted because the library is new and its
+headers are consumed straight away. oneTBB honours the command line unaided (it guards its
+own default). Neither upstream offers an exception or RTTI switch, and neither needs one:
+manifold reports errors through a status enum and only throws behind
+`MANIFOLD_ASSERT && MANIFOLD_DEBUG` (both off), while oneTBB derives `TBB_USE_EXCEPTIONS`
+from `__EXCEPTIONS` / `_CPPUNWIND` so its throwing paths compile out of the headers on their
+own under `-fno-exceptions`. Both carry a *deployment* consequence instead — see
+§ Static oneTBB below.
+
 Only three upstreams offer an exception switch (`glslang`, `SPIRV-Tools` on MSVC,
 `tinyusdz`) and two an RTTI switch (`glslang`, `SPIRV-Tools`); all are set the policy way.
 Note what that does *not* buy on Windows: the builder passes `/EHsc` in `CMAKE_CXX_FLAGS` for
@@ -271,6 +283,29 @@ the Windows CRT validation only sees the import lib (an import library carries n
 directives, so it reports SKIP — the DLL's own CRT comes from `CMAKE_MSVC_RUNTIME_LIBRARY`,
 which the builder passes globally).
 
+### Static oneTBB — one module per process
+
+`onetbb` is the second archive-wide *deployment* rule, next to onnxruntime's shared library.
+It is built static like everything else, which oneTBB's own CMakeLists warns against at
+configure time ("This is highly discouraged and such configuration is not supported"). The
+warning is expected and the build is correct — but oneTBB keeps **process-global** state (the
+task arena, the worker pool, `global_control`), and a static archive gives one copy of that
+state per linked binary instead of one per process.
+
+So: **exactly one module in a process may link this archive** — the executable, or one shared
+object, not both. Two modules each with their own copy get two independent thread pools, each
+sized for the whole machine (oversubscription), and a `global_control` set in one is invisible
+to the other. Nothing in the build can detect this; it is a rule for the consumer.
+
+Two secondary consequences of the static form, both harmless here: the dynamic-dispatch
+extras are compiled out (`__TBB_DYNAMIC_LOAD_ENABLED=0`), so `cache_aligned_allocator` falls
+back to the platform allocator and NUMA/hybrid-CPU binding (tbbbind) is gone — upstream
+disables that target itself for static builds; and the archive basename carries two
+decorations no other library here has, `libtbb.a` / `libtbb_debug.a` on Unix and
+`tbb12.lib` / `tbb12_debug.lib` on Windows. Full account in `libraries/onetbb.yaml`.
+
+Today its only consumer in the cascade is `manifold` (`MANIFOLD_PAR`).
+
 ### Patch System
 Some libraries need modifications to build correctly (e.g., forced C++ standard, macOS cross-compilation fixes). Instead of forking, use the patch system.
 
@@ -282,7 +317,7 @@ Some libraries need modifications to build correctly (e.g., forced C++ standard,
 4. Submodules stay clean (patches are applied at build time)
 
 **Examples**:
-- `patches/jsoncpp.patch`: allows overriding `CMAKE_CXX_STANDARD` (jsoncpp forces C++11, but headers expose `std::string_view` requiring C++17+).
+- `patches/manifold.patch`: wraps upstream's unguarded `set(CMAKE_CXX_STANDARD 17)` in `if(NOT CMAKE_CXX_STANDARD)`, so `-DCMAKE_CXX_STANDARD=20` stops being silently ignored. The canonical shape of this fix — three lines, no behaviour change when nothing is passed.
 - `patches/libvpx.patch` (two hunks):
   1. Replaces `ar` with `libtool -static` on macOS. macOS `ar` creates fat Mach-O archives from cross-arch objects that it cannot update, breaking cross-compilation from ARM to x86_64.
   2. Strips `WholeProgramOptimization` (`/GL`) from the generated Release `.vcxproj` (`gen_msvs_vcxproj.sh`). LTCG objects hide their CRT directives from `dumpbin` (defeating CRT validation) and tie the static lib to the exact producing MSVC toolset — unacceptable for a redistributable archive.

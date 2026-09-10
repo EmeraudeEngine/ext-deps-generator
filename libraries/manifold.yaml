@@ -1,0 +1,138 @@
+name: manifold
+source_dir: repositories/manifold
+languages: [cxx]
+depends_on: [clipper2, onetbb]
+
+# Manifold — robust boolean/CSG operations on watertight triangle meshes (union,
+# difference, intersection, minkowski, offsetting, SDF meshing), plus the 2D
+# `CrossSection` type on top of Clipper2.
+# Pinned to the v3.5.3 RELEASE tag (owner rule: no release candidates).
+#
+# Both of its optional dependencies are ENABLED, and both are cascade libraries rather
+# than vendored copies:
+#   * **Clipper2** (`MANIFOLD_CROSS_SECTION`, backend `clipper2`) — already in the
+#     archive for its own sake; manifold's `CrossSection` is a thin layer over it.
+#   * **oneTBB** (`MANIFOLD_PAR`) — added to the archive solely for this
+#     (see libraries/onetbb.yaml). Without it manifold runs every loop serially:
+#     the boolean core is written against a `parallel_for`-shaped API and falls back to
+#     a sequential implementation, so `MANIFOLD_PAR=OFF` is correct-but-slow, not
+#     broken. Read libraries/onetbb.yaml before shipping this: a static TBB is a
+#     configuration upstream explicitly discourages, and it puts ONE hard rule on the
+#     engine — only one module per process may link the archive.
+#
+# ⚠️ `MANIFOLD_DOWNLOADS: false` IS THE LOAD-BEARING OPTION HERE. Manifold's
+# `cmake/manifoldDeps.cmake` reaches for FetchContent (GitHub, at configure time) for
+# every dependency it fails to find, INCLUDING TBB and Clipper2 — and it would then
+# quietly build and link its own copies: a second Clipper2 next to the cascade's, and a
+# TBB pinned to whatever tag upstream wrote into that file (`v2022.3.0` today). Turning
+# downloads off converts every such miss into a configure-time FATAL_ERROR
+# ("<pkg> not found, and dependency downloading disabled"), which is what we want:
+# if `find_package(TBB)` or `find_package(Clipper2)` stops resolving from
+# `output/<config>` the build must stop, not silently produce a different archive.
+# `MANIFOLD_USE_BUILTIN_TBB` / `MANIFOLD_USE_BUILTIN_CLIPPER2` are the same trap spelled
+# differently and are forced off below.
+#
+# How the two get found: `depends_on` makes the builder pass
+# `-DCMAKE_PREFIX_PATH=output/<config>` (builder/cmake_builder.py), where the previous
+# steps installed `lib/cmake/TBB/TBBConfig.cmake` and
+# `lib/cmake/clipper2/Clipper2Config.cmake`. This also means manifold MUST be built
+# after both — see libraries/_build_order.yaml.
+#
+# ⚠️ PATCHED FOR THE C++ STANDARD (patches/manifold.patch). Upstream does an unguarded
+# `set(CMAKE_CXX_STANDARD 17)` at the top of its CMakeLists, which shadows the cache
+# entry a `-D` sets and silently ignores the command line — the classic trap of
+# AGENTS.md § Build policy. The patch wraps it in `if(NOT CMAKE_CXX_STANDARD)`, exactly
+# the guard oneTBB already has, so the archive compiles at C++20 like the rest of the
+# cascade. `target_compile_features(manifold PUBLIC cxx_std_17)` stays as upstream wrote
+# it: it is a floor, not a ceiling, and consuming at C++20 satisfies it. Re-verify after
+# a version bump with:
+#   grep -o '\-std=[a-z+0-9]*' builds/<config>/manifold/build.ninja | sort -u
+#
+# ℹ️ EXCEPTIONS (AGENTS.md § Build policy, point 3): manifold has no exception switch
+# and does not need one. Its error reporting is a status enum — a failed operation
+# returns an invalid `Manifold` whose `Status()` is a `Manifold::Error` — and the only
+# `throw` in the public headers sits in `optional_assert.h` behind
+# `MANIFOLD_ASSERT && MANIFOLD_DEBUG`, both of which are OFF here. So nothing throws into
+# engine code, and the `userErr` / `topologyErr` / `geometryErr` exception types do not
+# even exist in this build's headers.
+#
+# ⚠️ CONSUMER-SIDE MACROS: `MANIFOLD_DEBUG`, `MANIFOLD_ASSERT`, `MANIFOLD_TIMING`,
+# `MANIFOLD_CROSS_SECTION`, `MANIFOLD_NO_IOSTREAM` and `MANIFOLD_PAR` are all PUBLIC
+# compile definitions on upstream's CMake target, which anything linking the raw archive
+# never sees. Unlike simdjson's, none of them has to be replayed by the consumer:
+#   * `MANIFOLD_PAR` and `MANIFOLD_CROSS_SECTION` appear in no installed header —
+#     they only steer which sources are compiled and which headers are installed
+#     (`cross_section.h` is installed only with the latter).
+#   * `MANIFOLD_DEBUG` does appear in the headers (`common.h`, `manifold.h`,
+#     `vec_view.h`, `linalg.h`) but only guards *additive inline* helpers — `Dump()`,
+#     `Diff()`, `ToString()`, `operator<<` — plus the exception types above. No data
+#     member, no layout change, so a mismatch is not an ABI hazard in either direction.
+#     Defining it consumer-side while the archive was built without it is nevertheless
+#     pointless: the assertions it is meant to enable live in the archive's own
+#     translation units, which were compiled without it.
+#   * `MANIFOLD_NO_IOSTREAM` is the one to leave alone: it REMOVES public API
+#     (`Manifold::ReadOBJ` / `WriteOBJ`, `MeshGL` stream helpers). Defining it on the
+#     consumer side against an archive built without it would hide declarations of
+#     symbols that are present — harmless — while doing it the other way round
+#     (archive stripped, consumer not) is an undefined-symbol link error. It stays OFF
+#     on both sides.
+#
+# ℹ️ Artifact names are boring, for once: `libmanifold.a` / `manifold.lib`, with no
+# version and no debug postfix on any platform. `exportlib()` does set VERSION /
+# SOVERSION on the target, but CMake ignores both for a static library.
+
+cmake_options:
+  BUILD_SHARED_LIBS: false        # upstream defaults this to ON
+  CMAKE_POSITION_INDEPENDENT_CODE: true   # forced ON upstream too; kept explicit
+
+  # Project build policy (AGENTS.md § Build policy). Only works because of
+  # patches/manifold.patch — see the warning above.
+  CMAKE_CXX_STANDARD: 20
+  CMAKE_CXX_STANDARD_REQUIRED: true
+
+  # ⚠️ Never turn this on: it is what keeps FetchContent out of the build. See above.
+  MANIFOLD_DOWNLOADS: false
+  MANIFOLD_USE_BUILTIN_TBB: false
+  MANIFOLD_USE_BUILTIN_CLIPPER2: false
+  MANIFOLD_USE_BUILTIN_NANOBIND: false
+
+  # The two optional dependencies, both wired to the cascade's own copies.
+  MANIFOLD_PAR: true
+  MANIFOLD_CROSS_SECTION: true
+  MANIFOLD_CROSS_SECTION_BACKEND: clipper2   # the alternative, `boolean2`, is upstream-experimental
+
+  # Debug tracing/timing and assertions: off. Both print to std::cout, and
+  # MANIFOLD_DEBUG is also what switches error reporting from the status enum to
+  # exceptions (see the note above). Kept off in the Debug package too — the option
+  # is about manifold's own diagnostics, not about the build type.
+  MANIFOLD_DEBUG: false
+  MANIFOLD_ASSERT: false
+  MANIFOLD_TIMING: false
+
+  # Warnings-as-errors on an archive built on someone else's toolchain: no.
+  MANIFOLD_STRICT: false
+
+  # Keeps the iostream/filesystem parts of the public API (ReadOBJ / WriteOBJ). See the
+  # consumer-macro note above: this one must match between archive and consumer.
+  MANIFOLD_NO_IOSTREAM: false
+
+  # Consumer only. MANIFOLD_TEST is ON by default and pulls googletest via FetchContent
+  # (which MANIFOLD_DOWNLOADS=false would turn into a hard error), plus the samples and
+  # extras trees.
+  MANIFOLD_TEST: false
+
+  # Bindings: the engine consumes the C++ API directly.
+  # ⚠️ MANIFOLD_CBIND defaults to ON whenever MANIFOLD_CROSS_SECTION is on
+  # (cmake_dependent_option), so leaving it out would ship a second archive
+  # (`manifoldc`) wrapping the first one in a C FFI nobody calls.
+  MANIFOLD_CBIND: false
+  MANIFOLD_PYBIND: false
+  MANIFOLD_JSBIND: false          # Emscripten-only, inert here; forced off so no default decides
+
+  # Development-only upstream options, forced off rather than left to their defaults:
+  # tracy is a profiler pulled in by FetchContent, assimp an extra mesh importer for
+  # the `extras/` tools, and the fuzzer needs an address-sanitized build.
+  TRACY_ENABLE: false
+  TRACY_MEMORY_USAGE: false
+  ASSIMP_ENABLE: false
+  MANIFOLD_FUZZ: false

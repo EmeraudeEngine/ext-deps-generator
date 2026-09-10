@@ -217,6 +217,17 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     SIMDJSON_EXCEPTIONS=0
 )
 
+# oneTBB stamps TBB_USE_DEBUG into its own objects in a Debug build
+# ($<$<CONFIG:DEBUG>:TBB_USE_DEBUG> on its target), and a consumer of the raw archive
+# never sees that PUBLIC definition. The macro adds no data member — it turns on
+# __TBB_ASSERT and a few extra initialisations inside INLINE code — so a mismatch is an
+# ODR problem, not a layout one. On MSVC it fixes itself (oneTBB derives the default from
+# _DEBUG, which the debug CRT defines); elsewhere _DEBUG does not exist, so it has to be
+# said out loud. See libraries/onetbb.yaml.
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE TBB_USE_DEBUG)
+endif()
+
 if(WIN32)
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         NOMINMAX            # Prevent windows.h from defining min/max macros
@@ -328,6 +339,17 @@ if(WIN32)
     # pthread-win32: static build; pthreadVC3 is the C/setjmp flavor (VCE3/VSE3
     # are the C++ EH and SEH variants, also installed but not linked here).
     set(PTHREADWIN32_LIB "pthreadVC3")
+    # manifold: plain basename on every platform, no debug postfix.
+    set(MANIFOLD_LIB "manifold")
+    # oneTBB is the odd one out: its basename carries TBB_BINARY_VERSION on Windows
+    # only (OUTPUT_NAME tbb${TBB_BINARY_VERSION}, src/tbb/CMakeLists.txt) AND the
+    # unconditional CMAKE_DEBUG_POSTFIX "_debug" set by its top-level CMakeLists.
+    # See libraries/onetbb.yaml.
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(TBB_LIB "tbb12_debug")
+    else()
+        set(TBB_LIB "tbb12")
+    endif()
 else()
     # Unix library names
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -375,6 +397,14 @@ else()
     set(DRACO_LIB "draco")
     set(ONNXRUNTIME_LIB "onnxruntime")
     set(SIMDJSON_LIB "simdjson")
+    set(MANIFOLD_LIB "manifold")
+    # No version in the name off Windows, but the "_debug" postfix is not
+    # platform-gated — see libraries/onetbb.yaml.
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(TBB_LIB "tbb_debug")
+    else()
+        set(TBB_LIB "tbb")
+    endif()
     # lib3mf sets PREFIX "" on its target, so the archive is "lib3mf.a"
     # (not "liblib3mf.a"). Use a full path to bypass the `-l` short-name search,
     # which would otherwise look for "liblib3mf.{a,so,dylib}".
@@ -442,8 +472,14 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     # TLS (LibreSSL: consumers before providers — tls -> ssl -> crypto;
     # static archive basenames are identical on Unix and MSVC)
     tls ssl crypto
+    # Mesh booleans / CSG. manifold consumes BOTH Clipper2 (CrossSection backend) and
+    # TBB (its parallel backend), so on a single-pass Unix linker it must precede them.
+    ${MANIFOLD_LIB}
     # Geometry
     Clipper2
+    # Task scheduler — in the archive only for manifold's MANIFOLD_PAR backend
+    # (libraries/onetbb.yaml). Nothing else here links it.
+    ${TBB_LIB}
     # Networking
     ${ZMQ_LIB}
     # Process control

@@ -348,6 +348,39 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   `CMAKE_CXX_STANDARD` cache variable. Lifting it needs a patch; the API (Document, Bitmap)
   is the same under both standards.
 
+## manifold
+[v3.5.3, 0edd9d54876f3135e431575214dd6d8a72866fee]
+
+- URL: https://github.com/elalish/manifold.git
+- Version: 3.5.3 (release tag)
+- Dependencies: clipper2, onetbb
+- Usage: robust boolean / CSG operations on watertight triangle meshes — union, difference,
+  intersection, minkowski, offsetting, SDF meshing — plus the 2D `CrossSection` type. Both
+  of its optional dependencies are **enabled**, and both come from this archive rather than
+  from a vendored copy: Clipper2 backs `CrossSection` (`MANIFOLD_CROSS_SECTION`), and oneTBB
+  backs the parallel executor (`MANIFOLD_PAR`). Errors are reported through a status enum —
+  a failed operation returns an invalid `Manifold` whose `Status()` is a `Manifold::Error` —
+  so nothing throws into consumer code.
+- Notes: compiled as C++20 per the build policy, which takes `patches/manifold.patch`:
+  upstream does an unguarded `set(CMAKE_CXX_STANDARD 17)` that silently shadows the cache
+  entry a `-D` sets, and the patch wraps it in `if(NOT CMAKE_CXX_STANDARD)`. Built
+  consumer-only: no tests (they fetch googletest), no C/Python/JS bindings — `MANIFOLD_CBIND`
+  defaults to ON whenever `MANIFOLD_CROSS_SECTION` is on and would ship a second archive
+  wrapping the first in a C FFI — no tracy, no assimp, no fuzzer. `MANIFOLD_DEBUG`,
+  `MANIFOLD_ASSERT` and `MANIFOLD_TIMING` are off: they print to `std::cout`, and
+  `MANIFOLD_DEBUG` is also what switches error reporting from the status enum to exceptions.
+  Artifact names are plain (`libmanifold.a` / `manifold.lib`, no version, no debug postfix).
+- Warning: `MANIFOLD_DOWNLOADS` is forced **OFF** and must stay that way. `manifoldDeps.cmake`
+  reaches for FetchContent at configure time for every dependency it fails to find, TBB and
+  Clipper2 included, and would quietly link its own copies — a second Clipper2 next to this
+  archive's, and a TBB pinned to whatever tag upstream wrote in that file. With downloads off,
+  a `find_package` miss is a configure-time hard error instead.
+- Warning: of manifold's PUBLIC compile definitions, `MANIFOLD_NO_IOSTREAM` is the one that
+  matters to a consumer of the raw archive, and it must match on both sides: it *removes*
+  public API (`Manifold::ReadOBJ` / `WriteOBJ`). It is OFF here. `MANIFOLD_PAR` and
+  `MANIFOLD_CROSS_SECTION` appear in no installed header, and `MANIFOLD_DEBUG` only guards
+  additive inline helpers, so neither has to be replayed.
+
 ## meshoptimizer
 [v1.2, 9d9890c73011d75920af614485296d1e03e95448]
 
@@ -371,6 +404,47 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Dependencies: None
 - Usage: MP3 decoder. Required by libsndfile for MP3 read support.
 - Notes: Upstream is SourceForge SVN, this is a community git mirror with no release tags, so we pin to a master SHA. Built via the CMake port in `ports/cmake/`.
+
+## onetbb (oneTBB)
+[v2023.1.0, 3046c8b0c29df995980003ea24f4d78c80ec0c8d]
+
+- URL: https://github.com/uxlfoundation/oneTBB.git
+- Version: 2023.1.0 (release tag; `v2023.2.0-rc1` exists upstream and is deliberately not
+  taken)
+- Dependencies: None
+- Usage: the oneAPI Threading Building Blocks task scheduler. It is in the archive as
+  manifold's `MANIFOLD_PAR` backend — nothing else here links it — but the headers and the
+  CMake package are installed in full, so the engine can use `tbb::parallel_for` and friends
+  directly.
+- Notes: compiled as C++20 per the build policy, and this one honours the command line on its
+  own (upstream guards its default with `if (NOT CMAKE_CXX_STANDARD)`), so no patch is
+  needed. Built consumer-only: no tests, no examples, and `TBB_STRICT` off so a newer
+  compiler's newer warning cannot fail the build. `TBB_ENABLE_IPO` is forced OFF — it happens
+  to be inert in a static build, but on MSVC it would mean `/GL`, which the Windows CRT
+  validation rejects outright. `tbbmalloc` / `tbbmalloc_proxy` are not built: they are a
+  separate product (a scalable malloc and a global allocation *replacement*), manifold does
+  not use them, and a static build cannot load them anyway.
+- Warning: **this is a static build of a library whose upstream says not to do that.** With
+  `BUILD_SHARED_LIBS=OFF` oneTBB prints, at configure time, "You are building oneTBB as a
+  static library. This is highly discouraged and such configuration is not supported."
+  Expected here, and not a failure — but it puts one hard rule on the consumer: **exactly one
+  module per process may link this archive.** oneTBB keeps process-global state (the task
+  arena, the thread pool, `global_control`); a shared library gives one copy per process, a
+  static archive one copy per linked binary. Two modules each linking their own copy get two
+  independent thread pools, each sized for the whole machine, and `global_control` set in one
+  is invisible to the other. The static build also drops the dynamic-dispatch extras
+  (`__TBB_DYNAMIC_LOAD_ENABLED=0`): `cache_aligned_allocator` falls back to the platform
+  allocator, and NUMA/hybrid-CPU binding (tbbbind, which needs hwloc) is gone — upstream
+  disables that target itself for static builds.
+- Warning: the archive basename carries **two** decorations, unlike the rest of the cascade —
+  `libtbb.a` / `libtbb_debug.a` on Unix, `tbb12.lib` / `tbb12_debug.lib` on Windows. The `12`
+  is `TBB_BINARY_VERSION` and is Windows-only; the `_debug` postfix is not platform-gated.
+- Warning: `TBB_USE_DEBUG` is a PUBLIC compile definition of the Debug build that a consumer
+  of the raw archive never sees. It changes no layout — it enables `__TBB_ASSERT` and a few
+  extra initialisations inside *inline* code — but it is an ODR matter. MSVC resolves it by
+  itself (oneTBB derives the default from `_DEBUG`, which the debug CRT defines); on Linux and
+  macOS a Debug consumer must define `TBB_USE_DEBUG` by hand. `DependenciesTest` does so on
+  every platform.
 
 ## onnxruntime (ONNX Runtime)
 [v1.29.0, 2e2543fbe9fae542f921d47a72d21d5a4ef0b710]

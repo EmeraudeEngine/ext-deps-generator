@@ -6,9 +6,11 @@
  */
 
 #include <iostream>
+#include <cmath>
 #include <cstdlib>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -157,6 +159,28 @@
 
 // clipper2
 #include "clipper2/clipper.h"
+
+// manifold (mesh booleans / CSG). Built with MANIFOLD_CROSS_SECTION (Clipper2 backend)
+// and MANIFOLD_PAR (oneTBB backend) — see libraries/manifold.yaml. None of manifold's
+// PUBLIC compile definitions has to be replayed here: MANIFOLD_PAR and
+// MANIFOLD_CROSS_SECTION appear in no installed header, and MANIFOLD_DEBUG only guards
+// additive inline helpers. Errors come back as a Manifold::Error status, not as throws.
+#include "manifold/manifold.h"
+#include "manifold/cross_section.h"
+#include "manifold/version.h"
+
+// ============================================================================
+// Parallelism libraries
+// ============================================================================
+
+// oneTBB — in the archive as manifold's parallel backend, but a first-class library
+// here too. TBB_USE_DEBUG is defined by the build system in Debug configurations to
+// match the archive (see libraries/onetbb.yaml).
+#include "oneapi/tbb/version.h"
+#include "oneapi/tbb/blocked_range.h"
+#include "oneapi/tbb/parallel_for.h"
+#include "oneapi/tbb/parallel_reduce.h"
+#include "oneapi/tbb/info.h"
 
 // ============================================================================
 // Networking libraries
@@ -591,6 +615,122 @@ static bool test_jsoncpp()
     return true;
 }
 
+static bool test_manifold()
+{
+    // Boolean difference of two overlapping cubes: the canonical exercise of the part
+    // of manifold the engine is here for. Volume is checked against the exact value
+    // (both operands are axis-aligned boxes, so no tolerance games are needed beyond
+    // floating-point noise).
+    const manifold::Manifold big = manifold::Manifold::Cube({2.0, 2.0, 2.0});
+    const manifold::Manifold small = manifold::Manifold::Cube({1.0, 1.0, 1.0});
+    const manifold::Manifold diff = big - small;
+
+    // manifold reports failures through a status enum, NOT exceptions: the archive is
+    // built with MANIFOLD_DEBUG off, so the userErr/topologyErr/geometryErr types do
+    // not even exist in these headers.
+    if (diff.Status() != manifold::Manifold::Error::NoError)
+    {
+        std::cerr << "  manifold: boolean returned status "
+                  << static_cast< int >(diff.Status()) << "\n";
+        return false;
+    }
+    const double volume = diff.Volume();
+    if (std::abs(volume - 7.0) > 1e-9)
+    {
+        std::cerr << "  manifold: expected a volume of 7, got " << volume << "\n";
+        return false;
+    }
+    if (diff.Genus() != 0 || diff.NumTri() == 0)
+    {
+        std::cerr << "  manifold: unexpected topology (genus " << diff.Genus()
+                  << ", " << diff.NumTri() << " triangles)\n";
+        return false;
+    }
+
+    // CrossSection is the MANIFOLD_CROSS_SECTION half of the build, and it is a thin
+    // layer over Clipper2 — so this also proves manifold got wired to the cascade's
+    // Clipper2 rather than to a FetchContent copy of its own.
+    const manifold::CrossSection square = manifold::CrossSection::Square({4.0, 3.0});
+    if (std::abs(square.Area() - 12.0) > 1e-9 || square.NumContour() != 1)
+    {
+        std::cerr << "  manifold: CrossSection area " << square.Area() << ", "
+                  << square.NumContour() << " contour(s)\n";
+        return false;
+    }
+    // Extrude() takes Polygons, so this also round-trips the CrossSection back through
+    // Clipper2's contour representation on the way to a 3D solid.
+    const manifold::Manifold extruded =
+        manifold::Manifold::Extrude(square.ToPolygons(), 2.0);
+    if (extruded.Status() != manifold::Manifold::Error::NoError ||
+        std::abs(extruded.Volume() - 24.0) > 1e-9)
+    {
+        std::cerr << "  manifold: extrusion failed (volume " << extruded.Volume()
+                  << ")\n";
+        return false;
+    }
+
+    std::cout << "  manifold version: " << MANIFOLD_VERSION_MAJOR << "."
+              << MANIFOLD_VERSION_MINOR << "." << MANIFOLD_VERSION_PATCH
+              << " (cube difference volume " << volume << ", genus " << diff.Genus()
+              << ", " << diff.NumTri() << " tris; CrossSection area "
+              << square.Area() << ")\n";
+    return true;
+}
+
+static bool test_onetbb()
+{
+    // A parallel_reduce whose result is known exactly: sum of 0..N-1. This exercises
+    // the scheduler for real (arena creation, worker threads, task stealing), which is
+    // the part a static oneTBB build could plausibly get wrong.
+    constexpr int count = 100000;
+    const long long expected = static_cast< long long >(count) * (count - 1) / 2;
+
+    const long long sum = tbb::parallel_reduce(
+        tbb::blocked_range< int >(0, count, 1024), 0LL,
+        [](const tbb::blocked_range< int >& range, long long init) {
+            for (int i = range.begin(); i != range.end(); ++i)
+                init += i;
+            return init;
+        },
+        std::plus< long long >());
+
+    if (sum != expected)
+    {
+        std::cerr << "  oneTBB: parallel_reduce gave " << sum << ", expected "
+                  << expected << "\n";
+        return false;
+    }
+
+    // parallel_for over the same range, writing through an index, to cover the other
+    // half of the API manifold actually uses.
+    std::vector< int > doubled(count, 0);
+    tbb::parallel_for(tbb::blocked_range< int >(0, count),
+                      [&doubled](const tbb::blocked_range< int >& range) {
+                          for (int i = range.begin(); i != range.end(); ++i)
+                              doubled[i] = 2 * i;
+                      });
+    if (doubled.front() != 0 || doubled.back() != 2 * (count - 1))
+    {
+        std::cerr << "  oneTBB: parallel_for produced wrong values\n";
+        return false;
+    }
+
+    const int concurrency = tbb::info::default_concurrency();
+    if (concurrency < 1)
+    {
+        std::cerr << "  oneTBB: default_concurrency() reported " << concurrency << "\n";
+        return false;
+    }
+
+    // TBB_runtime_version() comes out of the archive, TBB_VERSION_STRING out of the
+    // headers: printing both is how a header/library mismatch would show up here.
+    std::cout << "  oneTBB version: " << TBB_VERSION_STRING << " (runtime "
+              << TBB_runtime_version() << ", interface "
+              << TBB_runtime_interface_version() << ", default concurrency "
+              << concurrency << ")\n";
+    return true;
+}
+
 static bool test_simdjson()
 {
     // On-Demand API on a padded buffer, which is the fast path the engine would use.
@@ -952,6 +1092,10 @@ int main(int /*argc*/, char* /*argv*/[])
 
     std::cout << "\n--- Geometry Libraries ---\n";
     run_test("clipper2", test_clipper2);
+    run_test("manifold", test_manifold);
+
+    std::cout << "\n--- Parallelism Libraries ---\n";
+    run_test("oneTBB", test_onetbb);
 
     std::cout << "\n--- Networking Libraries ---\n";
     run_test("libzmq", test_libzmq);

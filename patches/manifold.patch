@@ -1,0 +1,22 @@
+# target-commit: 0edd9d54876f3135e431575214dd6d8a72866fee
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 49182df0..f4938e0a 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -15,9 +15,13 @@
+ cmake_minimum_required(VERSION 3.18)
+ project(manifold LANGUAGES CXX)
+ 
+-# Use C++17
++# Use C++17, unless a newer standard was requested on the command line.
++# An unguarded set() here would shadow the -DCMAKE_CXX_STANDARD cache entry and
++# silently compile manifold at 17 while its headers are consumed at 20.
+ set(CMAKE_CXX_EXTENSIONS OFF)
+-set(CMAKE_CXX_STANDARD 17)
++if(NOT CMAKE_CXX_STANDARD)
++  set(CMAKE_CXX_STANDARD 17)
++endif()
+ set(CMAKE_CXX_STANDARD_REQUIRED ON)
+ 
+ set(CMAKE_VERBOSE_MAKEFILE ON)

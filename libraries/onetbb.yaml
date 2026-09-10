@@ -1,0 +1,123 @@
+name: onetbb
+source_dir: repositories/onetbb
+languages: [cxx]
+
+# oneTBB (UXL Foundation) — the task scheduler `manifold` uses for its parallel backend.
+# Pinned to the v2023.1.0 RELEASE tag (owner rule: no release candidates — v2023.2.0-rc1
+# exists upstream and is deliberately not taken).
+#
+# Why it is in the archive: it is only here as manifold's `MANIFOLD_PAR` dependency
+# (see libraries/manifold.yaml). Nothing else in the cascade links it. It is a real
+# library in its own right though, so the headers and the CMake package are installed
+# in full and the engine may use `tbb::parallel_for` directly if it ever wants to.
+#
+# ⚠️ THIS IS A STATIC BUILD OF A LIBRARY WHOSE UPSTREAM SAYS NOT TO DO THAT.
+# `BUILD_SHARED_LIBS=OFF` makes oneTBB print, at configure time:
+#
+#     You are building oneTBB as a static library. This is highly discouraged and
+#     such configuration is not supported. Consider building a dynamic library to
+#     avoid unforeseen issues.
+#
+# That warning is expected here and is NOT a build failure. The archive's whole reason
+# to exist is static libraries linked into one engine binary (AGENTS.md § Build policy),
+# and a `libtbb.so` would have to be deployed next to the executable like
+# onnxruntime's — a cost taken only when upstream leaves no choice, which is not the
+# case here. What upstream's warning is actually about:
+#
+#   * **One scheduler per process.** oneTBB keeps process-global state (the task arena,
+#     the thread pool, `global_control`). A shared library gives exactly one copy per
+#     process no matter how many consumers link it; a static archive gives one copy per
+#     linked binary. So the rule for the engine is: exactly ONE module (the executable,
+#     or one shared object) may link this archive. Two modules in the same process each
+#     linking their own copy get two independent thread pools, each sized for the whole
+#     machine — oversubscription, and `global_control` set in one is invisible to the
+#     other. This is the one real hazard, and it is a deployment rule, not a build bug.
+#   * **No dynamic-dispatch extras.** The static build compiles with
+#     `__TBB_DYNAMIC_LOAD_ENABLED=0` (src/tbb/CMakeLists.txt), so tbb no longer dlopens
+#     tbbmalloc / tbbbind at runtime. Concretely: `tbb::cache_aligned_allocator` falls
+#     back to the platform allocator instead of the scalable one, and NUMA/hybrid-CPU
+#     topology binding (tbbbind, which needs hwloc) is gone — upstream disables that
+#     target outright for static builds ("TBBBind build targets are disabled due to
+#     unsupported environment"). Neither matters for manifold's `parallel_for`.
+#
+# ⚠️ ARCHIVE NAMES CARRY BOTH A VERSION AND A DEBUG POSTFIX, unlike most of the cascade:
+#
+#   | config          | Unix                | Windows              |
+#   |-----------------|---------------------|----------------------|
+#   | Release         | `libtbb.a`          | `tbb12.lib`          |
+#   | Debug           | `libtbb_debug.a`    | `tbb12_debug.lib`    |
+#
+# The `12` is `TBB_BINARY_VERSION` and is Windows-only (`OUTPUT_NAME tbb${...}`,
+# src/tbb/CMakeLists.txt:55); the `_debug` comes from `CMAKE_DEBUG_POSTFIX _debug` set
+# unconditionally in the top-level CMakeLists. Both are handled in the test project's
+# CMakeLists.txt and both must be handled engine-side.
+#
+# ⚠️ `TBB_USE_DEBUG` IS A PUBLIC COMPILE DEFINITION IN DEBUG BUILDS
+# (`$<$<CONFIG:DEBUG>:TBB_USE_DEBUG>`, src/tbb/CMakeLists.txt), and a consumer of the
+# raw archive never sees it. It is not a layout matter — the macro adds no data members,
+# it turns on `__TBB_ASSERT` and a handful of extra initialisations inside inline code
+# (`_intrusive_list_node.h`, `queuing_rw_mutex.h`) — but it is an ODR matter: the same
+# inline function compiled two ways in one binary. On MSVC it resolves itself, because
+# oneTBB derives the default from `_DEBUG` (detail/_config.h:118) which the debug CRT
+# defines anyway; on Linux and macOS `_DEBUG` does not exist, so a Debug consumer must
+# define `TBB_USE_DEBUG` by hand to match the archive. DependenciesTest does it for
+# every platform in its Debug configuration; the engine must do the same.
+#
+# ℹ️ EXCEPTIONS AND RTTI (AGENTS.md § Build policy, points 3 and 4): oneTBB offers no
+# switch for either, so neither is turned off here. It costs nothing on the consumer
+# side, which is what the policy is about:
+#   * `TBB_USE_EXCEPTIONS` is auto-detected from `__EXCEPTIONS` / `_CPPUNWIND`
+#     (detail/_config.h:150-160). An engine compiled with `-fno-exceptions` gets
+#     `TBB_USE_EXCEPTIONS 0` on its own and the throwing paths compile out of the
+#     headers — no `#error`, no throw reaching engine code. The archive itself is
+#     compiled WITH exceptions (it has to be: it captures and re-throws across task
+#     boundaries), which is the same situation as every other C++ library here.
+#   * RTTI is only used behind `__TBB_USE_OPTIONAL_RTTI`, itself auto-detected, and in
+#     the archive's own translation units — no polymorphic type crosses the headers.
+#
+# ⚠️ `TBB_ENABLE_IPO` defaults to ON upstream. It happens to be inert in a static build
+# (the block that acts on it is gated on `BUILD_SHARED_LIBS`, CMakeLists.txt:275), but
+# it is forced OFF below rather than left to that coincidence: IPO on MSVC means `/GL`,
+# and a `/GL` archive is rejected outright by the Windows CRT validation
+# (AGENTS.md § Windows CRT Validation — LTCG rejection).
+
+cmake_options:
+  BUILD_SHARED_LIBS: false
+  CMAKE_POSITION_INDEPENDENT_CODE: true
+  TBB_INSTALL: true
+
+  # Project build policy (AGENTS.md § Build policy). oneTBB guards its own default
+  # (`if (NOT CMAKE_CXX_STANDARD) set(CMAKE_CXX_STANDARD 11)`, CMakeLists.txt:82), so
+  # unlike most of the cascade the command line is honoured here — no patch needed.
+  # Verify after a version bump with:
+  #   grep -o '\-std=[a-z+0-9]*' builds/<config>/onetbb/build.ninja | sort -u
+  CMAKE_CXX_STANDARD: 20
+  CMAKE_CXX_STANDARD_REQUIRED: true
+
+  # See the LTCG note above: never let this reach MSVC as /GL.
+  TBB_ENABLE_IPO: false
+
+  # Warnings-as-errors, ON by default upstream. An archive built on someone else's
+  # toolchain must not fail on a new compiler's new warning.
+  TBB_STRICT: false
+
+  # Consumer only. TBB_TEST is ON by default and pulls the whole test tree.
+  TBB_TEST: false
+  TBB_EXAMPLES: false
+
+  # tbbmalloc / tbbmalloc_proxy are a separate product: a scalable malloc and a
+  # global operator-new/malloc REPLACEMENT. Neither is needed by manifold, and the
+  # static build cannot dlopen them anyway (`__TBB_DYNAMIC_LOAD_ENABLED=0`, see above),
+  # so shipping them would put two unusable archives — one of which silently hijacks
+  # every allocation in the process if it is ever linked — into the package.
+  TBBMALLOC_BUILD: false
+
+  # tbbbind is already off for a static build (upstream disables the target), so this
+  # only makes sure the configure step does not go looking for a system hwloc via
+  # pkg-config and pick up something the archive must not depend on. The cascade's own
+  # hwloc is a separate, independent library here.
+  TBB_DISABLE_HWLOC_AUTOMATIC_SEARCH: true
+
+  # Search for an already-installed oneTBB instead of building the sources. Off, but
+  # spelled out: leaving it to the default would make the build depend on the host.
+  TBB_FIND_PACKAGE: false

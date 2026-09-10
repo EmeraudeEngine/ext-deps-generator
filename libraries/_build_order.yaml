@@ -24,6 +24,9 @@ order:
   - cpu_features
   - hwloc
 
+  # Task scheduler (manifold's parallel backend; nothing else links it)
+  - onetbb
+
   # Audio
   - openal-soft
   - libsamplerate
@@ -78,6 +81,9 @@ order:
 
   # GLSL -> SPIR-V compiler (depends on spirv-tools)
   - glslang
+
+  # Mesh booleans / CSG (find_package()s Clipper2 and TBB from output/<config>)
+  - manifold
 
   # Audio metadata
   - taglib
