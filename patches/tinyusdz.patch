@@ -61,6 +61,49 @@ index bf1c28660..56d78ad8f 100644
 +install(FILES ${CMAKE_CURRENT_BINARY_DIR}/tinyusdzConfig.cmake
 +  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/tinyusdz
 +)
+diff --git a/src/composition.cc b/src/composition.cc
+index 6568308c3..0589f36d8 100644
+--- a/src/composition.cc
++++ b/src/composition.cc
+@@ -4060,12 +4060,37 @@ void RemapPathsInPrimSpecTree(PrimSpec &ps, const NamespaceMapping &mapping) {
+             p = mapping.Apply(p);
+           }
+         }
+-      } else if (prop.second.is_attribute_connection()) {
++      // ---- ext-deps-generator patch ----
++      // Every attribute that HAS connections, not only those that are connection-ONLY.
++      //
++      // `Property::is_attribute_connection()` forwards to `Attribute::is_connection()`, which
++      // returns false as soon as the attribute also carries a value (attribute.hh) — so an input
++      // authored as BOTH a fallback value and a connection was skipped here and kept pointing into
++      // the sub-tree's PRE-SPLICE path. Authoring both is the normal UsdPreviewSurface idiom, and
++      // the one Omniverse Kit emits:
++      //
++      //   color3f inputs:diffuseColor = (0.18, 0.18, 0.18)
++      //   color3f inputs:diffuseColor.connect = </World/Looks/Slate/UsdUVTexture.outputs:rgb>
++      //
++      // The failure is invisible at composition time: the connection dangles, and Tydra later
++      // rejects the material with "Cannot find path </World/Looks/Slate> in the Stage", falling
++      // back to the value sitting right next to it — a flat 0.18 grey that reads as "the asset has
++      // no textures" while all of them are there. Measured on WorldLobby.usdz (an Omniverse Kit
++      // export): 0 textures translated, against 348 with this fix.
++      //
++      // ⚠️ This repository carried the same fix for v0.9.4, in `ReplaceRootPrimPathRec()`. That
++      // function is `[[maybe_unused]]` dead code since the v1.0.0 composition rework and the live
++      // rewrite below inherited the original predicate — the patch stopped applying because the
++      // surrounding function was renamed, not because the defect was fixed. Only the live site is
++      // patched here; the dead one is deliberately left alone.
++      } else if (prop.second.is_attribute() &&
++                 prop.second.attribute().has_connections()) {
+         Attribute &attr = prop.second.attribute();
+         for (auto &conn : attr.connections()) {
+           conn = mapping.Apply(conn);
+         }
+       }
++      // ---- end of patch ----
+     }
+ 
+     // Remap composition arc target paths
 diff --git a/src/nonstd/expected.hpp b/src/nonstd/expected.hpp
 index 5b19bf0d7..603e6c543 100644
 --- a/src/nonstd/expected.hpp

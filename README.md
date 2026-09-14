@@ -664,8 +664,23 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   defaults to **false** (`composition.hh:81,104,157`), and a Kit-exported stage writes its
   subLayers as `../Source/…`, so with the default those layers are silently rejected. The last
   three were absorbed by a rewrite of the composition engine (`src/composition-graph.cc`, a
-  task-queue prim-index builder). **Composition is therefore unmeasured on this version**: four
-  of the seven defects used to fail silently or report SUCCESS, so it is only ever trusted on a
+  task-queue prim-index builder).
+- Warning: **one of those seven came back, and the patch carries a hunk for it again**
+  (measured 2026-09-14 on the reference asset, not assumed). The `is_connection()` predicate
+  defect was fixed upstream in `tydra/render-data-material.cc` (22 sites) but NOT in the second
+  file it also lived in: `RemapPathsInPrimSpecTree()` (`composition.cc:4063`), the live rewrite
+  of a spliced sub-tree's internal paths, still gates its connection branch on
+  `Property::is_attribute_connection()` — false as soon as the attribute also carries a value.
+  An input authored as both a value and a `.connect` (what Kit emits) keeps its pre-splice path
+  and Tydra reports `Cannot find path </World/Looks/Foo> in the Stage`. This repository had
+  patched it in `ReplaceRootPrimPathRec()`, now `[[maybe_unused]]` dead code: **the patch stopped
+  applying because the surrounding function was rewritten, not because the defect was fixed.**
+  Measured effect of the hunk: **0 → 85 textures**. ⚠️ A fix verified file-by-file is not
+  verified — grep the predicate across the tree, then re-run the asset.
+- Warning: **composition is still only PARTIALLY measured on this version.** With the hunk the
+  reference asset composes 1988 prims / 741 meshes / 31 materials / 85 textures, against
+  2806 / 942 / 155 / 348 on the patched v0.9.4 — **818 prims short, unattributed**, and this is
+  a path that used to fail silently or report SUCCESS. It is only ever trusted on a
   prim/mesh/texture count — see `docs/todo/remeasure-tinyusdz-composition.md`.
 - Note: `TINYUSDZ_WITH_TEXTOOLS` (new in 1.0.0, ON upstream) is turned off. It builds a second
   static library and links it into the core for KTX2 / GPU-compressed decode inside USDZ, which

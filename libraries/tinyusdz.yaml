@@ -118,7 +118,48 @@ cmake_options:
 #    them: arcs are re-scanned and re-enqueued as nodes are added, and SubLayer is a task type.
 #    Structure is not measurement, though.
 #
-# ⚠️ COMPOSITION IS THEREFORE UNMEASURED ON THIS VERSION. The rule that produced those fixes
-# still stands: this path is never trusted on a "no error", only on a prim/mesh/texture COUNT,
-# because four of the seven defects failed silently or reported success. Re-run the reference
-# asset before relying on it — see docs/todo/.
+# ─────────────────────────────────────────────────────────────────────────────────────────
+# MEASURED 2026-09-14 — AND ONE OF THEM WAS BACK. A HUNK IS CARRIED AGAIN.
+#
+# The reference asset was finally re-run (WorldLobby.usdz, projet-alpha --load-demo world-lobby
+# --demo-options 1). Two of the classifications above were verified in the source and HOLD:
+# is_connection() -> has_connections() really is fixed on 22 sites of render-data-material.cc
+# (the 5 survivors are comments), and the arc prefix really was absorbed verbatim, as
+# GetReferencedPrimPath() at composition.cc:351.
+#
+# ⚠️⚠️ BUT "THE texture defect is fixed upstream" WAS TOO NARROW A CHECK. The same predicate
+# defect lived in a SECOND file that the verification never looked at: RemapPathsInPrimSpecTree()
+# (composition.cc:4063) — the live rewrite of a spliced sub-tree's internal paths — still gates
+# its connection branch on Property::is_attribute_connection(), which forwards to
+# Attribute::is_connection(), FALSE as soon as the attribute also carries a value. An input
+# authored as both a value and a `.connect` (the UsdPreviewSurface idiom Kit emits) is therefore
+# never remapped and keeps its pre-splice path, and Tydra then reports
+# "Cannot find path </World/Looks/Foo> in the Stage".
+#
+# This repository patched exactly that in v0.9.4 — in ReplaceRootPrimPathRec(), which is now
+# [[maybe_unused]] dead code. THE PATCH STOPPED APPLYING BECAUSE THE SURROUNDING FUNCTION WAS
+# REWRITTEN, NOT BECAUSE THE DEFECT WAS FIXED, and the defect travelled into the replacement.
+# ⚠️ The lesson for the next re-verification: a fix checked file-by-file is not checked — grep
+# the PREDICATE across the tree, then re-run the asset. Measurement found this in one run; three
+# source-reading passes had classified it as absorbed.
+#
+# patches/tinyusdz.patch carries the one-line predicate fix again (live site only; the dead
+# ReplaceRootPrimPathRec is deliberately left alone).
+#
+# Counts, same instrument (the engine loader's own `stage composed:` line):
+#
+#                      patched v0.9.4   rc3 as shipped   rc3 + this hunk
+#   prims                      2806            1988            1988
+#   meshes                      942             741             741
+#   materials                   155              31              31
+#   textures                    348               0              85
+#
+# ⚠️ STILL OPEN, NOT ATTRIBUTED: 818 prims, 201 meshes, 124 material prims and all four
+# SphereLight are missing from the composed stage, and this hunk does not move them (a dangling
+# connection cannot delete a prim). The 85 textures are what 31 materials carry where 155 carried
+# 348 — the same ratio, so the texture shortfall IS the missing materials, not a further texture
+# defect. A THIRD mechanism remains to be found: docs/todo/remeasure-tinyusdz-composition.md.
+#
+# The rule that produced those fixes still stands: this path is never trusted on a "no error",
+# only on a prim/mesh/texture COUNT, because four of the seven defects failed silently or
+# reported success.
