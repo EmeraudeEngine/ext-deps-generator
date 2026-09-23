@@ -256,8 +256,23 @@ the Debug archives stay debuggable. Validated on Linux 2026-09-23 on libressl (C
 - **libvpx** compiles its whole `configure` command line, `--prefix=<root>/output/…` included, into
   `vpx_codec_build_config()` (`repositories/libvpx/configure:846`). Left as is: LycheeSlicer does
   not embed libvpx. Fixing it means rewriting the generated `vpx_config.c` after configure.
+- **Assembler sources** (NASM: libjpeg-turbo SIMD) name each object's `STT_FILE` symbol after
+  the absolute source path CMake hands them — 27 strings per archive, no NASM option remaps it
+  (2.16). `LinuxPlatform.post_install()` removes every `STT_FILE` symbol naming a file under the
+  root from the installed archives (`objcopy --strip-symbols`; informational only, no role in
+  linking or at runtime). It runs from the CMake, Meson and Autotools builders. Not needed on
+  Windows (the linker drops COFF symbols) nor on macOS without `-g`.
+- ⚠️ **A library whose YAML omits a language does not receive that language's flags**
+  (`languages` defaults to `[c]`, and `CMAKE_CXX_FLAGS` is only passed for `cxx`): lib3mf (C++,
+  no `languages` key) and lunasvg's C sub-library plutovg (`languages: [cxx]`) get neither the
+  remapping nor `-fPIC` / `-arch` from the platform. Only their **Debug** archives leak paths
+  (`assert()` is compiled out in Release), so nothing shipped is affected — but the gap predates
+  this and also concerns the other platform flags.
 - The **MSYS2 builder** (libvpx on Windows) drives libvpx's own Visual Studio projects and does
   not receive the flags.
+- **Meson on Windows drops the trailing backslash** of `/d1trimfile:<root>\` (a `\` right
+  before the closing quote of the generated command line), so its trim leaves
+  `\repositories\…` with a leading separator — still relative. The `/` spelling is intact.
 - A root directory **containing a space** would split the flags (they travel through
   space-separated flag strings).
 
@@ -423,12 +438,23 @@ For libraries that use Meson as their build system (e.g., harfbuzz). The builder
 ```bash
 python build.py                              # Build all
 python build.py --runtime-lib MT             # Windows MT runtime
+python build.py --jobs 4                     # Cap parallel compile jobs per library
 python build.py --build-type Debug           # Debug build
 python build.py --library zlib               # Single lib + deps
 python build.py --library zlib --no-deps     # Single lib only
-python build.py --clean                      # Clean all builds/output
+python build.py --clean                      # ⚠️ GLOBAL: wipes ALL of builds/ and empties EVERY output/ subdir (other configs, extracted cef_binary_*)
 python build.py --list                       # List libraries
 ```
+
+`--jobs N` caps the compile parallelism of every builder (`cmake --build --parallel N`,
+`meson compile -j N`, `make -jN`, also the MSYS2 `make`). Without it each build system uses its
+own default — Ninja runs nproc + 2 compilers, `make -j` is unbounded — which the Windows
+machine (15 GB, MSVC with `/bigobj`) cannot hold: Meson's harfbuzz got the whole run killed for
+low memory (2026-09-23).
+
+To rebuild **one** configuration from scratch, do not use `--clean` (global, see above): delete
+`builds/<suffix>`, empty `output/<suffix>` (keep the directory: links may point to it), then
+run `build.py` for that configuration.
 
 ## Test Project (CMakeLists.txt)
 Builds all dependencies then links a test executable. Requires:

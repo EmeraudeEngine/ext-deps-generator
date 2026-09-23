@@ -61,6 +61,9 @@ class BuildConfig:
     macos_sdk: Optional[str] = None  # Required on macOS
     runtime_lib: str = "MD"  # Windows only: MD or MT
     root_dir: Path = field(default_factory=Path.cwd)
+    # Parallel compile jobs per library build; None = each build system's default
+    # (Ninja: nproc + 2, `make -j`: unbounded), too much for a 15 GB MSVC machine.
+    jobs: Optional[int] = None
 
     def __post_init__(self):
         if isinstance(self.root_dir, str):
@@ -120,6 +123,16 @@ class BuildConfig:
         return self.root_dir / "builds" / self.build_suffix
 
     @property
+    def build_machine_roots(self) -> list[str]:
+        """The root directory as given and resolved, without trailing separator."""
+        roots = []
+        for root in (self.root_dir.absolute(), self.root_dir.resolve()):
+            text = str(root).rstrip("\\/")
+            if text not in roots:
+                roots.append(text)
+        return roots
+
+    @property
     def path_remap_flags(self) -> list[str]:
         """Compiler flags keeping this checkout's absolute path out of the archives.
 
@@ -137,14 +150,8 @@ class BuildConfig:
         ⚠️ The flags travel through space-separated flag strings (``CMAKE_C_FLAGS``,
         ``CFLAGS``): a root directory containing a space would split them.
         """
-        roots = []
-        for root in (self.root_dir.absolute(), self.root_dir.resolve()):
-            text = str(root).rstrip("\\/")
-            if text not in roots:
-                roots.append(text)
-
         flags = []
-        for root in roots:
+        for root in self.build_machine_roots:
             if self.platform_name == "windows":
                 for prefix in (root.replace("/", "\\") + "\\", root.replace("\\", "/") + "/"):
                     flag = f"/d1trimfile:{prefix}"

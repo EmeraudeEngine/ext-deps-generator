@@ -249,6 +249,8 @@ class MesonBuilder:
     def _run_meson_compile(self, build_dir: Path) -> bool:
         """Run meson compile."""
         cmd = ["meson", "compile", "-C", str(build_dir)]
+        if self.config.jobs:
+            cmd.extend(["-j", str(self.config.jobs)])
         return self._run_command(cmd)
 
     def _run_meson_install(self, build_dir: Path) -> bool:

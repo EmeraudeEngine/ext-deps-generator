@@ -141,6 +141,9 @@ class AutotoolsBuilder:
         if not self._run_make_install(build_dir):
             return False
 
+        # Post-install hook (platform-specific)
+        self.platform.post_install(self.config, lib, build_dir, install_dir)
+
         # Architecture validation (macOS only)
         if hasattr(self.platform, "validate_architecture"):
             success, errors = self.platform.validate_architecture(self.config, install_dir)
@@ -242,7 +245,7 @@ class AutotoolsBuilder:
     def _run_make(self, build_dir: Path) -> bool:
         """Run make with appropriate flags."""
         env = self._get_build_env()
-        cmd = ["make", "-j"]
+        cmd = ["make", f"-j{self.config.jobs}" if self.config.jobs else "-j"]
         return self._run_command(cmd, cwd=build_dir, env=env)
 
     def _run_make_install(self, build_dir: Path) -> bool:

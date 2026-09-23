@@ -8,6 +8,7 @@ Usage:
     python build.py --build-type Debug           # Debug build
     python build.py --macos-sdk 12.0             # macOS deployment target
     python build.py --runtime-lib MT             # Windows runtime library
+    python build.py --jobs 4                     # Cap parallel compile jobs (memory)
     python build.py --library zlib               # Build single library with deps
     python build.py --library zlib --no-deps     # Build single library only
     python build.py --list                       # List available libraries
@@ -85,6 +86,14 @@ def parse_args() -> argparse.Namespace:
         "--list",
         action="store_true",
         help="List available libraries and exit",
+    )
+
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        metavar="N",
+        help="Parallel compile jobs per library (default: each build system's own, "
+        "e.g. Ninja's nproc + 2; lower it on a memory-constrained machine)",
     )
 
     parser.add_argument(
@@ -224,6 +233,8 @@ def run_dependencies_test(config: BuildConfig, root_dir: Path) -> int:
         return 1
 
     build_cmd = ["cmake", "--build", str(build_dir), "--config", config.build_type]
+    if config.jobs:
+        build_cmd.extend(["--parallel", str(config.jobs)])
     print("\n==================== Building test ====================\n")
     print(f"Running: {' '.join(build_cmd)}\n")
     if subprocess.run(build_cmd).returncode != 0:
@@ -280,6 +291,7 @@ def main() -> int:
         macos_sdk=args.macos_sdk,
         runtime_lib=args.runtime_lib,
         root_dir=root_dir,
+        jobs=args.jobs,
     )
 
     # Get platform handler

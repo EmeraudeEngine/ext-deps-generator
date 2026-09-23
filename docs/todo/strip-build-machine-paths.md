@@ -40,6 +40,9 @@ validated on Linux on libressl, hwloc and harfbuzz only.
   and the macOS cross file (arm64 → x86_64).
 - Rebuild **every** configuration on the three OSes, check each archive (`strings -a` / UTF-16LE
   scan for the root), publish a new archive version and bump it in emeraude-base.
+- lib3mf / plutovg: declare their real languages (lib3mf `languages: [c, cxx]`… check what
+  it compiles; lunasvg `[c, cxx]`) so they receive the platform flags — Debug archives only leak
+  today, and the same gap withholds `-fPIC` / `-arch` from them.
 - libvpx: its configure line (`--prefix=<root>/output/...`) is still compiled in; only matters if
   a consumer ever embeds libvpx.
 

@@ -279,7 +279,8 @@ class Msys2Builder:
 
     def _run_make(self, bash: Path, build_dir: Path) -> bool:
         """Run make (which invokes msbuild internally for vs17 targets)."""
-        return self._run_bash("make -j", build_dir, bash)
+        jobs = f"-j{self.config.jobs}" if self.config.jobs else "-j"
+        return self._run_bash(f"make {jobs}", build_dir, bash)
 
     def _run_make_install(self, bash: Path, build_dir: Path) -> bool:
         """Run make install."""

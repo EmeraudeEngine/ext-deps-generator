@@ -360,6 +360,8 @@ class CMakeBuilder:
             "--config",
             self.config.build_type,
         ]
+        if self.config.jobs:
+            cmd.extend(["--parallel", str(self.config.jobs)])
         return self._run_command(cmd)
 
     def _run_cmake_install(self, build_dir: Path) -> bool:
