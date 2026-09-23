@@ -263,16 +263,20 @@ class WindowsPlatform(Platform):
         return options
 
     def get_c_flags(self, config: "BuildConfig") -> str:
-        """MSVC-specific C flags."""
+        """MSVC-specific C flags, build-machine paths trimmed."""
         if config.build_type == "Debug":
-            return f"/{config.runtime_lib}d /Od /Zi /D_DEBUG"
-        return f"/{config.runtime_lib} /O2 /DNDEBUG"
+            flags = f"/{config.runtime_lib}d /Od /Zi /D_DEBUG"
+        else:
+            flags = f"/{config.runtime_lib} /O2 /DNDEBUG"
+        return " ".join([flags, *config.path_remap_flags])
 
     def get_cxx_flags(self, config: "BuildConfig") -> str:
-        """MSVC-specific C++ flags (includes /EHsc for exception handling)."""
+        """MSVC-specific C++ flags (includes /EHsc for exception handling), build-machine paths trimmed."""
         if config.build_type == "Debug":
-            return f"/{config.runtime_lib}d /Od /Zi /D_DEBUG /EHsc"
-        return f"/{config.runtime_lib} /O2 /DNDEBUG /EHsc"
+            flags = f"/{config.runtime_lib}d /Od /Zi /D_DEBUG /EHsc"
+        else:
+            flags = f"/{config.runtime_lib} /O2 /DNDEBUG /EHsc"
+        return " ".join([flags, *config.path_remap_flags])
 
     def get_config_specific_c_flags(self, config: "BuildConfig") -> dict[str, str]:
         """Get config-specific C flags for multi-config generators like Visual Studio.

@@ -11,6 +11,10 @@ autotools_options:
   disable_libxml2: true
   disable_io: true
   disable_libudev: true
+  # The run-state directory (Xeon Phi topology dumps, read at runtime) defaults to
+  # ${localstatedir}/run = <install prefix>/var/run: an absolute path of the build machine
+  # baked into every binary. Point it at the system location instead.
+  localstatedir: /var
 
 platforms:
   windows:

@@ -230,6 +230,39 @@ link). Detection scans the archive for the MSVC anonymous-object ClassID
 (`WindowsPlatform._contains_ltcg_objects`). `/GL` is forbidden in shipped
 archives anyway: it ties the .lib to the exact producing MSVC toolset.
 
+### Build-machine paths (`BuildConfig.path_remap_flags`)
+**No archive may carry the absolute path of the machine that built it** (owner requirement,
+2026-09-23): `__FILE__` / `assert()` bake `<root>/repositories/<lib>/…` (or `<root>/builds/…` for
+sources a library copies or generates into its build tree — cryptopp-cmake) into **every
+application linking the archive**. Measured on LycheeSlicer before the fix: ~85 strings per
+executable, ~440 in the engine library (libressl, libzmq, opus, mpg123, tinyusdz, libjpeg-turbo,
+hwloc, lame, cryptopp, draco, libtiff), on the three OSes.
+
+`BuildConfig.path_remap_flags` rewrites them relative to the ext-deps-generator root
+(`repositories/libressl/crypto/…`), for the root as given **and** its resolved path:
+GCC/Clang `-fmacro-prefix-map=<root>/=`, MSVC `/d1trimfile:<root>\` + `/d1trimfile:<root>/`
+(undocumented, relied on by Chromium; it strips rather than remaps, and matches the path as
+spelled, hence both separators). Every builder carries them: the platforms' `get_c_flags()` /
+`get_cxx_flags()` (CMake, `CMAKE_<LANG>_FLAGS`), the Autotools `CFLAGS`/`CXXFLAGS`, and Meson —
+in the macOS **cross file** when there is one (a command-line `-Dc_args` would *replace* its list
+and drop `-arch`), `-Dc_args`/`-Dcpp_args` otherwise. **Macros only**, never `-ffile-prefix-map`:
+the Debug archives stay debuggable. Validated on Linux 2026-09-23 on libressl (CMake), hwloc
+(Autotools) and harfbuzz (Meson): 0 occurrences of the root left.
+
+⚠️ Not covered by a compiler flag, handled per library:
+- **hwloc** compiles its run-state directory (`${localstatedir}/run/hwloc/`, read at runtime)
+  from the install prefix → `localstatedir: /var` in `libraries/hwloc.yaml` (Linux/macOS; the
+  Windows CMake build has no such path).
+- **libvpx** compiles its whole `configure` command line, `--prefix=<root>/output/…` included, into
+  `vpx_codec_build_config()` (`repositories/libvpx/configure:846`). Left as is: LycheeSlicer does
+  not embed libvpx. Fixing it means rewriting the generated `vpx_config.c` after configure.
+- The **MSYS2 builder** (libvpx on Windows) drives libvpx's own Visual Studio projects and does
+  not receive the flags.
+- A root directory **containing a space** would split the flags (they travel through
+  space-separated flag strings).
+
+Check an archive with `strings -a <lib> | grep -c <root>` (plus a UTF-16LE scan on Windows).
+
 ### Post-build assertions
 A library YAML can declare post-install checks that abort the build when the
 artifact is structurally valid but functionally broken (e.g. OpenAL-soft

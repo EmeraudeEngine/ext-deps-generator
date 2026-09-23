@@ -26,12 +26,12 @@ class LinuxPlatform(Platform):
         return {}
 
     def get_c_flags(self, config: "BuildConfig") -> str:
-        """Position-independent code for static libraries."""
-        return "-fPIC"
+        """Position-independent code for static libraries, build-machine paths remapped."""
+        return " ".join(["-fPIC", *config.path_remap_flags])
 
     def get_cxx_flags(self, config: "BuildConfig") -> str:
-        """Position-independent code for static libraries."""
-        return "-fPIC"
+        """Position-independent code for static libraries, build-machine paths remapped."""
+        return " ".join(["-fPIC", *config.path_remap_flags])
 
     def post_install(
         self,

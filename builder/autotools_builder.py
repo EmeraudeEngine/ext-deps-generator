@@ -266,6 +266,8 @@ class AutotoolsBuilder:
         else:
             flags.extend(["-g3", "-O0"])
 
+        flags.extend(self.config.path_remap_flags)
+
         return flags
 
     def _get_cflags(self) -> str:

@@ -119,6 +119,41 @@ class BuildConfig:
         """Get the builds directory."""
         return self.root_dir / "builds" / self.build_suffix
 
+    @property
+    def path_remap_flags(self) -> list[str]:
+        """Compiler flags keeping this checkout's absolute path out of the archives.
+
+        ``__FILE__`` / ``assert()`` expand to the path the compiler was given, so every
+        library would bake ``<root>/repositories/<lib>/...`` (or ``<root>/builds/...`` for
+        sources generated or copied into the build tree) into the application linking
+        it. They are rewritten relative to the root (``repositories/libressl/...``).
+
+        Only the macro expansions are remapped, never the debug information: the Debug
+        archives stay debuggable. GCC/Clang: ``-fmacro-prefix-map``. MSVC has no remap
+        for ``__FILE__``, only ``/d1trimfile:`` (undocumented, relied on by Chromium),
+        which strips the prefix; it matches the path as spelled, so both separator
+        spellings are passed.
+
+        ⚠️ The flags travel through space-separated flag strings (``CMAKE_C_FLAGS``,
+        ``CFLAGS``): a root directory containing a space would split them.
+        """
+        roots = []
+        for root in (self.root_dir.absolute(), self.root_dir.resolve()):
+            text = str(root).rstrip("\\/")
+            if text not in roots:
+                roots.append(text)
+
+        flags = []
+        for root in roots:
+            if self.platform_name == "windows":
+                for prefix in (root.replace("/", "\\") + "\\", root.replace("\\", "/") + "/"):
+                    flag = f"/d1trimfile:{prefix}"
+                    if flag not in flags:
+                        flags.append(flag)
+            else:
+                flags.append(f"-fmacro-prefix-map={root}/=")
+        return flags
+
     def validate(self) -> list[str]:
         """Validate the configuration. Returns list of errors."""
         errors = []

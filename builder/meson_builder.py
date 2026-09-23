@@ -131,6 +131,8 @@ class MesonBuilder:
         cpu_family = _MESON_CPU_FAMILY.get(target_arch, target_arch)
         min_version = self.config.macos_sdk or "12.0"
 
+        remap_args = "".join(f", '{flag}'" for flag in self.config.path_remap_flags)
+
         cross_file = build_dir.parent / f"{build_dir.name}_meson_cross.ini"
         cross_file.write_text(
             f"[binaries]\n"
@@ -146,8 +148,8 @@ class MesonBuilder:
             f"endian = 'little'\n"
             f"\n"
             f"[built-in options]\n"
-            f"c_args = ['-arch', '{target_arch}', '-mmacosx-version-min={min_version}', '-fPIC']\n"
-            f"cpp_args = ['-arch', '{target_arch}', '-mmacosx-version-min={min_version}', '-fPIC']\n"
+            f"c_args = ['-arch', '{target_arch}', '-mmacosx-version-min={min_version}', '-fPIC'{remap_args}]\n"
+            f"cpp_args = ['-arch', '{target_arch}', '-mmacosx-version-min={min_version}', '-fPIC'{remap_args}]\n"
             f"c_link_args = ['-arch', '{target_arch}']\n"
             f"cpp_link_args = ['-arch', '{target_arch}']\n"
         )
@@ -224,9 +226,14 @@ class MesonBuilder:
                 vscrt = "mdd" if is_debug else "md"
             cmd.append(f"-Db_vscrt={vscrt}")
 
-        # Cross-compilation file
+        # Cross-compilation file (it carries the path remapping itself: a command-line
+        # c_args would REPLACE the cross file's list, dropping -arch).
         if cross_file:
             cmd.append(f"--cross-file={cross_file}")
+        else:
+            remap = " ".join(self.config.path_remap_flags)
+            cmd.append(f"-Dc_args={remap}")
+            cmd.append(f"-Dcpp_args={remap}")
 
         # Native file (Windows: force MSVC)
         if native_file:

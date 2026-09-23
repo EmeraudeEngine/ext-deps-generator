@@ -58,12 +58,12 @@ class MacOSPlatform(Platform):
         return options
 
     def get_c_flags(self, config: "BuildConfig") -> str:
-        """macOS architecture, version min, and position-independent code."""
-        return f"-arch {config.arch} -mmacosx-version-min={config.macos_sdk} -fPIC"
+        """macOS architecture, version min, position-independent code, build-machine paths remapped."""
+        return " ".join([f"-arch {config.arch} -mmacosx-version-min={config.macos_sdk} -fPIC", *config.path_remap_flags])
 
     def get_cxx_flags(self, config: "BuildConfig") -> str:
-        """macOS architecture, version min, and position-independent code."""
-        return f"-arch {config.arch} -mmacosx-version-min={config.macos_sdk} -fPIC"
+        """macOS architecture, version min, position-independent code, build-machine paths remapped."""
+        return " ".join([f"-arch {config.arch} -mmacosx-version-min={config.macos_sdk} -fPIC", *config.path_remap_flags])
 
     def get_linker_flags(self, config: "BuildConfig") -> str:
         """macOS linker flags for cross-compilation."""
