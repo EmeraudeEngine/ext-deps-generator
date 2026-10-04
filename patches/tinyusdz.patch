@@ -146,3 +146,20 @@ index 65ee3db74..5eabea527 100644
  
  namespace tinyusdz {
  namespace tydra {
+diff --git a/src/io-util.cc b/src/io-util.cc
+--- a/src/io-util.cc
++++ b/src/io-util.cc
+@@ -42,8 +42,11 @@
+ 
+ #else  // !_WIN32
+ 
+-#if defined(TINYUSDZ_BUILD_IOS) || defined(TARGET_OS_IPHONE) || \
+-    defined(TARGET_IPHONE_SIMULATOR) || defined(__ANDROID__) || \
++// NOTE (ext-deps-generator patch): Apple's TargetConditionals.h DEFINES TARGET_OS_IPHONE and
++// TARGET_IPHONE_SIMULATOR on macOS too, with the VALUE 0: testing `defined()` sent macOS to the
++// "non posix" branch, so mmap was compiled out and every MMapFile() failed silently.
++#if defined(TINYUSDZ_BUILD_IOS) || (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE) || \
++    (defined(TARGET_IPHONE_SIMULATOR) && TARGET_IPHONE_SIMULATOR) || defined(__ANDROID__) || \
+     defined(__EMSCRIPTEN__) || defined(__wasi__)
+ 
+ // non posix
