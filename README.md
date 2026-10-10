@@ -930,6 +930,15 @@ Quick recap and reminder to release assets on GitHub. Here is an example for sep
 
 *Notes* : Use --clobber to overwrite.
 
+*Notes* : **archive layout** — each zip holds exactly ONE top-level directory, named after the
+configuration and WITHOUT the version: `linux.x86_64-Release-glibc2.41.v018.zip` extracts to
+`linux.x86_64-Release-glibc2.41/` (then `bin/ include/ lib/ share/ …`). The version lives only in
+the zip's file name. No other top-level entry (`.DS_Store`, `__MACOSX`), and entry names use `/`
+— a Windows zip written with `\` extracts to flat files named `a\b\c` on Linux/macOS. Build it
+from `output/`: `zip -qry <cfg>.vNNN.zip <cfg>` on Linux/macOS (`-y` keeps the onnxruntime and
+hwloc symlinks), Python's `zipfile` on Windows. Check: `unzip -Z1 <zip> | cut -d/ -f1 | sort -u`
+must print the configuration name alone.
+
 *Notes* : since onnxruntime joined the set, `output/<config>/lib` contains a **versioned
 shared library and its symlinks** (`libonnxruntime.so` -> `.so.1` -> `.so.1.29.0`, and the
 `.dylib` equivalents). Zip them with `zip -y` (store symlinks as symlinks); without it the
