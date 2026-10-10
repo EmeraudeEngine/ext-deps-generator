@@ -36,17 +36,26 @@ fixed its side (`cmake/StripBuildMachinePaths.cmake`, and `deploy/package.py`
 The builder side is done (`BuildConfig.path_remap_flags`, `AGENTS.md § Build-machine paths`),
 validated on Linux on libressl, hwloc and harfbuzz only.
 
-- Validate `/d1trimfile:` on Windows (CMake and Meson builds; watch for an unknown-option warning)
-  and the macOS cross file (arm64 → x86_64).
+- Validate the macOS cross file (arm64 → x86_64). `/d1trimfile:` is validated on Windows
+  (2026-10-10, Release-MD and Debug-MD, CMake and Meson): no unknown-option warning, no source
+  path left in any archive except the gaps listed below.
 - Rebuild **every** configuration on the three OSes, check each archive (`strings -a` / UTF-16LE
   scan for the root), publish a new archive version and bump it in emeraude-base.
-- lib3mf / plutovg: declare their real languages (lib3mf `languages: [c, cxx]`… check what
-  it compiles; lunasvg `[c, cxx]`) so they receive the platform flags — Debug archives only leak
-  today, and the same gap withholds `-fPIC` / `-arch` from them.
+- lib3mf / plutovg / libtiff's C++ part: declare their real languages (lib3mf
+  `languages: [c, cxx]`… check what it compiles; lunasvg `[c, cxx]`; libtiff has no `languages`
+  key, so `tiffxx` — `tif_stream.cxx` — gets no C++ flags) so they receive the platform flags —
+  Debug archives only leak today (Windows Debug-MD: lib3mf ~7000, plutovg ~90, `tiffxxd.lib` 6),
+  and the same gap withholds `-fPIC` / `-arch` from them.
 - libvpx: its configure line (`--prefix=<root>/output/...`) is still compiled in; only matters if
   a consumer ever embeds libvpx.
 
 ## ⚠️ Traps
 
+- **A raw root count over a Windows `.lib` is dominated by harmless metadata** (~7000 hits per
+  configuration): every archive member is named after its object's absolute path
+  (`builds\<cfg>\<lib>\<target>.dir\Release\*.obj`), and Debug objects carry the compiler command
+  line (`-I<root>\…`, seen in harfbuzz) in their CodeView build info. Neither reaches a linked
+  `.exe`. Scan for `<root>\repositories` / `<root>/repositories` instead — that is what
+  `__FILE__` / `assert()` produce.
 - libressl also compiles `OPENSSLDIR` in (`C:/Windows/libressl/ssl` on Windows) — absolute but not
   machine-specific; leave it unless the owner decides otherwise.
