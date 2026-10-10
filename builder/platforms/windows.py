@@ -199,10 +199,14 @@ class WindowsPlatform(Platform):
             # list: with a list, cmd's /c de-quoting mangles a vcvarsall path
             # containing spaces and exits rc=1. `/s` strips only the outer quote
             # pair, preserving the inner quoting around the path.
+            # cmd writes in the console's OEM code page (French: "n'est pas
+            # reconnu" with 0x82 in cp850); Python 3.15's default UTF-8 mode
+            # would decode it strictly and kill the reader thread.
             result = subprocess.run(
                 f'cmd.exe /s /c " "{vcvarsall}" {vcvars_arch} >nul && set "',
                 capture_output=True,
-                text=True,
+                encoding="oem",
+                errors="replace",
                 timeout=60,
             )
             if result.returncode != 0:
