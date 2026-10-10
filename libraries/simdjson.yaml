@@ -17,6 +17,8 @@ languages: [cxx]
 # it can compile (fallback, westmere, haswell, icelake) goes into the archive and the CPU
 # is probed on first use. Do NOT narrow this with SIMDJSON_IMPLEMENTATION or
 # -march=native — the archive is redistributable and must run on any machine.
+# Checked on MSVC for v018 (2026-10-10): same runtime dispatch, `haswell` selected at run time
+# on the build machine's CPU, not baked in.
 #
 # ⚠️ THE ONLY INSTALLED HEADER IS THE AMALGAMATED `singleheader/simdjson.h` (7.7 MiB,
 # 187k lines), copied to `include/simdjson.h`. There is no `install(DIRECTORY include/)`

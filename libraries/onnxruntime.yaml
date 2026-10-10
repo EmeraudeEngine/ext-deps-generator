@@ -28,6 +28,12 @@ languages: [c, cxx]
 # libc — nothing else. The C++ API (`onnxruntime_cxx_api.h`) is a header-only wrapper over
 # that C API, so there is no C++ ABI surface across the boundary either.
 #
+# Validated on the three OSes for v018 (2026-10-10). Windows: `dumpbin /dependents
+# onnxruntime.dll` shows VCRUNTIME140 / MSVCP140 in MD (the D variants in Debug) and NO VC++
+# runtime DLL in MT, so CMAKE_MSVC_RUNTIME_LIBRARY reaches the DLL as intended; the CRT scan
+# of the import lib reports SKIP, as expected. macOS: plain dylib, arm64 and the x86_64 cross
+# build both single-arch. Each package's only shared library is this one.
+#
 # ⚠️ A SECOND, TINY .so SHIPS ALONGSIDE: `libonnxruntime_providers_shared.so` (~15 KiB) is
 # the bridge ONNX Runtime uses to load out-of-tree execution providers. With only the CPU
 # provider built nothing loads it, but the install step ships it unconditionally — do not

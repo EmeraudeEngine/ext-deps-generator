@@ -33,14 +33,17 @@ fixed its side (`cmake/StripBuildMachinePaths.cmake`, and `deploy/package.py`
 
 ## What remains
 
-The builder side is done (`BuildConfig.path_remap_flags`, `AGENTS.md § Build-machine paths`),
-validated on Linux on libressl, hwloc and harfbuzz only.
+The builder side is done (`BuildConfig.path_remap_flags`, `AGENTS.md § Build-machine paths`) and
+every configuration of the three OSes was rebuilt with it for **v018** (2026-10-10): 0 source
+path (`<root>/repositories`) in any archive of any configuration — Release, and Debug outside
+DWARF / CodeView — except the libvpx gaps below. Validated: GCC `-fmacro-prefix-map`, MSVC
+`/d1trimfile:` on CMake and Meson (no unknown-option warning), the macOS arm64 → x86_64 cross
+file.
 
-- Validate the macOS cross file (arm64 → x86_64). `/d1trimfile:` is validated on Windows
-  (2026-10-10, Release-MD and Debug-MD, CMake and Meson): no unknown-option warning, no source
-  path left in any archive except the gaps listed below.
-- Rebuild **every** configuration on the three OSes, check each archive (`strings -a` / UTF-16LE
-  scan for the root), publish a new archive version and bump it in emeraude-base.
+- Bump emeraude-base to v018, then let app_system's `verify_no_build_machine_paths()` turn its
+  warning on these archive paths into an error.
+- libvpx on Windows: the MSYS2 builder drives libvpx's own Visual Studio projects and does not
+  receive the flags (`vpxmd.lib` ~4.7k source paths in Release-MD).
 - libvpx: its configure line (`--prefix=<root>/output/...`) is still compiled in; only matters if
   a consumer ever embeds libvpx.
 

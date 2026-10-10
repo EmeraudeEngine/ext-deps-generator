@@ -46,6 +46,11 @@ languages: [c, cxx]
 # separate archive is installed and none is missing: upstream merges the astcenc
 # objects into libktx.a itself (ar -t shows astcenc_*.cpp.o; nm resolves every
 # astcenc_* reference within the archive). DependenciesTest links accordingly.
+# ⚠️ macOS x86_64: `lipo -archs libktx.a` prints `x86_64 x86_64h`, not `x86_64` (seen for
+# v018, 2026-10-10). astc-encoder compiles its AVX2 variant as the x86_64h (Haswell)
+# sub-architecture and Apple's libtool merges it as a second slice. The plain x86_64 slice
+# is self-contained (its astcenc_* objects define every entry point), so an `-arch x86_64`
+# link never sees the x86_64h one. A packaging check on `lipo -archs == x86_64` must allow it.
 
 cmake_options:
   # Project build policy (AGENTS.md § Build policy): pin the standard, otherwise the build

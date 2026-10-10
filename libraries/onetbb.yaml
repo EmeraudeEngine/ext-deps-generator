@@ -51,6 +51,11 @@ languages: [cxx]
 # src/tbb/CMakeLists.txt:55); the `_debug` comes from `CMAKE_DEBUG_POSTFIX _debug` set
 # unconditionally in the top-level CMakeLists. Both are handled in the test project's
 # CMakeLists.txt and both must be handled engine-side.
+# Measured on Windows for v018 (2026-10-10): the names above are what is installed, plus an
+# identical `tbb.lib` / `tbb_debug.lib` beside them — upstream's deliberate "legacy name"
+# copy (src/tbb/CMakeLists.txt:172). Harmless; link the `tbb12` one. No /GL (the LTCG
+# rejection never fired), CRT directives correct in all four Windows packages, and the
+# macOS x86_64-from-arm64 cross build produces single-arch x86_64 archives.
 #
 # ⚠️ `TBB_USE_DEBUG` IS A PUBLIC COMPILE DEFINITION IN DEBUG BUILDS
 # (`$<$<CONFIG:DEBUG>:TBB_USE_DEBUG>`, src/tbb/CMakeLists.txt), and a consumer of the

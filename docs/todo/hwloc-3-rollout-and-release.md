@@ -41,6 +41,11 @@ must move to the new release in the same push.
   compiles and links (every symbol resolves) but was **not run** — the build Mac has no Rosetta 2
   (owner decision). `libktx.a` carries an extra `x86_64h` slice (astc-encoder's AVX2 variant),
   harmless for an `-arch x86_64` link.
+- Windows MD and MT, Release and Debug (2026-10-10): master's `contrib/windows-cmake` still
+  honours `HWLOC_SKIP_TOOLS` / `HWLOC_SKIP_LSTOPO` / `HWLOC_ENABLE_TESTING`, CRT validation OK,
+  `DependenciesTest` 49/49 in all four (LightUSD rc4).
+- Archive v018 cut from `main` at the commit carrying this line (12 → 10 assets: no glibc 2.35
+  build this time, owner decision 2026-10-10).
 
 ## Same release: tinyusdz is now LightUSD (owner decision 2026-10-10)
 
@@ -58,12 +63,9 @@ no compatibility alias, so the consumers switch together with hwloc 3:
 
 ## To do
 
-- Windows MD and MT (Release, Debug): `contrib/windows-cmake` exists on master but changed
-  (15 commits since 2.14.0-33) — check the YAML's `cmake_options` are still honoured
-  (`HWLOC_SKIP_TOOLS`, `HWLOC_SKIP_LSTOPO`, `HWLOC_ENABLE_TESTING`) and the CRT validation.
-- `DependenciesTest` on Windows and the remaining macOS configs (it links hwloc).
 - Every downstream consumer of the archive that calls the hwloc API directly: adapt it to 3.0
   (and to LightUSD, above) before it moves to the new release.
-- Cut the release, then move emeraude-base's `EXTERNAL_DEPENDENCIES_VERSION`.
+- Move emeraude-base's `EXTERNAL_DEPENDENCIES_VERSION` to v018, together with the engine
+  adaptation above.
 - When 3.0.0 is tagged: move the pin to the tag and re-check whether `patches/hwloc.patch` is
   still needed (report the wrap-around upstream only on the owner's decision).

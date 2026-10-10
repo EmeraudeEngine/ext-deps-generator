@@ -697,7 +697,8 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Version: 1.3.2
 - Dependencies: None
 - Usage: Compression library.
-- Notes: This version builds the static and the shared libraries, beware when linking. An upcoming release will fix this with cmake options.
+- Notes: only the static library is installed — checked on the three OSes for v018 (2026-10-10):
+  no zlib `.so` / `.dylib` / `.dll` in any package.
 
 ## zstd (Zstandard)
 [release, f8745da6ff1ad1e7bab384bd1f9d742439278e99]
@@ -706,7 +707,8 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Version: 1.5.7
 - Dependencies: pthread-win32 on Windows
 - Usage: Compression library.
-- Notes: This version builds the static and the shared libraries, beware when linking.
+- Notes: only the static library is installed — checked on the three OSes for v018 (2026-10-10):
+  no zstd `.so` / `.dylib` / `.dll` in any package.
 
 ## libressl
 [VENDORED — release tarball, NOT a git submodule]
