@@ -2,6 +2,7 @@
 Meson build orchestration.
 """
 
+import os
 import platform as platform_module
 import shutil
 import subprocess
@@ -42,7 +43,16 @@ class MesonBuilder:
         # foo.lib instead of MSYS2 gcc's libfoo.a.
         self._env: Optional[dict[str, str]] = None
         if hasattr(platform, "get_msvc_env"):
-            self._env = platform.get_msvc_env(config)
+            # PYTHONUTF8=0: a localized MSVC (French, ...) prints in the console's
+            # OEM code page (`version\xff19.44` in cp850). Meson decodes child
+            # output with errors='replace' unless the locale encoding is UTF-8,
+            # which Python 3.15 makes the default (PEP 686) -> strict UTF-8
+            # decode, UnicodeDecodeError, then `'NoneType' object has no
+            # attribute 'split'` in compiler detection. VSLANG=1033 is no
+            # alternative: it needs the English pack, absent from a French-only
+            # Visual Studio install.
+            msvc_env = platform.get_msvc_env(config) or os.environ
+            self._env = {**msvc_env, "PYTHONUTF8": "0"}
 
     def build(self, lib: Library) -> bool:
         """Build a single library. Returns True on success."""

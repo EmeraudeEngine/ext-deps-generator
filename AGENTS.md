@@ -425,6 +425,11 @@ For libraries that use Meson as their build system (e.g., harfbuzz). The builder
 - For macOS cross-compilation (ARM host -> x86_64 target), generates a Meson cross-file with `[host_machine]` and `[built-in options]` sections
 - Runs `meson compile` and `meson install`
 - Post-install validation (CRT on Windows, architecture on macOS) runs after install
+- ⚠️ On Windows it runs Meson with `PYTHONUTF8=0`. A localized MSVC (French) prints in the
+  console's OEM code page, and Python 3.15+ defaults to UTF-8 mode (PEP 686), which pushes Meson
+  onto a strict UTF-8 decode: compiler detection then dies with `UnicodeDecodeError` followed by
+  `'NoneType' object has no attribute 'split'` ("This is a Meson bug"). `VSLANG=1033` does not
+  help on a French-only Visual Studio install, which lacks the English resources (2026-10-10).
 
 ## Open work — `docs/todo/`, one file per idea
 
