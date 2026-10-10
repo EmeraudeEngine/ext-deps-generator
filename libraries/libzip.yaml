@@ -12,7 +12,6 @@ use_install_prefix_as_find_root: true
 cmake_options:
   ENABLE_COMMONCRYPTO: true
   ENABLE_GNUTLS: false
-  ENABLE_MBEDTLS: false
   ENABLE_OPENSSL: false
   ENABLE_WINDOWS_CRYPTO: false
   ENABLE_BZIP2: true

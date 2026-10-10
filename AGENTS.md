@@ -77,8 +77,9 @@ CMakeLists.txt              # Test project to validate all libs link correctly
 > 2. **C++20.** The consuming engine and `DependenciesTest` are C++20; a library compiled to
 >    an older standard can present a different API through the same headers (the
 >    `std::string_view` guards are the classic case). Prefer `CMAKE_CXX_STANDARD: 20` in the
->    YAML — but check that upstream honours it: simdjson, for one, overwrites it from its own
->    cache variable and silently ignores the command line (see `libraries/simdjson.yaml`).
+>    YAML — but check that upstream honours it: simdjson up to 4.x, for one, overwrote it from
+>    its own cache variable and silently ignored the command line (fixed in 5.x, see
+>    `libraries/simdjson.yaml`).
 > 3. **No C++ exceptions.** The engine compiles with `-fno-exceptions`, so a library whose
 >    headers can throw into engine code is a compile error waiting to happen. Turn off the
 >    exception interface wherever upstream offers a switch (`SIMDJSON_EXCEPTIONS`,

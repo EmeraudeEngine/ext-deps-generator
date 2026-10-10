@@ -1,7 +1,7 @@
-# target-commit: 0edd9d54876f3135e431575214dd6d8a72866fee
+# target-commit: ce50d78021d64507f89e8c9fc2c2e51018117857
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 49182df0..f4938e0a 100644
+index a3ee8e07..c74c776c 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -15,9 +15,13 @@

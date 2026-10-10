@@ -2,6 +2,25 @@ name: fastgltf
 source_dir: repositories/fastgltf
 languages: [c, cxx]
 
+# glTF 2.0 parser, pinned to the v0.9.1 release tag. 0.9.0 -> 0.9.1 renamed the math
+# helper `invert()` to `inverse()` and removed FASTGLTF_ENABLE_DEPRECATED_EXT (never set
+# here); FASTGLTF_ENABLE_INSTALL is new and defaults ON, which the install relies on.
+#
+# ⚠️ simdjson IS A REAL DEPENDENCY, NOT A BUNDLED DETAIL. `cmake/dependencies.cmake` does
+# `find_package(simdjson CONFIG)` and, when that misses, DOWNLOADS the simdjson
+# amalgamation from GitHub at configure time (`deps/simdjson/`, 4.6.11 in 0.9.1) and
+# compiles it PRIVATELY into libfastgltf.a. Until 2026-10-10 this YAML had no
+# `depends_on`, so no CMAKE_PREFIX_PATH reached the configure and that is what happened:
+# the archive carried two simdjson copies in the same `simdjson::` namespace (fastgltf's
+# and the standalone one, different versions — an ODR violation waiting to bite), and the
+# build needed network access. `depends_on: [simdjson]` makes find_package resolve to the
+# installed package, so fastgltf links `simdjson::simdjson` instead and a consumer must
+# link libsimdjson after libfastgltf (DependenciesTest does). The installed simdjson is
+# built with SIMDJSON_EXCEPTIONS=0 / SIMDJSON_THREADS_ENABLED=1, which fastgltf picks up
+# through the package's INTERFACE definitions. Check after a bump: the configure log must
+# say "fastgltf: Found simdjson config", never "downloading".
+depends_on: [simdjson]
+
 cmake_options:
   # Project build policy (AGENTS.md § Build policy): pin the standard, otherwise the build
   # takes the host compiler's default (gnu++17 on gcc 14 today, something else tomorrow) and

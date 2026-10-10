@@ -131,11 +131,11 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   option to opt out; removing them would take a patch.
 
 ## fastgltf
-[v0.9.x, 0d1b67a28c4950ea2deb796702006dcbe31e02b3]
+[v0.9.1, 705564d4d54500ae88befb0db9e361e447923655]
 
 - URL: https://github.com/spnda/fastgltf.git
-- Version: 0.9.0
-- Dependencies: None
+- Version: 0.9.1
+- Dependencies: simdjson (the installed package; without it fastgltf downloads and embeds a private copy — see libraries/fastgltf.yaml)
 - Usage: GLTF 2.0 file parser.
 
 ## flac
@@ -155,10 +155,10 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Usage: Fonts files (.ttf, .tti, ...) library.
 
 ## glslang
-[16.5.0, a8d28bd082bff18ffbe80996e922b012f915cf07]
+[16.6.0, e1b562a8bed273a02f30b59b66a5d499793cede5]
 
 - URL: https://github.com/KhronosGroup/glslang.git
-- Version: 16.5.0
+- Version: 16.6.0
 - Dependencies: spirv-tools (which itself depends on spirv-headers)
 - Usage: GLSL/HLSL front-end and SPIR-V code generator. Required to compile GLSL shaders to SPIR-V at runtime in Vulkan engines.
 - Notes: Built with `ALLOW_EXTERNAL_SPIRV_TOOLS=ON` and `BUILD_EXTERNAL=OFF` so the SPIR-V optimizer is consumed from the standalone spirv-tools package via `find_package` instead of glslang's bundled `update_glslang_sources.py` fetch. Commits of spirv-tools and spirv-headers are aligned with glslang's `known_good.json` to stay ABI-compatible.
@@ -171,18 +171,18 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   `set()` conditional; the two standards present the same API here, so it was left alone.
 
 ## harfbuzz 
-[14.4.0, 36cb489cb02ce4b92099669ba9f9bea348eff93f]
+[14.6.0, c7a7457b7385f33178e8cf87615ca077a810bbe7]
 
 - URL: https://github.com/harfbuzz/harfbuzz.git
-- Version: 14.4.0
+- Version: 14.6.0
 - Dependencies: None
 - Usage: Vector font library. Requested by Freetype
  
 ## hwloc 
-[v2.14, 51896fab7ce4244bd49334558e01c0c2bd8dc2af]
+[master (3.0.0a1), ead59f4aebfe5ab705eead4abdd34fd12b22bcf9]
 
 - URL: https://github.com/open-mpi/hwloc
-- Version: 2.14
+- Version: 3.0.0a1-git (upstream master, + patches/hwloc.patch; 3.0 breaks the 2.x cpukinds API — see libraries/hwloc.yaml)
 - Dependencies: None
 - Usage: Fetch system capabilities.
 - Notes: Linux and macOS versions are using autotools instead of cmake.
@@ -251,10 +251,10 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Usage: Ogg container format. Required by libvorbis, flac, and libsndfile.
 
 ## libpng 
-[v1.6.58, 3061454d980de7d53608f594194cfac722721d2a]
+[v1.6.59, cd952f49f95bb27154ae77dbb103032d95f6e580]
 
 - URL: https://github.com/glennrp/libpng.git
-- Version: 1.6.58
+- Version: 1.6.59
 - Dependencies: zlib
 - Usage: Image format library.
 
@@ -319,10 +319,10 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Usage: Image format library.
 
 ## libzip 
-[main, 6f8a0cdd24a0dc6cce9dac4a7679da784ab124ea]
+[v1.12, b26af3afd67e6b01e1e38a446ecb950e47fff146]
 
 - URL: https://github.com/nih-at/libzip.git
-- Version: 1.11.14
+- Version: 1.12 (Mbed TLS support removed upstream; the option is gone from the YAML)
 - Dependencies: zlib bzip2 xz zstd
 - Usage: Compressed archive management library.
 - Notes: On Windows, you need to add "PATHS LIBS_ROOT" inside find_package() functions in the CMakeLists.txt before compiling.
@@ -349,10 +349,10 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   is the same under both standards.
 
 ## manifold
-[v3.5.3, 0edd9d54876f3135e431575214dd6d8a72866fee]
+[v3.5.4, ce50d78021d64507f89e8c9fc2c2e51018117857]
 
 - URL: https://github.com/elalish/manifold.git
-- Version: 3.5.3 (release tag)
+- Version: 3.5.4 (release tag)
 - Dependencies: clipper2, onetbb
 - Usage: robust boolean / CSG operations on watertight triangle meshes — union, difference,
   intersection, minkowski, offsetting, SDF meshing — plus the 2D `CrossSection` type. Both
@@ -382,10 +382,10 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   additive inline helpers, so neither has to be replayed.
 
 ## meshoptimizer
-[v1.2, 9d9890c73011d75920af614485296d1e03e95448]
+[v1.3, 9e1f07b159d3cb777f1c67ed31fc11fd117986f4]
 
 - URL: https://github.com/zeux/meshoptimizer.git
-- Version: 1.2
+- Version: 1.3
 - Dependencies: None
 - Usage: Vertex/index buffer codec behind `EXT_meshopt_compression`. fastgltf *parses* the
   extension (it fills a `fastgltf::CompressedBufferView` per buffer view) but never decodes
@@ -545,12 +545,10 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   the C API and presents the same surface either way.
 
 ## simdjson
-[v4.6.9, 0a2e33f345f49cb6e24401d5b16dbdbc9650921a]
+[v5.0.3, bf89ddd00ef5fcb6a7f20611ea8853d258b67249]
 
 - URL: https://github.com/simdjson/simdjson.git
-- Version: 4.6.9 (release tag — the tagged commit is titled "Release candidate 4.6.9"
-  because that is upstream's wording for its release-prep commit; `simdjson_version.h` on
-  that commit says a bare `4.6.9`)
+- Version: 5.0.3 (release tag)
 - Dependencies: None
 - Usage: SIMD-accelerated JSON parser (DOM and On-Demand APIs), for the JSON the engine
   reads outside glTF — configuration, manifests, descriptors. 4.x also ships a serialisation
@@ -578,11 +576,11 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   off (its help text reads "Disable singleheader generation", which invites the mistake)
   installs the library with **no header whatsoever**. The file is checked into the
   repository at release time, so nothing is generated and Python is not needed.
-- Warning: `CMAKE_CXX_STANDARD` is ignored here, so do not reach for it —
-  `cmake/developer-options.cmake` does a plain
-  `set(CMAKE_CXX_STANDARD ${SIMDJSON_CXX_STANDARD})`, and a normal variable shadows the
-  cache entry a `-D` sets: the command line is silently dropped. The knob is
-  `SIMDJSON_CXX_STANDARD` (cache variable, default 17), set to 20 in the YAML.
+- Notes: since 5.x a command-line `CMAKE_CXX_STANDARD` is honoured
+  (`cmake/developer-options.cmake` guards it with `if(NOT DEFINED CMAKE_CXX_STANDARD)`), so
+  the YAML sets the policy option directly. Up to 4.6.9 that line was an unguarded `set()`
+  and the `-D` was silently dropped — re-check `build.ninja` after every bump.
+  `SIMDJSON_STATIC_REFLECTION_MODE` (5.x's tri-state, default `AUTO`) is pinned `OFF`.
 - Warning: **the archive is built without the exception-throwing interface**
   (`SIMDJSON_EXCEPTIONS=OFF`), because the engine that consumes it compiles without
   exceptions — so **consumers must define `SIMDJSON_EXCEPTIONS=0`** as well. This selects an
@@ -598,36 +596,36 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   first place to look if a mixed-mode link ever misbehaves.
 
 ## spirv-headers
-[vulkan-sdk-1.4.357.0, 29981f65241605e08b0ede4cfeb999fe3b723c6a]
+[vulkan-sdk-1.4.363.0, 496543121ce6419f23d6fa5d7194ba66c36212d2]
 
 - URL: https://github.com/KhronosGroup/SPIRV-Headers.git
-- Version: vulkan-sdk-1.4.357.0
+- Version: vulkan-sdk-1.4.363.0
 - Dependencies: None
 - Usage: SPIR-V header files (enums, opcodes). Consumed by spirv-tools.
-- Notes: Commit pinned to glslang 16.5.0's `known_good.json` to keep the SPIR-V toolchain
+- Notes: Commit pinned to glslang 16.6.0's `known_good.json` to keep the SPIR-V toolchain
   coherent. This trio (spirv-headers, spirv-tools, glslang) is bumped **together**, always
   from that file — never library by library.
 
 ## spirv-tools
-[v2026.3, b707790a898e44038547df54580022fc1cf89c3d]
+[v2026.4, ef96ed763b43b59b33b31b362f09a02b729fa1c9]
 
 - URL: https://github.com/KhronosGroup/SPIRV-Tools.git
-- Version: 2026.3 (the commit glslang 16.5.0 asks for happens to be the v2026.3 release tag,
-  where the previous pin sat on a release candidate)
+- Version: 2026.4 (the commit glslang 16.6.0 asks for is the v2026.4 release tag; all three
+  of the trio carry the `vulkan-sdk-1.4.363.0` tag)
 - Dependencies: spirv-headers
 - Usage: SPIR-V parsing, validation, optimization and linking. Consumed by glslang's SPIR-V optimizer (`SPIRV-Tools-opt`).
-- Notes: Built with `SPIRV_TOOLS_BUILD_STATIC=ON` and `SPIRV-Headers_SOURCE_DIR=${INSTALL_PREFIX}` so the headers from the previously installed `spirv-headers` package are reused (no `add_subdirectory` of headers). Commit pinned to glslang 16.5.0's `known_good.json`.
+- Notes: Built with `SPIRV_TOOLS_BUILD_STATIC=ON` and `SPIRV-Headers_SOURCE_DIR=${INSTALL_PREFIX}` so the headers from the previously installed `spirv-headers` package are reused (no `add_subdirectory` of headers). Commit pinned to glslang 16.6.0's `known_good.json`.
 - Notes: `patches/spirv-tools.patch` adds the `SPIRV_TOOLS_BUILD_SHARED` gate upstream lacks
   (it always builds `libSPIRV-Tools-shared`) and fixes an upstream typo that links mimalloc
-  into the *shared* target from inside the *static* branch. Re-verified against v2026.3: the
-  patch still applies unchanged and the typo is still there. Its `# target-commit:` guard is
+  into the *shared* target from inside the *static* branch. Re-verified against v2026.4: the
+  patch applies with a 10-line offset and the typo is still there. Its `# target-commit:` guard is
   updated with every bump.
 
 ## taglib 
-[v2.3.1, 54ae7d8ac45755e286a5c574280f48d5bef93aef]
+[v2.3.2, deadc2990767dfbda0701e0ab35fdeea653db08f]
 
 - URL: https://github.com/taglib/taglib.git
-- Version: 2.3.1
+- Version: 2.3.2
 - Dependencies: zlib
 - Usage: Audio meta-data library.
 - Warning: **compiled as C++17, not C++20**, in deviation from the build policy: taglib does
@@ -692,19 +690,19 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   must not be turned on just to move the standard.
 
 ## ufbx
-[v0.23.0, fcc5d6ba444cfd3eb80677dba5e37e493941abe5]
+[v0.23.1, 26a482ae66871d7de36eb722aa060bce95bce274]
 
 - URL: https://github.com/ufbx/ufbx.git
-- Version: 0.23.0
+- Version: 0.23.1
 - Dependencies: None (links libm on Unix)
 - Usage: Single-translation-unit FBX 7.x parser. Used for skeletal mesh/animation import.
 - Notes: Upstream is header + single `.c`, no CMakeLists.txt. The patch adds a minimal one that builds a static library and installs `ufbx.h` under `include/ufbx/`.
 
 ## xz (LZMA) 
-[v5.8, 4b73f2ec19a99ef465282fbce633e8deb33691b3]
+[v5.8.4, d3e650e63c110e830fd5391e7f8b45df0b91d3da]
 
 - URL: https://github.com/tukaani-project/xz.git
-- Version: 5.8.3
+- Version: 5.8.4
 - Dependencies: None
 - Usage: Compression library.
 

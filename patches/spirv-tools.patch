@@ -1,10 +1,10 @@
-# target-commit: b707790a898e44038547df54580022fc1cf89c3d
+# target-commit: ef96ed763b43b59b33b31b362f09a02b729fa1c9
 
 diff --git a/source/CMakeLists.txt b/source/CMakeLists.txt
-index 8e918de0..53be07f6 100644
+index d45a2218..63616c66 100644
 --- a/source/CMakeLists.txt
 +++ b/source/CMakeLists.txt
-@@ -337,23 +337,26 @@ function(spirv_tools_default_target_options target)
+@@ -347,23 +347,26 @@ function(spirv_tools_default_target_options target)
    add_dependencies(${target} core_tables extinst_tables)
  endfunction()
  
@@ -43,7 +43,7 @@ index 8e918de0..53be07f6 100644
    endif()
    spirv_tools_default_target_options(${SPIRV_TOOLS}-static)
    # The static target does not have the '-static' suffix.
-@@ -361,20 +364,26 @@ if(SPIRV_TOOLS_BUILD_STATIC)
+@@ -371,20 +374,26 @@ if(SPIRV_TOOLS_BUILD_STATIC)
  
    # Create the "${SPIRV_TOOLS}" target as an alias to either "${SPIRV_TOOLS}-static"
    # or "${SPIRV_TOOLS}-shared" depending on the value of BUILD_SHARED_LIBS.
