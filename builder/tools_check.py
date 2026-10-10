@@ -59,15 +59,23 @@ MIN_APPLE_CLANG_VERSION: tuple[int, int] = (14, 0)
 # support these libraries rely on.
 
 
-def _msys2_present() -> bool:
-    """Return True if MSYS2 bash.exe is reachable (env var or standard path)."""
+# MSYS2 packages libvpx's configure/make needs, as (package, executable).
+MSYS2_PACKAGES: list[tuple[str, str]] = [
+    ("make", "make"),
+    ("diffutils", "diff"),
+    ("perl", "perl"),  # configure aborts with "Perl is required to build"
+]
+
+
+def _msys2_root() -> Path | None:
+    """Return the MSYS2 root whose bash.exe is reachable (env var or standard path)."""
     msys2_path = os.environ.get("MSYS2_PATH")
-    if msys2_path and (Path(msys2_path) / "usr" / "bin" / "bash.exe").exists():
-        return True
-    return any(
-        (Path(root) / "usr" / "bin" / "bash.exe").exists()
-        for root in ("C:/msys64", "C:/msys32")
-    )
+    candidates = [msys2_path] if msys2_path else []
+    candidates += ["C:/msys64", "C:/msys32"]
+    for root in candidates:
+        if (Path(root) / "usr" / "bin" / "bash.exe").exists():
+            return Path(root)
+    return None
 
 
 def check_required_tools(platform_name: str) -> list[str]:
@@ -81,8 +89,14 @@ def check_required_tools(platform_name: str) -> list[str]:
         if shutil.which(executable) is None:
             missing.append(f"{display_name} ({executable})")
 
-    if platform_name == "windows" and not _msys2_present():
-        missing.append("MSYS2 (required for libvpx)")
+    if platform_name == "windows":
+        msys2_root = _msys2_root()
+        if msys2_root is None:
+            missing.append("MSYS2 (required for libvpx)")
+        else:
+            for package, executable in MSYS2_PACKAGES:
+                if not (msys2_root / "usr" / "bin" / f"{executable}.exe").exists():
+                    missing.append(f"MSYS2 package '{package}' (pacman -S {package}, required for libvpx)")
 
     return missing
 

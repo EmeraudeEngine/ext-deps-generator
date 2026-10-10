@@ -39,7 +39,7 @@ CMakeLists.txt              # Test project to validate all libs link correctly
 - Visual Studio 2022 (MSVC v143 toolchain)
 - MSYS2 (required for building libvpx — provides bash/make for its configure script)
   - Install from https://www.msys2.org/
-  - Run `pacman -S make diffutils` inside MSYS2 to install required tools (libvpx's `configure` needs `diff`)
+  - Run `pacman -S make diffutils perl` inside MSYS2 to install required tools (libvpx's `configure` needs `diff` and aborts with "Perl is required to build" without `perl`); the preflight check refuses to start when one is missing
   - NASM recommended for x86_64 assembly optimizations (`pacman -S nasm` or install via Windows PATH)
   - The MSYS2 `bash.exe` and `make` must be accessible (used to run libvpx's configure/make targeting MSVC)
   - Set `MSYS2_PATH` environment variable if MSYS2 is not installed at `C:\msys64`
