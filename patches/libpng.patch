@@ -1,0 +1,17 @@
+# target-commit: cd952f49f95bb27154ae77dbb103032d95f6e580
+
+diff --git a/scripts/cmake/genout.cmake.in b/scripts/cmake/genout.cmake.in
+index 242aa8ab3..91fabf1f0 100644
+--- a/scripts/cmake/genout.cmake.in
++++ b/scripts/cmake/genout.cmake.in
+@@ -19,7 +19,9 @@ set(BINDIR "@CMAKE_CURRENT_BINARY_DIR@")
+ set(APPLE "@APPLE@")
+ set(AWK "@AWK@")
+ set(CMAKE_C_COMPILER "@CMAKE_C_COMPILER@")
+-set(CMAKE_C_FLAGS @CMAKE_C_FLAGS@)
++# Bracket argument: MSVC flags may hold backslashes (/d1trimfile:<root>\),
++# which an unquoted argument would parse as escape sequences ('\U').
++separate_arguments(CMAKE_C_FLAGS NATIVE_COMMAND [=[@CMAKE_C_FLAGS@]=])
+ set(CMAKE_SYSROOT @CMAKE_SYSROOT@)
+ set(INCDIR "@CMAKE_CURRENT_BINARY_DIR@")
+ set(PNG_PREFIX "@PNG_PREFIX@")

@@ -388,6 +388,10 @@ Some libraries need modifications to build correctly (e.g., forced C++ standard,
 - `patches/libvpx.patch` (two hunks):
   1. Replaces `ar` with `libtool -static` on macOS. macOS `ar` creates fat Mach-O archives from cross-arch objects that it cannot update, breaking cross-compilation from ARM to x86_64.
   2. Strips `WholeProgramOptimization` (`/GL`) from the generated Release `.vcxproj` (`gen_msvs_vcxproj.sh`). LTCG objects hide their CRT directives from `dumpbin` (defeating CRT validation) and tie the static lib to the exact producing MSVC toolset — unacceptable for a redistributable archive.
+- `patches/libpng.patch`: `scripts/cmake/genout.cmake.in` pasted `CMAKE_C_FLAGS` unquoted into a
+  generated CMake script, so the MSVC `/d1trimfile:<root>\` flag (§ Build-machine paths) broke
+  the Windows build with `Invalid character escape '\U'`. The patch reads the flags through a
+  bracket argument and `separate_arguments(... NATIVE_COMMAND ...)` (2026-10-10).
 - `patches/hwloc.patch`: a source fix, not a build fix. `hwloc__darwin_build_perflevel_cache_level()` (`hwloc/topology-darwin.c`) restarts at the first CPU after a partial cache group, so a CPU kind whose weight is not a multiple of the cache width (`hw.perflevelN.cpusperl2`) hangs `hwloc_topology_load()` forever. The patch returns once the cpuset is exhausted. Still needed on upstream master; see the header of `libraries/hwloc.yaml` for the 3-core-type Apple silicon story and the master pin.
 - `patches/onnxruntime.patch`: makes MLAS's AVX-NE-CONVERT kernel conditional on the **assembler** instead of the compiler. Upstream gates `x86_64/cvtfp16Avx.S` on `CMAKE_CXX_COMPILER_VERSION >= 13.1`, but `vcvtneeph2ps` / `vcvtneoph2ps` are only known to GNU as from binutils 2.40 — gcc-14 on Ubuntu 22.04 (binutils 2.38) fails with `no such instruction`. See `libraries/onnxruntime.yaml` for the fallback and its consequence.
 
