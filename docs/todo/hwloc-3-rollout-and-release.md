@@ -47,6 +47,14 @@ must move to the new release in the same push.
 - Archive v018 cut from `main` at the commit carrying this line (12 → 10 assets: no glibc 2.35
   build this time, owner decision 2026-10-10).
 
+## Consumers — done 2026-10-10
+
+emeraude-engine `8bfac99e` (USDLoader → `lightusd`, GLTFLoader handles fastgltf 0.9.1's meshopt
+`Color` filter; hwloc 3.0 was already in `66e70adc`) and emeraude-base `a21ae5a`
+(`EXTERNAL_DEPENDENCIES_VERSION` v018, `SetupTinyUSDZ.cmake` → `lightusd`). projet-alpha builds
+`-Werror` on Linux and WorldLobby option 1 composes 2806 prims / 942 meshes / 155 materials / 348
+textures / 4 SphereLight in the engine.
+
 ## Same release: tinyusdz is now LightUSD (owner decision 2026-10-10)
 
 The archive moves tinyusdz from v1.0.0-rc3 to v1.0.0-rc4, where upstream rebranded it LightUSD
@@ -63,9 +71,10 @@ no compatibility alias, so the consumers switch together with hwloc 3:
 
 ## To do
 
-- Every downstream consumer of the archive that calls the hwloc API directly: adapt it to 3.0
-  (and to LightUSD, above) before it moves to the new release.
-- Move emeraude-base's `EXTERNAL_DEPENDENCIES_VERSION` to v018, together with the engine
-  adaptation above.
+- **glibc 2.35 archives for v018** (owner decision 2026-10-10): v018 shipped glibc2.41 only, but
+  emeraude-base falls back to the `glibc2.35` floor, so every Linux host whose glibc is not exactly
+  2.41 cannot download v018 until they exist. Build Release and Debug on the Ubuntu 22.04 machine at
+  tag v018 (`source config_ubuntu22.sh`, gcc-14), zip each `output/<cfg>` with `zip -qry`, and
+  upload the two zips to the existing v018 release.
 - When 3.0.0 is tagged: move the pin to the tag and re-check whether `patches/hwloc.patch` is
   still needed (report the wrap-around upstream only on the owner's decision).
