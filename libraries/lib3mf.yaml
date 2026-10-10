@@ -1,5 +1,9 @@
 name: lib3mf
 source_dir: repositories/lib3mf
+# Languages: lib3mf is C++ with C parts (it had no key, i.e. `[c]`). Without the `cxx` entry the builder passes no CMAKE_CXX_FLAGS, so the C++
+# sources missed the platform flags (-fPIC, -arch, the build-path remapping): until
+# 2026-10-10 the Debug archive leaked the build machine's root in every assert().
+languages: [c, cxx]
 
 # Use ext-deps-generator's own zlib/libzip instead of lib3mf's bundled copies.
 # With USE_INCLUDED_LIBZIP=ON, lib3mf compiles its embedded libzip straight into

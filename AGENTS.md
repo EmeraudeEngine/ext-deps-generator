@@ -275,11 +275,11 @@ the Debug archives stay debuggable. Validated on Linux 2026-09-23 on libressl (C
   linking or at runtime). It runs from the CMake, Meson and Autotools builders. Not needed on
   Windows (the linker drops COFF symbols) nor on macOS without `-g`.
 - ⚠️ **A library whose YAML omits a language does not receive that language's flags**
-  (`languages` defaults to `[c]`, and `CMAKE_CXX_FLAGS` is only passed for `cxx`): lib3mf (C++,
-  no `languages` key) and lunasvg's C sub-library plutovg (`languages: [cxx]`) get neither the
-  remapping nor `-fPIC` / `-arch` from the platform. Only their **Debug** archives leak paths
-  (`assert()` is compiled out in Release), so nothing shipped is affected — but the gap predates
-  this and also concerns the other platform flags.
+  (`languages` defaults to `[c]`, and `CMAKE_CXX_FLAGS` is only passed for `cxx`) — neither the
+  remapping nor `-fPIC` / `-arch` from the platform. lib3mf (C++, no key), lunasvg's C
+  sub-library plutovg (`[cxx]`) and libtiff's C++ wrapper `tiffxx` (no key) fell in it: their
+  Debug archives leaked the root through `assert()`. All three declare `[c, cxx]` since
+  2026-10-10. When adding a library, list **every** language it compiles, sub-libraries included.
 - The **MSYS2 builder** (libvpx on Windows) drives libvpx's own Visual Studio projects and does
   not receive the flags.
 - **Meson on Windows drops the trailing backslash** of `/d1trimfile:<root>\` (a `\` right

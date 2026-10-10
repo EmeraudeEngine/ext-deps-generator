@@ -1,6 +1,9 @@
 name: lunasvg
 source_dir: repositories/lunasvg
-languages: [cxx]
+# Languages: lunasvg is C++, but its sub-library plutovg is C. Without the `cxx` entry the builder passes no CMAKE_CXX_FLAGS, so the C++
+# sources missed the platform flags (-fPIC, -arch, the build-path remapping): until
+# 2026-10-10 the Debug archive leaked the build machine's root in every assert().
+languages: [c, cxx]
 
 cmake_options:
   # ⚠️ DEVIATION from the build policy (AGENTS.md § Build policy) — the C++ standard.

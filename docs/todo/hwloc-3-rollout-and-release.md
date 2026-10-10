@@ -35,8 +35,12 @@ must move to the new release in the same push.
 
 - Linux x86_64 Release and Debug (2026-10-10, glibc 2.41, whole archive rebuilt): `checking for
   hwloc version... 3.0.0a1-git`, `DependenciesTest` 48/48 in both.
-- macOS arm64 Release (2026-10-10, whole archive rebuilt): probe 3 cpukinds in 10 ms on the
-  Mac18,5, `DependenciesTest` 48/48.
+- macOS arm64 Release and Debug (2026-10-10, whole archive rebuilt, LightUSD rc4): probe 3
+  cpukinds in 10 ms on the Mac18,5, `DependenciesTest` 48/48 in both.
+- macOS x86_64 Release and Debug (2026-10-10): every library built, `DependenciesTest` configures,
+  compiles and links (every symbol resolves) but was **not run** — the build Mac has no Rosetta 2
+  (owner decision). `libktx.a` carries an extra `x86_64h` slice (astc-encoder's AVX2 variant),
+  harmless for an `-arch x86_64` link.
 
 ## Same release: tinyusdz is now LightUSD (owner decision 2026-10-10)
 
@@ -54,7 +58,6 @@ no compatibility alias, so the consumers switch together with hwloc 3:
 
 ## To do
 
-- macOS arm64 Debug, x86_64 Release and Debug.
 - Windows MD and MT (Release, Debug): `contrib/windows-cmake` exists on master but changed
   (15 commits since 2.14.0-33) — check the YAML's `cmake_options` are still honoured
   (`HWLOC_SKIP_TOOLS`, `HWLOC_SKIP_LSTOPO`, `HWLOC_ENABLE_TESTING`) and the CRT validation.

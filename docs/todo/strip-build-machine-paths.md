@@ -41,11 +41,6 @@ validated on Linux on libressl, hwloc and harfbuzz only.
   path left in any archive except the gaps listed below.
 - Rebuild **every** configuration on the three OSes, check each archive (`strings -a` / UTF-16LE
   scan for the root), publish a new archive version and bump it in emeraude-base.
-- lib3mf / plutovg / libtiff's C++ part: declare their real languages (lib3mf
-  `languages: [c, cxx]`… check what it compiles; lunasvg `[c, cxx]`; libtiff has no `languages`
-  key, so `tiffxx` — `tif_stream.cxx` — gets no C++ flags) so they receive the platform flags —
-  Debug archives only leak today (Windows Debug-MD: lib3mf ~7000, plutovg ~90, `tiffxxd.lib` 6),
-  and the same gap withholds `-fPIC` / `-arch` from them.
 - libvpx: its configure line (`--prefix=<root>/output/...`) is still compiled in; only matters if
   a consumer ever embeds libvpx.
 

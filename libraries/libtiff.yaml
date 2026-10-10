@@ -1,5 +1,9 @@
 name: libtiff
 source_dir: repositories/libtiff
+# Languages: libtiff is C, plus the C++ stream wrapper libtiffxx (tif_stream.cxx). Without the `cxx` entry the builder passes no CMAKE_CXX_FLAGS, so the C++
+# sources missed the platform flags (-fPIC, -arch, the build-path remapping): until
+# 2026-10-10 the Debug archive leaked the build machine's root in every assert().
+languages: [c, cxx]
 
 # TIFF reader/writer. Pinned to the v4.7.2 RELEASE tag (owner rule: no release candidates).
 #
