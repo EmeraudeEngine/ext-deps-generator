@@ -51,8 +51,15 @@ CMakeLists.txt              # Test project to validate all libs link correctly
 - PyYAML (e.g., `pip install PyYAML` in the project venv)
 - Autoconf, Automake, Libtool and NASM (`brew install autoconf automake libtool nasm`): the
   preflight check refuses to start without them, whatever `--library` names. Homebrew installs
-  libtool as `glibtoolize`; hwloc's `autogen.sh` (`autoreconf`) needs it under its normal name, so
-  put `/opt/homebrew/opt/libtool/libexec/gnubin` first in `PATH` for the build (2026-10-10).
+  GNU libtoolize as `glibtoolize` only; the Autotools builder hands it to hwloc's `autogen.sh`
+  through `LIBTOOLIZE` (autoreconf honours it), nothing to set by hand.
+  ⚠️ **Never put `/opt/homebrew/opt/libtool/libexec/gnubin` in `PATH`**: besides `libtoolize`
+  it holds a GNU `libtool` that shadows Apple's, and CMake archives every static library with
+  `libtool -static` — ktx failed with `libtool: error: unrecognised option: '-static'`. The
+  preflight check now refuses a non-Apple `libtool` (2026-10-10).
+- With the Python packages in the venv (`pip install -r requirements.txt`), **activate it**
+  (`source .venv/bin/activate`): the preflight looks `meson`/`ninja`/`cmake` up in `PATH`, so
+  calling `.venv/bin/python build.py` alone reports Meson missing.
 
 ### Linux
 - GCC or Clang toolchain

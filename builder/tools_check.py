@@ -89,6 +89,19 @@ def check_required_tools(platform_name: str) -> list[str]:
         if shutil.which(executable) is None:
             missing.append(f"{display_name} ({executable})")
 
+    if platform_name == "macos":
+        # autogen.sh needs GNU libtoolize; Homebrew names it glibtoolize (see autotools_builder).
+        if shutil.which("libtoolize") is None and shutil.which("glibtoolize") is None:
+            missing.append("GNU libtoolize (brew install libtool, provides glibtoolize)")
+        # Homebrew's libtool gnubin directory on PATH shadows Apple's libtool with GNU's,
+        # and every CMake static archive (`libtool -static`) then fails to link.
+        apple_libtool = _run_version(["libtool", "-V"])
+        if shutil.which("libtool") and (apple_libtool is None or "Apple" not in apple_libtool):
+            missing.append(
+                "Apple's libtool (a GNU libtool comes first in PATH, e.g. "
+                "/opt/homebrew/opt/libtool/libexec/gnubin: remove it from PATH)"
+            )
+
     if platform_name == "windows":
         msys2_root = _msys2_root()
         if msys2_root is None:

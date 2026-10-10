@@ -189,8 +189,17 @@ class AutotoolsBuilder:
         if not autogen_script.exists():
             return True
 
+        # Homebrew installs GNU libtoolize as `glibtoolize` only; its gnubin directory would
+        # provide `libtoolize`, but also a GNU `libtool` that shadows Apple's, which CMake
+        # needs as its static archiver (`libtool -static`). autoreconf honours $LIBTOOLIZE.
+        env = None
+        if self.config.platform_name == "macos" and shutil.which("libtoolize") is None:
+            glibtoolize = shutil.which("glibtoolize")
+            if glibtoolize:
+                env = {**os.environ, "LIBTOOLIZE": glibtoolize}
+
         print("Running autogen.sh...")
-        return self._run_command(["bash", "autogen.sh"], cwd=source_dir)
+        return self._run_command(["bash", "autogen.sh"], cwd=source_dir, env=env)
 
     def _run_configure(
         self,
