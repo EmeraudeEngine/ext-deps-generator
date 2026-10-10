@@ -179,19 +179,20 @@ endif()
 # Include directories
 ########################################################################
 
-# NOTE: order matters. "${LIBS_ROOT}/include" MUST come first: tinyusdz vendors its own
-# zstd.h under external/, and the cascade's real zstd.h has to win.
+# NOTE: order matters. "${LIBS_ROOT}/include" MUST come first: LightUSD (the tinyusdz
+# entry) vendors its own zstd.h under external/, and the cascade's real zstd.h has to win.
 target_include_directories(${PROJECT_NAME} PRIVATE
     "${LIBS_ROOT}/include"
     "${LIBS_ROOT}/include/freetype2"
     "${LIBS_ROOT}/include/libpng16"
-    # tinyusdz headers include one another by paths relative to the ROOT of its source
+    # LightUSD headers include one another by paths relative to the ROOT of its source
     # tree ("nonstd/optional.hpp", "core/path.hh", "value-types.hh"), which the patch
-    # preserves on install. Reaching tinyusdz.hh through "${LIBS_ROOT}/include" alone is
+    # preserves on install. Reaching lightusd.hh through "${LIBS_ROOT}/include" alone is
     # therefore not enough — both dirs below must be on the include path (they mirror the
-    # $<INSTALL_INTERFACE:...> entries exported by patches/tinyusdz.patch).
-    "${LIBS_ROOT}/include/tinyusdz"
-    "${LIBS_ROOT}/include/tinyusdz/external"
+    # $<INSTALL_INTERFACE:...> entries exported by patches/tinyusdz.patch). Upstream
+    # rebranded tinyusdz to LightUSD at v1.0.0-rc4: include/tinyusdz/ is now include/lightusd/.
+    "${LIBS_ROOT}/include/lightusd"
+    "${LIBS_ROOT}/include/lightusd/external"
 )
 
 ########################################################################
@@ -322,10 +323,11 @@ if(WIN32)
     # Other
     set(UFBX_LIB "ufbx")
     set(BC7ENC_LIB "bc7enc_rdo")
-    # ktx / meshoptimizer / tinyusdz keep their basenames in Debug (no "d" postfix)
+    # ktx / meshoptimizer / tinyusdz keep their basenames in Debug (no "d" postfix).
+    # tinyusdz is LightUSD since v1.0.0-rc4: the archive is lightusd_static.lib.
     set(KTX_LIB "ktx")
     set(MESHOPT_LIB "meshoptimizer")
-    set(TINYUSDZ_LIB "tinyusdz_static")
+    set(TINYUSDZ_LIB "lightusd_static")
     # draco: same basename on every platform and in Debug. On MSVC draco
     # builds the target "draco" (draco.lib); elsewhere it is "draco_static" with
     # OUTPUT_NAME draco, so the archive is libdraco.a either way.
@@ -393,7 +395,8 @@ else()
     set(BC7ENC_LIB "bc7enc_rdo")
     set(KTX_LIB "ktx")
     set(MESHOPT_LIB "meshoptimizer")
-    set(TINYUSDZ_LIB "tinyusdz_static")
+    # LightUSD since v1.0.0-rc4 (liblightusd_static.a), no debug postfix.
+    set(TINYUSDZ_LIB "lightusd_static")
     set(DRACO_LIB "draco")
     set(ONNXRUNTIME_LIB "onnxruntime")
     set(SIMDJSON_LIB "simdjson")

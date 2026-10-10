@@ -229,8 +229,9 @@
 #include "draco/compression/encode.h"
 #include "draco/mesh/triangle_soup_mesh_builder.h"
 
-// tinyusdz (OpenUSD reader)
-#include "tinyusdz/tinyusdz.hh"
+// tinyusdz (OpenUSD reader) — rebranded LightUSD at v1.0.0-rc4: header lightusd.hh,
+// namespace lightusd.
+#include "lightusd/lightusd.hh"
 
 // lib3mf (static archive exposing the C ABI binding)
 #include "Bindings/C/lib3mf.h"
@@ -855,23 +856,23 @@ static bool test_tinyusdz()
         "    }\n"
         "}\n";
 
-    tinyusdz::Stage stage;
+    lightusd::Stage stage;
     std::string warn, err;
-    if (!tinyusdz::LoadUSDAFromMemory(reinterpret_cast< const uint8_t* >(usda), sizeof(usda) - 1,
+    if (!lightusd::LoadUSDAFromMemory(reinterpret_cast< const uint8_t* >(usda), sizeof(usda) - 1,
                                       "", &stage, &warn, &err))
     {
-        std::cerr << "  tinyusdz: USDA parse failed: " << err << "\n";
+        std::cerr << "  lightusd: USDA parse failed: " << err << "\n";
         return false;
     }
     if (stage.root_prims().size() != 1)
     {
-        std::cerr << "  tinyusdz: expected 1 root prim, got " << stage.root_prims().size() << "\n";
+        std::cerr << "  lightusd: expected 1 root prim, got " << stage.root_prims().size() << "\n";
         return false;
     }
 
-    std::cout << "  tinyusdz version: " << tinyusdz::version_major << "."
-              << tinyusdz::version_minor << "." << tinyusdz::version_micro
-              << " (parsed in-memory USDA, " << stage.root_prims().size() << " root prim)\n";
+    std::cout << "  lightusd version: " << lightusd::version_major << "."
+              << lightusd::version_minor << "." << lightusd::version_micro
+              << "-" << lightusd::version_rev << " (parsed in-memory USDA, " << stage.root_prims().size() << " root prim)\n";
     return true;
 }
 

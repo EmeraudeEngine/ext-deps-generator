@@ -4,162 +4,227 @@ languages: [c, cxx]
 
 # OpenUSD reader (USDA / USDC crate / USDZ) with no third-party dependency beyond the STL.
 #
-# ⚠️ PINNED TO v1.0.0-rc3, A RELEASE CANDIDATE — a deliberate exception to the owner rule
-# that kept this library on v0.9.4 for exactly that reason. Upstream has cut no final release
-# since 0.9.4 (2026-08-31: the tag line runs v0.9.9-rc1..rc7 then v1.0.0-rc1..rc3), so the
-# choice is between an RC and a two-major-versions-old reader. Revisit when 1.0.0 final lands.
+# ⚠️ UPSTREAM IS NOW "LightUSD" — v1.0.0-rc4 (c9f177148) REBRANDED THE WHOLE PROJECT. The
+# registry entry, the submodule path and patches/tinyusdz.patch keep the historical name
+# `tinyusdz`; everything the build PRODUCES follows upstream's new name:
+#   * every CMake option is LIGHTUSD_* (TINYUSDZ_* is gone, not aliased — a stale -D does
+#     nothing at all, and the only trace is CMake's end-of-configure "Manually-specified
+#     variables were not used" list; the rc3 YAML fed to rc4 lists all 22 of its options there);
+#   * the archive is liblightusd_static.a / lightusd_static.lib (was tinyusdz_static);
+#   * the headers install under include/lightusd/ (was include/tinyusdz/), the umbrella header
+#     is lightusd.hh (tinyusdz.hh is gone), the CMake package is `lightusd`
+#     (find_package(lightusd CONFIG) -> lightusd::lightusd_static, upstream's own ALIAS name);
+#   * the C++ namespace is `lightusd` (tinyusdz:: is gone, no alias) and the macros are
+#     LIGHTUSD_* — consumer code must be ported, see the engine's USD loader.
+# ⚠️ Rebuilding into an output folder that already holds the rc3 install leaves the stale
+# include/tinyusdz/, libtinyusdz_static.a and lib/cmake/tinyusdz/ behind: rebuild the
+# configuration from an emptied output/<suffix> (AGENTS.md § CLI Usage).
 #
-# ⚠️ EXCEPTIONS: the engine cascade is built with -fno-exceptions. Upstream defaults this
-# option to Off on POSIX and On for MSVC, whose CMakeLists states "it looks it is hard to
-# disable C++ exception for MSVC". It is forced Off here on EVERY platform so nothing depends
-# on a per-platform default — the Windows build is where that assumption gets tested.
-
-# ⚠️ DEVIATION from the build policy (AGENTS.md § Build policy) — the C++ standard:
-# tinyusdz sets `CMAKE_CXX_STANDARD` unconditionally inside its own branches (17 in the
-# configuration used here), so a `-DCMAKE_CXX_STANDARD=20` from the builder is silently
-# overridden. The one branch that yields C++20 is gated on TINYUSDZ_WITH_COROUTINE, a
-# feature switch, not a standard switch — do not turn a feature on just to move the
-# standard. Exceptions are already off (see above), which is the policy point that matters
-# most here; RTTI has no upstream switch.
+# ⚠️ PINNED TO v1.0.0-rc4, A RELEASE CANDIDATE — a deliberate exception to the owner rule
+# that kept this library on v0.9.4 for exactly that reason. Upstream has cut no final release
+# since 0.9.4 (the tag line runs v0.9.9-rc1..rc7, v1.0.0-rc1..rc4), so the choice is between an
+# RC and a two-major-versions-old reader. rc3 -> rc4 was taken on 2026-10-10 (owner decision).
+# rc3 is NOT an ancestor of rc4 (the histories diverge by thousands of commits): treat every
+# rc bump as a new library, re-verify every hunk of the patch and RE-MEASURE the reference asset.
+#
+# Build policy (AGENTS.md § Build policy), as actually compiled — read back from build.ninja,
+# not from this file:
+#   * static + PIC: upstream always builds lightusd_static with POSITION_INDEPENDENT_CODE ON;
+#     the shared variant is off.
+#   * C++20: honoured ONLY because patches/tinyusdz.patch guards upstream's unguarded
+#     `set(CMAKE_CXX_STANDARD 17)` (inside `if (PROJECT_IS_TOP_LEVEL)`), the same shadowing
+#     trap as glslang/taglib/manifold. Without the hunk, the option below is silently ignored
+#     and the library compiles at C++17. The only upstream route to C++20 was
+#     LIGHTUSD_WITH_COROUTINE, a feature switch — not taken.
+#   * exceptions OFF and RTTI OFF, both through upstream switches (-fno-exceptions /
+#     -fno-rtti on every C++ TU, /EHs-c- and /GR- on MSVC). Both default Off upstream on every
+#     platform since rc3 (the MSVC "exceptions On" default of older releases is gone, and
+#     the RTTI switch already existed at rc3 — this file used to say otherwise); set
+#     explicitly here so nothing depends on a default. No consumer-side macro is needed: the
+#     installed headers pick their exception mode from __EXCEPTIONS / __cpp_exceptions in
+#     the consumer's own translation unit (value-types.hh).
 
 cmake_options:
   BUILD_SHARED_LIBS: false
-  TINYUSDZ_BUILD_SHARED_LIBS: false
+  LIGHTUSD_BUILD_SHARED_LIBS: false
   CMAKE_POSITION_INDEPENDENT_CODE: true
 
-  TINYUSDZ_CXX_EXCEPTIONS: false
+  # Effective only through the patch hunk guarding upstream's set() — see the header.
+  CMAKE_CXX_STANDARD: 20
 
-  # ccache would make the generator's output depend on the host's cache state.
-  TINYUSDZ_USE_CCACHE: false
+  LIGHTUSD_CXX_EXCEPTIONS: false
+  LIGHTUSD_CXX_RTTI: false
 
-  # Upstream builds with -Weverything -Werror on clang, which encodes "compiles warning-free
-  # on the exact toolchain upstream tested" — every compiler bump surfaces new -Weverything
-  # warnings (upstream already special-cases clang 17 and 18 for that reason). AppleClang 21
-  # is the current offender: its libc++ annotates std::mutex for thread-safety analysis, so
-  # -Wthread-safety-negative fires all over logger.hh and -Werror turns it fatal. Warnings on
-  # this pinned third-party code stay visible in the log; they just no longer fail the build.
-  TINYUSDZ_NO_WERROR: true
+  # ccache would make the generator's output depend on the host's cache state (ON upstream).
+  LIGHTUSD_USE_CCACHE: false
 
-  # Nothing but the library itself.
-  TINYUSDZ_BUILD_TESTS: false
-  TINYUSDZ_BUILD_BENCHMARKS: false
-  TINYUSDZ_BUILD_EXAMPLES: false
-  TINYUSDZ_BUILD_TOOLS: false
-  TINYUSDZ_WITH_PYTHON: false
-  TINYUSDZ_WITH_C_API: false
-  TINYUSDZ_WITH_MCP_SERVER: false
+  # Upstream builds with -Weverything -Werror on clang (and -Wall -Werror on GCC), which
+  # encodes "compiles warning-free on the exact toolchain upstream tested" — every compiler
+  # bump surfaces new warnings (upstream already special-cases clang 17, 18 and 21). Warnings
+  # on this pinned third-party code stay visible in the log; they just no longer fail the build.
+  LIGHTUSD_NO_WERROR: true
+
+  # Nothing but the library itself. Tests and examples default ON for a top-level build.
+  LIGHTUSD_BUILD_TESTS: false
+  LIGHTUSD_BUILD_BENCHMARKS: false
+  LIGHTUSD_BUILD_EXAMPLES: false
+  LIGHTUSD_BUILD_TOOLS: false
+  LIGHTUSD_BUILD_GUI_VIEWER: false
+  LIGHTUSD_BUILD_QUICKLOOK: false
+  LIGHTUSD_BUILD_TEXTURE_GPU_BENCH: false
+  LIGHTUSD_WITH_PYTHON: false
+  LIGHTUSD_WITH_C_API: false
+
+  # Runtimes and servers the engine does not embed (all default Off; pinned so a future
+  # default flip cannot pull in OpenSSL / civetweb / QuickJS / WAMR / geogram silently).
+  LIGHTUSD_WITH_MCP_SERVER: false
+  LIGHTUSD_WITH_QJS: false
+  LIGHTUSD_WITH_WAMR: false
+  LIGHTUSD_WITH_GEOGRAM: false
+  LIGHTUSD_WITH_REMOTERY: false
+  LIGHTUSD_WITH_COROUTINE: false
+
+  # Would add a second archive (lightusd_next) under the core for LargeSceneLoader.
+  LIGHTUSD_USE_NEXT_PCP_LARGE_SCENE: false
 
   # The pxr-compatible shim exists to ease porting from OpenUSD; the engine talks to the
-  # tinyusdz API directly, so it is dead surface here.
-  TINYUSDZ_WITH_PXR_COMPAT_API: false
+  # LightUSD API directly, so it is dead surface here (ON upstream for a top-level build).
+  LIGHTUSD_WITH_PXR_COMPAT_API: false
 
-  # ⚠️ NEW IN v1.0.0-rc3 and ON by default: TINYUSDZ_WITH_TEXTOOLS builds a second static
-  # library (tinyusdz_textools — vendored tir/texcomp/texpipe/envmap) and links it into the
-  # core for KTX2 / GPU-compressed texture decode inside USDZ. Turned off here for the same
-  # reason as the side formats below: the engine owns texture decoding, through libktx for
-  # KTX2 and bc7enc_rdo for runtime BC7 (see libraries/ktx.yaml). Leaving it on would also
-  # add a second archive to the package and a second entry to every consumer's link line.
-  TINYUSDZ_WITH_TEXTOOLS: false
+  # ON by default: builds a SECOND static library (lightusd_textools — vendored
+  # tir/texcomp/texpipe/envmap) and links it into the core for KTX2 / GPU-compressed texture
+  # decode inside USDZ. Off: the engine owns texture decoding, through libktx for KTX2 and
+  # bc7enc_rdo for runtime BC7 (see libraries/ktx.yaml), and reads only Tydra's texture
+  # METADATA (load_texture_assets = false). Leaving it on would also add a second archive to
+  # the package and a second entry to every consumer's link line.
+  LIGHTUSD_WITH_TEXTOOLS: false
+
+  # ⚠️ ON by default, and OFF here because it COLLIDES WITH THE CASCADE'S ZSTD. It compiles the
+  # vendored amalgamated src/external/zstd.c into the archive, exporting ~270 global ZSTD_* /
+  # COVER_* / HUF_* symbols that libzstd.a also defines. Measured 2026-10-10 on rc3 (same
+  # option): a link line with -lzstd BEFORE the archive fails with hundreds of "multiple
+  # definition of ZSTD_compressBlock_lazy …"; the other order links, but then every ZSTD_* call
+  # in the process binds to whichever copy the linker met first. What it buys is LightUSD's OWN
+  # extension — zstd-compressed .usd files (OpenUSD crate files use LZ4, which stays) — and
+  # zstd-supercompressed KTX2, which needs TEXTOOLS anyway. LIGHTUSD_USE_SYSTEM_ZSTD is no way
+  # out: it links `zstd::zstd`, a target the cascade's zstd package does not export
+  # (zstd::libzstd_static / zstd::libzstd), and the sources keep including the vendored header.
+  LIGHTUSD_WITH_ZSTD_COMPRESSION: false
 
   # Import/export side formats the engine already covers with its own loaders, or does not want.
-  TINYUSDZ_WITH_USD_TO_GLTF: false
-  TINYUSDZ_WITH_USDOBJ: false
-  TINYUSDZ_WITH_USDVOX: false
-  TINYUSDZ_WITH_USDFBX: false
-  TINYUSDZ_WITH_AUDIO: false
+  LIGHTUSD_WITH_USD_TO_GLTF: false
+  LIGHTUSD_WITH_USDOBJ: false
+  LIGHTUSD_WITH_USDVOX: false
+  LIGHTUSD_WITH_USDFBX: false
+  # OpenVDB import through the vendored tinyvdb (ON upstream). ⚠️ Two couplings make this
+  # switch load-bearing, both measured on rc4 (2026-10-10): tinyvdb_io.c #defines TVDB_USE_ZSTD
+  # unconditionally, so with USDVOL on and ZSTD_COMPRESSION off the archive carries undefined
+  # ZSTD_decompress/ZSTD_isError references; and tydra/render-data.cc calls
+  # usdVol::ReadVDBFromMemory() without a guard, so USDVOL off alone leaves THAT undefined —
+  # fixed by a hunk in patches/tinyusdz.patch. Turning this back on means turning
+  # ZSTD_COMPRESSION back on, and the zstd collision with it.
+  LIGHTUSD_WITH_USDVOL: false
+  LIGHTUSD_WITH_AUDIO: false
 
   # MaterialX is off on purpose: the reference asset (Intel Jungle Ruins) uses only
   # UsdPreviewSurface / UsdUVTexture / UsdPrimvarReader_float2 — measured, not assumed.
   # Turn it on the day an asset actually needs it.
-  TINYUSDZ_WITH_USDMTLX: false
+  LIGHTUSD_WITH_USDMTLX: false
+
+  # JSON stays ON (default): Tydra compiles JSON-using sources unconditionally
+  # (command-and-history.cc, value-to-json.cc, diff-and-compare.cc), so turning it off would
+  # leave undefined references in the archive. The deprecated nlohmann::json overloads are
+  # turned off: upstream exports their switch as a PUBLIC compile definition, which a consumer
+  # using the raw include directories (the engine, DependenciesTest) never receives — off, the
+  # installed usd-to-json.hh and the archive agree for every consumer.
+  LIGHTUSD_ENABLE_NLOHMANN_JSON_COMPAT: false
 
   # Tydra resolves material bindings and GeomSubsets into a renderer-friendly form. Kept ON:
   # the engine still does its own translation into native scene logic (absorption rule), but
   # re-deriving binding resolution from raw prims would be duplicated work.
-  TINYUSDZ_WITH_TYDRA: true
+  LIGHTUSD_WITH_TYDRA: true
 
-  TINYUSDZ_WITH_MODULE_USDA_READER: true
-  TINYUSDZ_WITH_MODULE_USDC_READER: true
+  # The composition cache (src/pcp) is used by composition-graph.cc and large-scene-loader.cc:
+  # kept ON (default) — composition is the path the reference asset measures.
+  LIGHTUSD_WITH_PCP: true
 
-# Windows note: turning exceptions off above is what makes expected-lite pull <windows.h>
-# in on MSVC, whose min/max macros then break every std::numeric_limits<T>::max() in the
-# codebase. Fixed in patches/tinyusdz.patch (NOMINMAX guard in src/nonstd/expected.hpp),
-# not here — the header is installed, so consumers hit the same include from their own
-# -fno-exceptions translation units and need the guard to travel with it.
+  LIGHTUSD_WITH_MODULE_USDA_READER: true
+  LIGHTUSD_WITH_MODULE_USDC_READER: true
+
+# Left at upstream defaults on purpose (vendored, no external dependency, no extra archive):
+# the image codecs (nanoimage / stb / fpng / TIFF / EXR v3 / colorio — dead code for the
+# engine, which decodes textures itself, but Tydra's image paths reference them), the USDA/USDC
+# writers, SIMD (LIGHTUSD_ENABLE_SIMD, LIGHTUSD_ENABLE_NATIVE_SIMD: x86 function multi-versioning
+# by ifunc), LIGHTUSD_ENABLE_THREAD (Off) and LIGHTUSD_PRODUCTION_BUILD (Off: error messages keep
+# a __FILE__ prefix, which the builder's -fmacro-prefix-map already makes relative).
+#
+# Windows note: turning exceptions off is what makes expected-lite pull <windows.h> in on MSVC,
+# whose min/max macros then break every std::numeric_limits<T>::max(). Since rc4 upstream adds
+# NOMINMAX globally for its OWN MSVC build, but the installed header is reached from consumer
+# TUs that never see that definition: the guard in src/nonstd/expected.hpp
+# (patches/tinyusdz.patch) is still needed and travels with the header.
+#
+# Installed layout (from the patch's install block — upstream installs nothing for this
+# configuration): lib/liblightusd_static.a, include/lightusd/** (the src/ tree verbatim minus
+# attic and the Python binding trees), lib/cmake/lightusd/. The headers include one another
+# relative to the ROOT of the src/ tree and to src/external, so a consumer using raw include
+# directories needs BOTH include/lightusd and include/lightusd/external — AFTER the cascade's
+# own include/, because external/ vendors a zstd.h (and other headers) that must not shadow the
+# real ones.
 #
 # ─────────────────────────────────────────────────────────────────────────────────────────
-# THE COMPOSITION AND MATERIAL PATCHES ARE GONE (re-verified 2026-08-31 against v1.0.0-rc3)
+# THE COMPOSITION AND MATERIAL PATCHES OF v0.9.4 (history kept for the next re-verification)
 #
-# From 2026-08-10 to the v1.0.0-rc3 bump, patches/tinyusdz.patch also carried seven fixes for
+# From 2026-08-10 to the v1.0.0-rc3 bump, patches/tinyusdz.patch carried seven fixes for
 # upstream defects found while loading a real Omniverse Kit export (WorldLobby.usdz, 1.6 GB):
 # before them the stage composed to 10 prims and reported SUCCESS, after them to 2806 prims,
-# 942 meshes, 141 materials, 348 textures. None of the seven applies any more. What became of
-# each, checked in the new source rather than assumed:
+# 942 meshes, 155 materials, 348 textures. At rc3 six were classified as gone:
 #
-#  * FIXED UPSTREAM, verbatim — the material:binding-with-no-target abort
-#    (tydra/shader-network.cc now returns false there, with a comment stating the same
-#    reasoning), the `st` primvar authored as float2[] (render-data-mesh.cc accepts
-#    texCoord2f[] and the layout-identical float2[], with the same memcpy argument), and THE
-#    texture defect: is_connection() has been replaced by has_connections() throughout
-#    render-data-material.cc (22 sites), which is what made every material come back as flat
-#    0.18 grey.
+#  * FIXED UPSTREAM — the material:binding-with-no-target abort, the `st` primvar authored as
+#    float2[], and the is_connection() -> has_connections() fix in render-data-material.cc.
+#  * NOW AN API OPTION, and therefore an ENGINE responsibility — the '..' asset path:
+#    `allow_parent_relative_paths`, DEFAULT FALSE on the resolver and on the sublayer,
+#    references and payload option structs. A Kit-exported stage writes its subLayers as
+#    "../Source/…", so the engine MUST set all four or the layers are silently rejected.
+#  * ABSORBED BY A REWRITE (composition-graph.cc, a task-queue prim-index builder) — subLayers
+#    of a referenced/payloaded layer, single-pass arc resolution, arc prefix re-rooting.
 #
-#  * NOW AN API OPTION, and therefore an ENGINE responsibility — the '..' asset path.
-#    security-policy.hh gained `ValidateAndNormalizeAssetPath(path, out, allow_parent_refs)`
-#    and composition.hh an `allow_parent_relative_paths` field. ⚠️ IT DEFAULTS TO FALSE in
-#    all three option structs (composition.hh:81,104,157). A Kit-exported stage writes its
-#    subLayers as "../Source/…", so the engine MUST set that option to true or the layers are
-#    silently rejected again. Nothing in this build can set it for the consumer.
-#
-#  * ABSORBED BY A REWRITE, unverified here — the three composition defects (subLayers of a
-#    referenced/payloaded layer never composed, arcs resolved in a single pass, arc prefix not
-#    re-rooted). The engine is now a task-queue prim-index builder in a new file,
-#    composition-graph.cc (PrimIndexBuilder / CompositionGraph), which structurally supersedes
-#    them: arcs are re-scanned and re-enqueued as nodes are added, and SubLayer is a task type.
-#    Structure is not measurement, though.
+# ⚠️ THE SEVENTH CAME BACK, AND IS STILL THERE AT rc4. RemapPathsInPrimSpecTree()
+# (composition.cc) — the live rewrite of a spliced sub-tree's internal paths — gates its
+# connection branch on Property::is_attribute_connection(), which forwards to
+# Attribute::is_connection(), FALSE as soon as the attribute also carries a value. An input
+# authored as both a value and a `.connect` (the UsdPreviewSurface idiom Kit emits) keeps its
+# pre-splice path, and Tydra reports "Cannot find path </World/Looks/Foo> in the Stage".
+# v0.9.4 was patched in ReplaceRootPrimPathRec(), now [[maybe_unused]] dead code: THE PATCH
+# STOPPED APPLYING BECAUSE THE FUNCTION WAS REWRITTEN, NOT BECAUSE THE DEFECT WAS FIXED.
+# Re-verified 2026-10-10 against rc4: byte-identical predicate, hunk ported verbatim, and still
+# load-bearing — measured without it: 348 -> 0 textures, on rc3 AND on rc4.
+# ⚠️ Lesson: a fix checked file-by-file is not checked — grep the PREDICATE across the tree,
+# then re-run the asset. The same applies to the TARGET_OS_IPHONE hunk: rc4 has a SECOND
+# `defined(TARGET_OS_IPHONE)` test in io-util.cc (the filesystem glob), patched alongside.
 #
 # ─────────────────────────────────────────────────────────────────────────────────────────
-# MEASURED 2026-09-14 — AND ONE OF THEM WAS BACK. A HUNK IS CARRIED AGAIN.
+# MEASURED 2026-10-10 — rc3 AND rc4 COMPOSE THE REFERENCE ASSET IDENTICALLY, AT PARITY WITH v0.9.4
 #
-# The reference asset was finally re-run (WorldLobby.usdz, projet-alpha --load-demo world-lobby
-# --demo-options 1). Two of the classifications above were verified in the source and HOLD:
-# is_connection() -> has_connections() really is fixed on 22 sites of render-data-material.cc
-# (the 5 survivors are comments), and the arc prefix really was absorbed verbatim, as
-# GetReferencedPrimPath() at composition.cc:351.
+# Instrument: a standalone probe mirroring USDLoader::load() (resolveReferences = true, the
+# engine's USDZ resolver handlers, allow_parent_relative_paths on the resolver + three option
+# structs, CompositeAllArcs repeated to a fixed point with a shared layer_cache, Tydra with
+# load_texture_assets = false). WorldLobby.usdz, Linux Release:
 #
-# ⚠️⚠️ BUT "THE texture defect is fixed upstream" WAS TOO NARROW A CHECK. The same predicate
-# defect lived in a SECOND file that the verification never looked at: RemapPathsInPrimSpecTree()
-# (composition.cc:4063) — the live rewrite of a spliced sub-tree's internal paths — still gates
-# its connection branch on Property::is_attribute_connection(), which forwards to
-# Attribute::is_connection(), FALSE as soon as the attribute also carries a value. An input
-# authored as both a value and a `.connect` (the UsdPreviewSurface idiom Kit emits) is therefore
-# never remapped and keeps its pre-splice path, and Tydra then reports
-# "Cannot find path </World/Looks/Foo> in the Stage".
+#                         rc3+patch, 1 pass   rc3+patch   rc4+patch   rc4, no remap hunk
+#   prims                           1988          2806        2806            2806
+#   meshes                           741           942         942             942
+#   Material prims                    31           155         155             155
+#   Tydra materials                   27           141         141             141
+#   Tydra textures                    85           348         348               0
+#   SphereLight                        0             4           4               4
 #
-# This repository patched exactly that in v0.9.4 — in ReplaceRootPrimPathRec(), which is now
-# [[maybe_unused]] dead code. THE PATCH STOPPED APPLYING BECAUSE THE SURROUNDING FUNCTION WAS
-# REWRITTEN, NOT BECAUSE THE DEFECT WAS FIXED, and the defect travelled into the replacement.
-# ⚠️ The lesson for the next re-verification: a fix checked file-by-file is not checked — grep
-# the PREDICATE across the tree, then re-run the asset. Measurement found this in one run; three
-# source-reading passes had classified it as absorbed.
+# The "818 missing prims" of 2026-09-14 were NOT a library defect: the first column reproduces
+# the engine's numbers of that day exactly, and it is ONE CompositeAllArcs() pass — what the
+# engine did before its 2026-10-04 fixed-point loop. A Kit export's `prepend references` sit
+# inside the payloaded layers, and one pass applies references before payloads; the second
+# pass resolves them. rc4 at C++17 and at C++20 give identical counts.
 #
-# patches/tinyusdz.patch carries the one-line predicate fix again (live site only; the dead
-# ReplaceRootPrimPathRec is deliberately left alone).
-#
-# Counts, same instrument (the engine loader's own `stage composed:` line):
-#
-#                      patched v0.9.4   rc3 as shipped   rc3 + this hunk
-#   prims                      2806            1988            1988
-#   meshes                      942             741             741
-#   materials                   155              31              31
-#   textures                    348               0              85
-#
-# ⚠️ STILL OPEN, NOT ATTRIBUTED: 818 prims, 201 meshes, 124 material prims and all four
-# SphereLight are missing from the composed stage, and this hunk does not move them (a dangling
-# connection cannot delete a prim). The 85 textures are what 31 materials carry where 155 carried
-# 348 — the same ratio, so the texture shortfall IS the missing materials, not a further texture
-# defect. A THIRD mechanism remains to be found: docs/todo/remeasure-tinyusdz-composition.md.
-#
-# The rule that produced those fixes still stands: this path is never trusted on a "no error",
-# only on a prim/mesh/texture COUNT, because four of the seven defects failed silently or
-# reported success.
+# The rule that produced the original fixes still stands: this path is never trusted on a
+# "no error", only on a prim/mesh/texture COUNT, because four of the seven defects failed
+# silently or reported success — and a composition the CALLER stops early looks exactly the same.

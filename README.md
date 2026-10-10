@@ -633,61 +633,45 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
   `-DCMAKE_CXX_STANDARD=20` is silently overridden. Lifting it needs a patch; the API
   (TagLib::String, FileRef) is the same under both standards.
 
-## tinyusdz
-[v1.0.0-rc3, 7f5b62c3d32064ae0d10eaebd40d0bdf720b485a]
+## tinyusdz (LightUSD)
+[v1.0.0-rc4, c9f177148f7dcddde33f4f8d6e82599f151d8803]
 
 - URL: https://github.com/lighttransport/tinyusdz.git
-- Version: 1.0.0-rc3
+- Version: 1.0.0-rc4 — **upstream rebranded the project LightUSD at this tag**. The registry
+  entry keeps its name `tinyusdz`; everything it installs is renamed:
+  `lib/liblightusd_static.a` / `lightusd_static.lib` (no Debug postfix), headers under
+  `include/lightusd/` (entry point `lightusd.hh`), package `lib/cmake/lightusd`, namespace
+  **`lightusd`** (no `tinyusdz` alias), options `LIGHTUSD_*`. A consumer must switch in the
+  same move as the archive — see `libraries/tinyusdz.yaml`.
 - Dependencies: None (C++ STL only)
-- Usage: OpenUSD reader (USDA / USDC crate / USDZ) for the engine's SceneLoaders. Built with
-  `TINYUSDZ_CXX_EXCEPTIONS=Off` (the cascade is `-fno-exceptions`); MaterialX, audio, the C API,
-  the pxr-compat shim and the side importers (obj/vox/fbx/gltf) are all disabled. Tydra is kept
-  for material-binding and GeomSubset resolution.
-- Patch: upstream installs ONLY its optional C API shared library, so a stock build exports
-  nothing at all while reporting success. `patches/tinyusdz.patch` adds the install rules for
-  the static library, the header tree (layout preserved — headers include one another by
-  relative path) and a CMake package config. It also fixes two build-level details: the
-  `../../src/` include paths in `tydra/shape-to-mesh.hh`, and a `NOMINMAX` / `WIN32_LEAN_AND_MEAN`
-  guard before the `<windows.h>` that `nonstd/expected.hpp` pulls in on MSVC as soon as
-  exceptions are off (its min/max macros otherwise shred every `std::numeric_limits<T>::max()`).
-- Warning: **the pin is a release candidate**, a deliberate exception to the rule that had kept
-  this library on v0.9.4. Upstream has cut no final release since 0.9.4 — as of 2026-08-31 the
-  tag line runs `v0.9.9-rc1..rc7` then `v1.0.0-rc1..rc3` — so the choice was between an RC and a
-  reader two major versions behind. Revisit when 1.0.0 final lands.
-- Warning: **the seven composition and material fixes this repository used to carry are gone**,
-  re-verified against v1.0.0-rc3 rather than assumed. Three are fixed verbatim upstream (the
-  `material:binding`-with-no-target abort, `st` authored as `float2[]`, and the
-  `is_connection()` → `has_connections()` texture defect that made every material come back
-  flat grey). One became an API option the **engine** must now set: `allow_parent_relative_paths`
-  defaults to **false** (`composition.hh:81,104,157`), and a Kit-exported stage writes its
-  subLayers as `../Source/…`, so with the default those layers are silently rejected. The last
-  three were absorbed by a rewrite of the composition engine (`src/composition-graph.cc`, a
-  task-queue prim-index builder).
-- Warning: **one of those seven came back, and the patch carries a hunk for it again**
-  (measured 2026-09-14 on the reference asset, not assumed). The `is_connection()` predicate
-  defect was fixed upstream in `tydra/render-data-material.cc` (22 sites) but NOT in the second
-  file it also lived in: `RemapPathsInPrimSpecTree()` (`composition.cc:4063`), the live rewrite
-  of a spliced sub-tree's internal paths, still gates its connection branch on
-  `Property::is_attribute_connection()` — false as soon as the attribute also carries a value.
-  An input authored as both a value and a `.connect` (what Kit emits) keeps its pre-splice path
-  and Tydra reports `Cannot find path </World/Looks/Foo> in the Stage`. This repository had
-  patched it in `ReplaceRootPrimPathRec()`, now `[[maybe_unused]]` dead code: **the patch stopped
-  applying because the surrounding function was rewritten, not because the defect was fixed.**
-  Measured effect of the hunk: **0 → 85 textures**. ⚠️ A fix verified file-by-file is not
-  verified — grep the predicate across the tree, then re-run the asset.
-- Warning: **composition is still only PARTIALLY measured on this version.** With the hunk the
-  reference asset composes 1988 prims / 741 meshes / 31 materials / 85 textures, against
-  2806 / 942 / 155 / 348 on the patched v0.9.4 — **818 prims short, unattributed**, and this is
-  a path that used to fail silently or report SUCCESS. It is only ever trusted on a
-  prim/mesh/texture count — see `docs/todo/remeasure-tinyusdz-composition.md`.
-- Note: `TINYUSDZ_WITH_TEXTOOLS` (new in 1.0.0, ON upstream) is turned off. It builds a second
-  static library and links it into the core for KTX2 / GPU-compressed decode inside USDZ, which
-  the engine already covers with libktx and bc7enc_rdo; leaving it on would also add a second
-  archive to the package and to every consumer's link line.
-- Warning: **compiled as C++17, not C++20**, in deviation from the build policy: tinyusdz sets
-  `CMAKE_CXX_STANDARD` unconditionally inside its own branches, and the only branch yielding
-  C++20 is gated on `TINYUSDZ_WITH_COROUTINE` — a feature switch, not a standard switch, so it
-  must not be turned on just to move the standard.
+- Usage: OpenUSD reader (USDA / USDC crate / USDZ) for the engine's SceneLoaders. Tydra and PCP
+  are kept (material-binding, GeomSubset resolution, composition); MaterialX, audio, the C API,
+  the pxr-compat shim, the side importers (obj/vox/fbx/gltf), the texture tools and every
+  tool/viewer/scripting extra are disabled.
+- Build policy: **C++20, `-fno-exceptions`, `-fno-rtti`** (`LIGHTUSD_CXX_EXCEPTIONS` /
+  `LIGHTUSD_CXX_RTTI` Off), read back from `build.ninja`. Upstream still forces C++17
+  unguarded; the patch guards it.
+- Patch (`patches/tinyusdz.patch`, 7 hunks): install rules for the static library, the header
+  tree (layout preserved — headers include one another by relative path) and the package; the
+  C++ standard guard; the `../../src/` include paths in `tydra/shape-to-mesh.hh`; a `NOMINMAX` /
+  `WIN32_LEAN_AND_MEAN` guard before the `<windows.h>` of `nonstd/expected.hpp`; the two
+  `TARGET_OS_IPHONE` value tests in `io-util.cc` (mmap and the filesystem glob stay on macOS);
+  the connection-remap fix in `composition.cc` (`RemapPathsInPrimSpecTree()` gating on
+  `is_attribute_connection()` — **load-bearing: 348 → 0 textures without it**, on rc3 and rc4);
+  and a guard on the VDB reader call in `tydra/render-data.cc`, which upstream calls even when
+  `LIGHTUSD_WITH_USDVOL` is off.
+- Warning: **`LIGHTUSD_WITH_ZSTD_COMPRESSION` and `LIGHTUSD_WITH_USDVOL` are off.** The vendored
+  zstd puts ~270 `ZSTD_*` symbols in the archive that collide with the cascade's `libzstd.a`
+  ("multiple definition"), and USDVOL's tinyvdb needs that same zstd. Consequence:
+  zstd-compressed `.usd` (a LightUSD-only extension) is rejected and `.vdb` volume fields are
+  skipped.
+- Measured 2026-10-10 on the reference asset (WorldLobby.usdz, a probe mirroring the engine's
+  loader with its fixed-point composition): **2806 prims / 942 meshes / 155 materials / 348
+  textures / 4 SphereLight** on rc3 and rc4 alike — parity with the patched v0.9.4. The "818
+  missing prims" of 2026-09-14 were the engine's former single-pass composition, not a library
+  defect. This path is only ever trusted on such a count, never on a "no error".
+- Warning: **the pin is a release candidate**: upstream has cut no final 1.0.0. Revisit when it
+  lands.
 
 ## ufbx
 [v0.23.1, 26a482ae66871d7de36eb722aa060bce95bce274]

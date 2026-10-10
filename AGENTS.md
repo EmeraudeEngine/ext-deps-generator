@@ -90,7 +90,7 @@ CMakeLists.txt              # Test project to validate all libs link correctly
 > 3. **No C++ exceptions.** The engine compiles with `-fno-exceptions`, so a library whose
 >    headers can throw into engine code is a compile error waiting to happen. Turn off the
 >    exception interface wherever upstream offers a switch (`SIMDJSON_EXCEPTIONS`,
->    `TINYUSDZ_CXX_EXCEPTIONS`) and record the consumer-side macro that must accompany it.
+>    `LIGHTUSD_CXX_EXCEPTIONS`) and record the consumer-side macro that must accompany it.
 >    Note the distinction: the switch usually selects an *API* (error codes instead of
 >    throws), which is what matters here; compiling the library's own sources with
 >    `-fno-exceptions` is a separate, stricter step that is not required.
@@ -109,13 +109,13 @@ CMakeLists.txt              # Test project to validate all libs link correctly
 explicitly rather than left on a default. The C-only libraries (zlib, bzip2, xz, brotli,
 libpng, libjpeg-turbo, libwebp, libtiff, libvpx, the audio codecs, freetype, hwloc,
 cpu_features, libressl, ufbx, spirv-headers, libzip, lib3mf) are out of scope for points 2 to
-4. Four standing deviations, each argued in its own YAML header:
+4. The standing deviations, each argued in its own YAML header (tinyusdz left this table on
+2026-10-10: its LightUSD rc4 port guards the unguarded C++17 `set()` with a patch):
 
 | library | deviation | why |
 |---|---|---|
 | `glslang` | C++17 | `set(CMAKE_CXX_STANDARD 17)` unguarded (CMakeLists.txt:229) — a `-D` is silently ignored; lifting it needs a patch |
 | `taglib` | C++17 | same unguarded `set()` at the top of its CMakeLists |
-| `tinyusdz` | C++17 | sets the standard inside its own branches; the only C++20 branch is gated on a *feature* switch (coroutines) |
 | `bc7enc_rdo` | C++17 | sets the `CXX_STANDARD` **target property**, which outranks the cache variable |
 | `lunasvg` | C++17 | same, target property (CMakeLists.txt:57) |
 | `reproc` | C++11 / C99 | same, target property set on every target it creates (cmake/reproc.cmake:111) |
@@ -127,7 +127,7 @@ warning, no error, the build simply uses the other standard. An unguarded
 `CXX_STANDARD` *target property* outranks it entirely. So never trust the YAML to describe
 what was compiled: read the standard back from the generated `build.ninja`
 (`grep -o '\-std=[a-z+0-9]*' builds/<config>/<lib>/build.ninja | sort -u`), which is how the
-six rows above were found. Where a library overrides, the option is left OUT of the YAML
+C++ rows above were found. Where a library overrides, the option is left OUT of the YAML
 rather than kept as a decorative no-op, and the deviation is written in its header.
 Subdirectory scopes count too: `ktx` builds at C++20 while the astc-encoder it vendors and
 installs alongside builds at C++14, because that subdirectory sets its own.
@@ -150,7 +150,7 @@ own under `-fno-exceptions`. Both carry a *deployment* consequence instead — s
 § Static oneTBB below.
 
 Only three upstreams offer an exception switch (`glslang`, `SPIRV-Tools` on MSVC,
-`tinyusdz`) and two an RTTI switch (`glslang`, `SPIRV-Tools`); all are set the policy way.
+`tinyusdz`/LightUSD) and three an RTTI switch (`glslang`, `SPIRV-Tools`, `tinyusdz`/LightUSD); all are set the policy way.
 Note what that does *not* buy on Windows: the builder passes `/EHsc` in `CMAKE_CXX_FLAGS` for
 every library (`builder/platforms/windows.py`), so the MSVC compile line still enables
 exceptions regardless of those per-library switches. Making the Windows builds

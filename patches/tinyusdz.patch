@@ -1,10 +1,26 @@
-# target-commit: 7f5b62c3d32064ae0d10eaebd40d0bdf720b485a
+# target-commit: c9f177148f7dcddde33f4f8d6e82599f151d8803
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index bf1c28660..56d78ad8f 100644
+index 1001412d5..05162c99c 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -4435,3 +4435,56 @@ if(WIN32)
+@@ -438,7 +438,14 @@ endif()
+ 
+ if (PROJECT_IS_TOP_LEVEL)
+   message(STATUS "LightUSD is being built as toplevel project so set CXX standard here.")
+-  if(LIGHTUSD_WITH_COROUTINE)
++  # ---- ext-deps-generator patch ----
++  # The unguarded set() below shadowed a -DCMAKE_CXX_STANDARD given on the command line, so the
++  # library compiled at C++17 whatever the consumer asked for, without a warning. A standard that
++  # is already set now wins; with none, upstream's choice below applies unchanged.
++  if(CMAKE_CXX_STANDARD)
++    message(STATUS "Use C++${CMAKE_CXX_STANDARD} (CMAKE_CXX_STANDARD given by the caller).")
++  # ---- end of patch ----
++  elseif(LIGHTUSD_WITH_COROUTINE)
+     message(STATUS "Use C++20 for c++20 coroutine.")
+     # Coroutine support requires C++20
+     set(CMAKE_CXX_STANDARD 20)
+@@ -4459,3 +4466,64 @@ if(WIN32)
                                             "${CMAKE_CURRENT_SOURCE_DIR}")
    endif()
  endif()
@@ -12,60 +28,68 @@ index bf1c28660..56d78ad8f 100644
 +#
 +# ---- Installation rules (added by the ext-deps-generator patch system) ----
 +#
-+# Upstream only installs the optional C API shared library. This build disables the C API, so a
-+# stock configure/build/install cycle produces libtinyusdz_static.a and exports NOTHING — the
-+# install step reports success while writing no library, no header and no package config.
++# Upstream only installs the optional C API shared library and the Python module. This build
++# disables both, so a stock configure/build/install cycle produces liblightusd_static.a and
++# exports NOTHING — the install step reports success while writing no library, no header and
++# no package config.
 +#
 +# The block below installs the static library, the public header tree and a CMake package
-+# config, so consumers can `find_package(tinyusdz CONFIG)` like every other ext-deps library.
++# config, so consumers can `find_package(lightusd CONFIG)` and link `lightusd::lightusd_static`
++# (the same name as upstream's own in-tree ALIAS).
 +#
 +include(GNUInstallDirs)
 +
 +# The headers include one another by relative path ("core/prim.hh", "nonstd/expected.hpp"),
 +# so the source tree layout MUST be preserved on install and BOTH the root and external/
 +# directories must land on the consumer's include path.
-+target_include_directories(${TINYUSDZ_TARGET_STATIC}
++target_include_directories(${LIGHTUSD_TARGET_STATIC}
 +  PUBLIC
 +    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
 +    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/external>
-+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/tinyusdz>
-+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/tinyusdz/external>
++    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/lightusd>
++    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/lightusd/external>
 +)
 +
-+install(TARGETS ${TINYUSDZ_TARGET_STATIC}
-+  EXPORT tinyusdzTargets
++install(TARGETS ${LIGHTUSD_TARGET_STATIC}
++  EXPORT lightusdTargets
 +  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 +  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 +)
 +
-+# `attic` holds superseded code kept for reference; it is not part of the public surface.
++# Not installed: `attic` (superseded code kept for reference) and the Python binding trees
++# (`blender` vendors a whole CPython 3.9 include directory, `python`, pybind11, nanobind) —
++# none of them is reachable from the C++ API this build exposes.
 +install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/
-+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/tinyusdz
++  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/lightusd
 +  FILES_MATCHING
 +    PATTERN "*.hh"
 +    PATTERN "*.h"
 +    PATTERN "*.hpp"
 +    PATTERN "*.inc"
 +    PATTERN "attic" EXCLUDE
++    PATTERN "blender" EXCLUDE
++    PATTERN "python" EXCLUDE
++    PATTERN "pybind11" EXCLUDE
++    PATTERN "nanobind" EXCLUDE
 +)
 +
-+install(EXPORT tinyusdzTargets
-+  FILE tinyusdzTargets.cmake
-+  NAMESPACE tinyusdz::
-+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/tinyusdz
++install(EXPORT lightusdTargets
++  FILE lightusdTargets.cmake
++  NAMESPACE lightusd::
++  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/lightusd
 +)
 +
-+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/tinyusdzConfig.cmake
-+"include(\"\${CMAKE_CURRENT_LIST_DIR}/tinyusdzTargets.cmake\")\n")
++file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/lightusdConfig.cmake
++"include(\"\${CMAKE_CURRENT_LIST_DIR}/lightusdTargets.cmake\")\n")
 +
-+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/tinyusdzConfig.cmake
-+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/tinyusdz
++install(FILES ${CMAKE_CURRENT_BINARY_DIR}/lightusdConfig.cmake
++  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/lightusd
 +)
 diff --git a/src/composition.cc b/src/composition.cc
-index 6568308c3..0589f36d8 100644
+index 043903a4b..a9b21619a 100644
 --- a/src/composition.cc
 +++ b/src/composition.cc
-@@ -4060,12 +4060,37 @@ void RemapPathsInPrimSpecTree(PrimSpec &ps, const NamespaceMapping &mapping) {
+@@ -4060,12 +4060,36 @@ void RemapPathsInPrimSpecTree(PrimSpec &ps, const NamespaceMapping &mapping) {
              p = mapping.Apply(p);
            }
          }
@@ -86,13 +110,12 @@ index 6568308c3..0589f36d8 100644
 +      // rejects the material with "Cannot find path </World/Looks/Slate> in the Stage", falling
 +      // back to the value sitting right next to it — a flat 0.18 grey that reads as "the asset has
 +      // no textures" while all of them are there. Measured on WorldLobby.usdz (an Omniverse Kit
-+      // export): 0 textures translated, against 348 with this fix.
++      // export).
 +      //
 +      // ⚠️ This repository carried the same fix for v0.9.4, in `ReplaceRootPrimPathRec()`. That
 +      // function is `[[maybe_unused]]` dead code since the v1.0.0 composition rework and the live
-+      // rewrite below inherited the original predicate — the patch stopped applying because the
-+      // surrounding function was renamed, not because the defect was fixed. Only the live site is
-+      // patched here; the dead one is deliberately left alone.
++      // rewrite below inherited the original predicate — still so at v1.0.0-rc4. Only the live site
++      // is patched here; the dead one is deliberately left alone.
 +      } else if (prop.second.is_attribute() &&
 +                 prop.second.attribute().has_connections()) {
          Attribute &attr = prop.second.attribute();
@@ -104,11 +127,43 @@ index 6568308c3..0589f36d8 100644
      }
  
      // Remap composition arc target paths
+diff --git a/src/io-util.cc b/src/io-util.cc
+index 25c65b960..b24ba492a 100644
+--- a/src/io-util.cc
++++ b/src/io-util.cc
+@@ -42,8 +42,11 @@
+ 
+ #else  // !_WIN32
+ 
+-#if defined(LIGHTUSD_BUILD_IOS) || defined(TARGET_OS_IPHONE) || \
+-    defined(TARGET_IPHONE_SIMULATOR) || defined(__ANDROID__) || \
++// NOTE (ext-deps-generator patch): Apple's TargetConditionals.h DEFINES TARGET_OS_IPHONE and
++// TARGET_IPHONE_SIMULATOR on macOS too, with the VALUE 0: testing `defined()` sent macOS to the
++// "non posix" branch, so mmap was compiled out and every MMapFile() failed silently.
++#if defined(LIGHTUSD_BUILD_IOS) || (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE) || \
++    (defined(TARGET_IPHONE_SIMULATOR) && TARGET_IPHONE_SIMULATOR) || defined(__ANDROID__) || \
+     defined(__EMSCRIPTEN__) || defined(__wasi__)
+ 
+ // non posix
+@@ -423,8 +426,12 @@ bool UnmapFile(const MMapFileHandle &handle, std::string *err) {
+ 
+ // Full desktop platforms (POSIX + Windows) that have a real filesystem to glob
+ // against. Restricted/sandboxed targets do only string (env/tilde) expansion.
++// NOTE (ext-deps-generator patch): the same TARGET_OS_IPHONE trap as the mmap guard above —
++// the macro is defined (as 0) on macOS, so `!defined()` switched the filesystem glob of
++// ExpandFilePath()/SimpleGlob() off there.
+ #if !defined(__wasi__) && !defined(LIGHTUSD_BUILD_IOS) &&      \
+-    !defined(TARGET_OS_IPHONE) && !defined(TARGET_IPHONE_SIMULATOR) && \
++    !(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE) && \
++    !(defined(TARGET_IPHONE_SIMULATOR) && TARGET_IPHONE_SIMULATOR) && \
+     !defined(__ANDROID__) && !defined(__EMSCRIPTEN__) && !defined(__OpenBSD__)
+ #define LIGHTUSD_HAVE_GLOB_FS 1
+ #else
 diff --git a/src/nonstd/expected.hpp b/src/nonstd/expected.hpp
-index 5b19bf0d7..603e6c543 100644
+index 5b19bf0d7..b490df12f 100644
 --- a/src/nonstd/expected.hpp
 +++ b/src/nonstd/expected.hpp
-@@ -255,6 +255,22 @@ namespace nonstd {
+@@ -255,6 +255,24 @@ namespace nonstd {
  
  #if nsel_CONFIG_NO_EXCEPTIONS
  # if nsel_CONFIG_NO_EXCEPTIONS_SEH
@@ -118,9 +173,11 @@ index 5b19bf0d7..603e6c543 100644
 +// reached on MSVC as soon as exceptions are off: value-types.hh only tests __EXCEPTIONS
 +// and __cpp_exceptions (GNU/Clang macros), so under /EHs-c- it force-defines
 +// nsel_CONFIG_NO_EXCEPTIONS=1, and the SEH default above is (that && _MSC_VER).
-+// Guarding here rather than on the compiler command line also covers consumers of the
-+// installed headers, who reach this same include from their own -fno-exceptions TUs.
-+// src/external/tinyexr.h guards its own <windows.h> exactly this way.
++// Upstream's MSVC build adds NOMINMAX globally since rc4 (add_compile_definitions in
++// CMakeLists.txt), but that reaches the library's own translation units only: consumers
++// of the installed headers reach this same include from their own -fno-exceptions TUs,
++// so the guard has to travel with the header. src/external/tinyexr.h guards its own
++// <windows.h> exactly this way.
 +#  ifndef WIN32_LEAN_AND_MEAN
 +#   define WIN32_LEAN_AND_MEAN
 +#  endif
@@ -131,8 +188,36 @@ index 5b19bf0d7..603e6c543 100644
  #  include <windows.h>   // for ExceptionCodes
  # else
  // already included: <cassert>
+diff --git a/src/tydra/render-data.cc b/src/tydra/render-data.cc
+index 9f7d65e5d..40f3235b8 100644
+--- a/src/tydra/render-data.cc
++++ b/src/tydra/render-data.cc
+@@ -1123,12 +1123,23 @@ bool RenderSceneConverter::ConvertVolume(
+ 
+     // Decode the .vdb into dense float grids.
+     std::vector<usdVol::VDBGrid> grids;
++    // ---- ext-deps-generator patch ----
++    // usdVol.cc (and the vendored tinyvdb it wraps) is only compiled with LIGHTUSD_WITH_USDVOL,
++    // but this call was not guarded: turning the option off left an undefined reference to
++    // usdVol::ReadVDBFromMemory() in the archive, so the first consumer link failed. Without the
++    // module a volume field is skipped, exactly like one whose .vdb cannot be decoded.
++#if defined(LIGHTUSD_USE_USDVOL)
+     std::string vwarn, verr;
+     if (!usdVol::ReadVDBFromMemory(asset.data(), asset.size(), resolvedPath,
+                                    &grids, &vwarn, &verr)) {
+       DCOUT("Failed to decode vdb: " << resolvedPath << " : " << verr);
+       continue;
+     }
++#else
++    DCOUT("vdb decoding not built (LIGHTUSD_WITH_USDVOL=OFF): " << resolvedPath);
++    continue;
++#endif
++    // ---- end of patch ----
+     if (grids.empty()) continue;
+ 
+     // Pick the grid whose name matches the requested field, else the first.
 diff --git a/src/tydra/shape-to-mesh.hh b/src/tydra/shape-to-mesh.hh
-index 65ee3db74..5eabea527 100644
+index 0f361f008..96ca4e877 100644
 --- a/src/tydra/shape-to-mesh.hh
 +++ b/src/tydra/shape-to-mesh.hh
 @@ -11,8 +11,8 @@
@@ -144,22 +229,5 @@ index 65ee3db74..5eabea527 100644
 +#include "../math-util.inc"
 +#include "../value-types.hh"
  
- namespace tinyusdz {
+ namespace lightusd {
  namespace tydra {
-diff --git a/src/io-util.cc b/src/io-util.cc
---- a/src/io-util.cc
-+++ b/src/io-util.cc
-@@ -42,8 +42,11 @@
- 
- #else  // !_WIN32
- 
--#if defined(TINYUSDZ_BUILD_IOS) || defined(TARGET_OS_IPHONE) || \
--    defined(TARGET_IPHONE_SIMULATOR) || defined(__ANDROID__) || \
-+// NOTE (ext-deps-generator patch): Apple's TargetConditionals.h DEFINES TARGET_OS_IPHONE and
-+// TARGET_IPHONE_SIMULATOR on macOS too, with the VALUE 0: testing `defined()` sent macOS to the
-+// "non posix" branch, so mmap was compiled out and every MMapFile() failed silently.
-+#if defined(TINYUSDZ_BUILD_IOS) || (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE) || \
-+    (defined(TARGET_IPHONE_SIMULATOR) && TARGET_IPHONE_SIMULATOR) || defined(__ANDROID__) || \
-     defined(__EMSCRIPTEN__) || defined(__wasi__)
- 
- // non posix
