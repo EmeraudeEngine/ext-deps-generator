@@ -1,3 +1,14 @@
+# PINNED ON UPSTREAM master (3.0.0a1, ead59f4ae, 2026-10-08), NOT on a release tag — owner decision
+# 2026-10-10. hwloc <= 2.15 (and the v2.x branch) hangs forever in hwloc_topology_load() on Apple
+# silicon with three core types (M5 Pro/Max class: hw.nperflevels = 3, IOKit cluster types E, P and M):
+# hwloc__darwin_look_iokit_cpukinds() only knows E and P (with a kinds[1]/kinds[i] typo that files M as
+# perflevel 0), so a kind receives the caches of the wrong perflevel, its CPU count is not a multiple of
+# cpusperl2, and hwloc__darwin_build_perflevel_cache_level() wraps around. The mapping is fixed upstream
+# by Apple (1aa822adf, bf9797df6, 3a72815b4, ead59f4ae — master only). hwloc 3.0 breaks the 2.x API
+# (hwloc_cpukinds_get_info() takes a struct hwloc_infos_s **): consumers are adapted in the same move.
+# patches/hwloc.patch stops the wrap-around loop itself (still present on master): it never relies on
+# the cpuset weight being a multiple of the cache width. Move to the 3.0.0 tag once it ships, then
+# re-check whether the patch is still needed.
 name: hwloc
 source_dir: repositories/hwloc
 

@@ -1,0 +1,15 @@
+diff --git a/hwloc/topology-darwin.c b/hwloc/topology-darwin.c
+index 407389ff3..7b0620e11 100644
+--- a/hwloc/topology-darwin.c
++++ b/hwloc/topology-darwin.c
+@@ -541,6 +541,10 @@ static void hwloc__darwin_build_perflevel_cache_level(struct hwloc_topology *top
+     obj->attr->cache.linesize = linesize;
+     obj->attr->cache.associativity = 0; /* unknown */
+     hwloc__insert_object_by_cpuset(topology, NULL, obj, "darwin:perflevel:cache");
++    if (next < 0)
++      /* the last group was partial (cpuset weight not a multiple of width): the cpuset is
++       * exhausted, stop here, otherwise hwloc_bitmap_next(cpuset, -1) restarts at the first cpu forever */
++      return;
+   }
+ }
+ 

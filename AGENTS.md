@@ -49,6 +49,10 @@ CMakeLists.txt              # Test project to validate all libs link correctly
 - Xcode Command Line Tools
 - Meson and Ninja (e.g., `brew install meson ninja`)
 - PyYAML (e.g., `pip install PyYAML` in the project venv)
+- Autoconf, Automake, Libtool and NASM (`brew install autoconf automake libtool nasm`): the
+  preflight check refuses to start without them, whatever `--library` names. Homebrew installs
+  libtool as `glibtoolize`; hwloc's `autogen.sh` (`autoreconf`) needs it under its normal name, so
+  put `/opt/homebrew/opt/libtool/libexec/gnubin` first in `PATH` for the build (2026-10-10).
 
 ### Linux
 - GCC or Clang toolchain
@@ -383,6 +387,7 @@ Some libraries need modifications to build correctly (e.g., forced C++ standard,
 - `patches/libvpx.patch` (two hunks):
   1. Replaces `ar` with `libtool -static` on macOS. macOS `ar` creates fat Mach-O archives from cross-arch objects that it cannot update, breaking cross-compilation from ARM to x86_64.
   2. Strips `WholeProgramOptimization` (`/GL`) from the generated Release `.vcxproj` (`gen_msvs_vcxproj.sh`). LTCG objects hide their CRT directives from `dumpbin` (defeating CRT validation) and tie the static lib to the exact producing MSVC toolset — unacceptable for a redistributable archive.
+- `patches/hwloc.patch`: a source fix, not a build fix. `hwloc__darwin_build_perflevel_cache_level()` (`hwloc/topology-darwin.c`) restarts at the first CPU after a partial cache group, so a CPU kind whose weight is not a multiple of the cache width (`hw.perflevelN.cpusperl2`) hangs `hwloc_topology_load()` forever. The patch returns once the cpuset is exhausted. Still needed on upstream master; see the header of `libraries/hwloc.yaml` for the 3-core-type Apple silicon story and the master pin.
 - `patches/onnxruntime.patch`: makes MLAS's AVX-NE-CONVERT kernel conditional on the **assembler** instead of the compiler. Upstream gates `x86_64/cvtfp16Avx.S` on `CMAKE_CXX_COMPILER_VERSION >= 13.1`, but `vcvtneeph2ps` / `vcvtneoph2ps` are only known to GNU as from binutils 2.40 — gcc-14 on Ubuntu 22.04 (binutils 2.38) fails with `no such instruction`. See `libraries/onnxruntime.yaml` for the fallback and its consequence.
 
 ⚠️ **A patch cannot reach outside the library's `source_dir`.** `PatchManager` runs `git apply` with `--directory=<source_dir relative to the submodule root>`, so for a library whose CMake root is a subdirectory (`onnxruntime` → `cmake/`, clipper2 → `CPP/`) the patch paths are relative to *that* subdirectory and a `../` escape is rejected outright (`invalid path`). A fix that must touch sources elsewhere in the submodule has to be expressed from inside the buildable subdirectory — this is why the onnxruntime patch synthesises a fallback translation unit from CMake rather than editing the `#if` in `core/mlas/lib/platform.cpp`.
