@@ -261,7 +261,18 @@ def run_dependencies_test(config: BuildConfig, root_dir: Path) -> int:
         return 1
 
     print(f"\n==================== Running test ({exe.name}) ====================\n")
-    rc = subprocess.run([str(exe)]).returncode
+    try:
+        rc = subprocess.run([str(exe)]).returncode
+    except OSError as e:
+        # An x86_64 test on Apple silicon needs Rosetta 2 to run: errno 86 (Bad CPU type).
+        hint = ""
+        if config.platform_name == "macos" and e.errno == 86:
+            hint = (
+                "\n  The libraries and the test were built; running an x86_64 binary on Apple"
+                "\n  silicon needs Rosetta 2: softwareupdate --install-rosetta --agree-to-license"
+            )
+        print(f"\nError: cannot run {exe}: {e.strerror}{hint}", file=sys.stderr)
+        return 1
     if rc != 0:
         print(f"\nError: Test executable exited with code {rc}", file=sys.stderr)
         return rc
