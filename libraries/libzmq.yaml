@@ -45,3 +45,7 @@ platforms:
   windows:
     cmake_options:
       ENABLE_CLANG: false
+      # On MSVC, ENABLE_CPACK runs include(InstallRequiredSystemLibraries), which installs the
+      # VC++ runtime DLLs (vcruntime140, msvcp140*, concrt140 — the debug ones in Debug) into
+      # bin/ of a package that is meant to hold static libraries only. Packaging is not used.
+      ENABLE_CPACK: false
