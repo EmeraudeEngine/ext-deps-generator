@@ -491,6 +491,28 @@ Builds a library for both macOS architectures (ARM64 + x86_64) in Release mode w
 ### `/check-releases`
 Runs `check_releases.py` to compare each submodule's pinned commit against upstream release tags. Read-only: reports which libraries have a newer stable tag, which are on a branch with a tag suggestion, and which have no tags upstream. Does not modify anything.
 
+## Vulkan SDK (separate extraction path — `extract_vulkan_sdk.py`)
+
+Owner decision (2026-10-11): the strict minimum of the LunarG Vulkan SDK ships INSIDE each archive, as
+`output/<cfg>/vulkan-sdk/` (identical in Release and Debug), so emeraude-engine needs no installed SDK. It is NOT built
+from source: `extract_vulkan_sdk.py` copies it from the SDK installed on each OS (`SDK_VERSION` in the script is the
+single place where the version lives — the engine carries none):
+
+| Path | Content |
+|---|---|
+| `VERSION` | the SDK version (first line, read by the engine's `SetupVulkan.cmake`) and the source path |
+| `include/` | `vulkan/*.h`, `vk_video/*.h` only (no `vulkan.hpp`: 27 MB the cascade never includes) |
+| `lib/` | the link library: `libvulkan.so` chain (Linux), `vulkan-1.lib` (Windows), `libvulkan.dylib` chain + `libMoltenVK.dylib` (macOS) |
+| `layers/` | `VK_LAYER_KHRONOS_validation` + its manifest, `library_path` rewritten to `./<lib>`; **stripped on Linux** (the SDK ships it unstripped: 393 MB → 32 MB) |
+| `icd/` | macOS: `MoltenVK_icd.json` → `../lib/libMoltenVK.dylib` |
+| `LICENSES/` | the SDK licence files |
+
+The loader is not shipped on Linux / Windows: CEF puts its own next to the application. Run it after a build and before
+packaging (`python3 extract_vulkan_sdk.py`, or `--sdk PATH --output output/<cfg>`); a missing file refuses the whole
+extraction. Linux: 38 MiB per configuration (2026-10-11). ⚠️ Re-publishing a tag (v018 upgraded in place): consumers
+that already extracted it must delete `dependencies/<cfg>` and the `.zip`, `InstallDependencies.cmake` does not
+re-download an existing one.
+
 ## CEF (separate build path — `build_cef.py`)
 
 CEF is **deliberately NOT** in the `libraries/*.yaml` registry. The registry
