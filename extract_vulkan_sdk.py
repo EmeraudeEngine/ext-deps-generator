@@ -25,13 +25,17 @@ The Vulkan loader itself is deliberately NOT shipped on Linux / Windows: CEF shi
 loader, so the SDK's is extracted there.
 """
 
+import sys
+
+if sys.version_info < (3, 10):
+	sys.exit(f"extract_vulkan_sdk.py needs Python 3.10 or newer (this is {sys.version.split()[0]}).")
+
 import argparse
 import json
 import os
 import platform
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 SDK_VERSION = "1.4.363.0"
