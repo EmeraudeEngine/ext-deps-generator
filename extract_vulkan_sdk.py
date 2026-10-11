@@ -8,8 +8,8 @@ the files the SDK of each OS ships (the same version on the three OS), put them 
     output/<os>.<arch>-<cfg>[-<tag>]/vulkan-sdk/
         VERSION          the SDK version and where it was extracted from
         include/         vulkan/*.h and vk_video/*.h (the C headers only, no vulkan.hpp)
-        lib/             what a consumer LINKS against: libvulkan.so (Linux), vulkan-1.lib (Windows),
-                         libvulkan.1.dylib + libMoltenVK.dylib (macOS)
+        lib/             the loader: libvulkan.so chain (Linux), vulkan-1.dll + vulkan-1.lib (Windows),
+                         libvulkan.dylib chain + libMoltenVK.dylib (macOS)
         layers/          the Khronos validation layer + its manifest (library_path relative to the manifest)
         icd/             macOS only: MoltenVK_icd.json (library_path ../lib/libMoltenVK.dylib)
         LICENSES/        the SDK licence files
@@ -20,9 +20,9 @@ Usage:
     python3 extract_vulkan_sdk.py                      # the host SDK, every output/<host os>.* directory
     python3 extract_vulkan_sdk.py --sdk PATH --output output/linux.x86_64-Release-glibc2.41
 
-The Vulkan loader itself is deliberately NOT shipped on Linux / Windows: CEF ships its own next to the application
-(libvulkan.so.1 1.4.361 measured on Linux, 2026-10-11) and the application directory wins. macOS has no system
-loader, so the SDK's is extracted there.
+The loader is shipped on every OS (owner decision 2026-10-11): the engine opens it by explicit path
+(<binary>/vulkan/, macOS Contents/Frameworks) while CEF keeps its own copy for its GPU process. On Windows it is taken
+from System32, where the SDK installer puts it, only when its version is exactly the SDK's.
 """
 
 import sys
@@ -78,6 +78,36 @@ def find_one(root: Path, patterns: list[str], what: str, missing: list[str]) -> 
 	missing.append(f"{what} (searched {', '.join(patterns)} under {root})")
 
 	return None
+
+
+def windows_file_version(path: Path) -> str | None:
+	"""The FileVersion resource of a Windows binary ('1.4.363.0'), or None."""
+	import ctypes
+	from ctypes import wintypes
+
+	version = ctypes.windll.version
+	size = version.GetFileVersionInfoSizeW(str(path), None)
+
+	if size == 0:
+		return None
+
+	buffer = ctypes.create_string_buffer(size)
+
+	if not version.GetFileVersionInfoW(str(path), 0, size, buffer):
+		return None
+
+	pointer = ctypes.c_void_p()
+	length = wintypes.UINT()
+
+	if not version.VerQueryValueW(buffer, "\\", ctypes.byref(pointer), ctypes.byref(length)):
+		return None
+
+	class FixedFileInfo(ctypes.Structure):
+		_fields_ = [(name, wintypes.DWORD) for name in ("signature", "struc_version", "file_version_ms", "file_version_ls")]
+
+	info = ctypes.cast(pointer, ctypes.POINTER(FixedFileInfo)).contents
+
+	return f"{info.file_version_ms >> 16}.{info.file_version_ms & 0xFFFF}.{info.file_version_ls >> 16}.{info.file_version_ls & 0xFFFF}"
 
 
 def copy_headers(sdk: Path, destination: Path, missing: list[str]) -> None:
@@ -196,6 +226,17 @@ def extract(sdk: Path, output: Path, osname: str) -> None:
 		if loader:
 			lib.mkdir(parents=True, exist_ok=True)
 			shutil.copy2(loader, lib / loader.name)
+
+		# NOTE: The Windows SDK folder carries no vulkan-1.dll: its installer puts the loader in System32 (measured
+		# 2026-10-11). Taken from there ONLY when its file version is exactly the SDK's.
+		runtime = Path(os.environ.get("SystemRoot", "C:/Windows")) / "System32" / "vulkan-1.dll"
+		runtime_version = windows_file_version(runtime) if runtime.is_file() else None
+
+		if runtime_version != SDK_VERSION:
+			missing.append(f"vulkan-1.dll {SDK_VERSION} (System32 has {runtime_version or 'none'}: reinstall the SDK {SDK_VERSION})")
+		else:
+			lib.mkdir(parents=True, exist_ok=True)
+			shutil.copy2(runtime, lib / "vulkan-1.dll")
 	else:
 		loader = find_one(sdk, ["lib/libvulkan.dylib", "lib/libvulkan.1.dylib"], "libvulkan.dylib (loader)", missing)
 		moltenvk = find_one(sdk, ["lib/libMoltenVK.dylib"], "libMoltenVK.dylib", missing)
