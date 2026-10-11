@@ -10,7 +10,8 @@ the files the SDK of each OS ships (the same version on the three OS), put them 
         include/         vulkan/*.h and vk_video/*.h (the C headers only, no vulkan.hpp)
         lib/             the loader: libvulkan.so chain (Linux), vulkan-1.dll + vulkan-1.lib (Windows),
                          libvulkan.dylib chain + libMoltenVK.dylib (macOS)
-        layers/          the Khronos validation layer + its manifest (library_path relative to the manifest)
+        layers/          the Khronos validation layer + its manifest (library_path relative to the manifest: ".\\" on
+                         Windows, "./" elsewhere)
         icd/             macOS only: MoltenVK_icd.json (library_path ../lib/libMoltenVK.dylib)
         LICENSES/        the SDK licence files
 
@@ -263,7 +264,11 @@ def extract(sdk: Path, output: Path, osname: str) -> None:
 		layers.mkdir(parents=True, exist_ok=True)
 		shutil.copy2(layer, layers / layer.name)
 		strip_binary(layers / layer.name, osname, architecture)
-		write_manifest(manifest, layers / manifest.name, f"./{layer.name}")
+		# NOTE: The Windows loader treats library_path as relative to the manifest ONLY with a backslash: "./x.dll" is
+		# handed to LoadLibrary as is and resolves through PATH (an installed SDK's copy, or nothing — the instance
+		# then fails), measured by the Windows peer 2026-10-11. Linux and macOS take "./".
+		relative = f".\\{layer.name}" if osname == "windows" else f"./{layer.name}"
+		write_manifest(manifest, layers / manifest.name, relative)
 
 	licences = destination / "LICENSES"
 	licences.mkdir(parents=True, exist_ok=True)
