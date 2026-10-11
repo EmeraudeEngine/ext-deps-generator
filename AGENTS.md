@@ -505,9 +505,10 @@ single place where the version lives — the engine carries none):
 | `lib/` | the link library: `libvulkan.so` chain (Linux), `vulkan-1.lib` (Windows), `libvulkan.dylib` chain + `libMoltenVK.dylib` (macOS) |
 | `layers/` | `VK_LAYER_KHRONOS_validation` + its manifest, `library_path` rewritten to `./<lib>`; **stripped on Linux** (the SDK ships it unstripped: 393 MB → 32 MB) |
 | `icd/` | macOS: `MoltenVK_icd.json` → `../lib/libMoltenVK.dylib` |
-| `LICENSES/` | the SDK licence files |
+| `LICENSES/` | LunarG's SDK notice (`LICENSE.txt`: the SDK has no licence of its own) + the licence of every redistributed component, from `vulkan_sdk_licenses/` (Vulkan-Headers, Vulkan-Loader, Vulkan-ValidationLayers, SPIRV-Tools, SPIRV-Headers; MoltenVK on macOS), fetched at the SDK's tag. `--licenses-only` refreshes them in existing outputs without an installed SDK |
 
-The loader is not shipped on Linux / Windows: CEF puts its own next to the application. Run it after a build and before
+The loader is shipped on every OS (owner decision 2026-10-11): the engine opens it by explicit path from
+`<binary>/vulkan/` (macOS: `Contents/Frameworks`), while CEF keeps its own copy for its GPU process. Run it after a build and before
 packaging (`python3 extract_vulkan_sdk.py`, or `--sdk PATH --output output/<cfg>`); a missing file refuses the whole
 extraction. Linux: 38 MiB per configuration (2026-10-11). ⚠️ Re-publishing a tag (v018 upgraded in place): consumers
 that already extracted it must delete `dependencies/<cfg>` and the `.zip`, `InstallDependencies.cmake` does not

@@ -13,13 +13,14 @@ the files the SDK of each OS ships (the same version on the three OS), put them 
         layers/          the Khronos validation layer + its manifest (library_path relative to the manifest: ".\\" on
                          Windows, "./" elsewhere)
         icd/             macOS only: MoltenVK_icd.json (library_path ../lib/libMoltenVK.dylib)
-        LICENSES/        the SDK licence files
+        LICENSES/        LunarG's SDK notice + every redistributed component's licence (vulkan_sdk_licenses/)
 
 and let the usual packaging zip output/ (or a developer symlink it into emeraude-base/dependencies/).
 
 Usage:
     python3 extract_vulkan_sdk.py                      # the host SDK, every output/<host os>.* directory
     python3 extract_vulkan_sdk.py --sdk PATH --output output/linux.x86_64-Release-glibc2.41
+    python3 extract_vulkan_sdk.py --licenses-only      # refresh LICENSES/ of existing outputs, no SDK needed
 
 The loader is shipped on every OS (owner decision 2026-10-11): the engine opens it by explicit path
 (<binary>/vulkan/, macOS Contents/Frameworks) while CEF keeps its own copy for its GPU process. On Windows it is taken
@@ -42,6 +43,8 @@ from pathlib import Path
 SDK_VERSION = "1.4.363.0"
 VALIDATION_LAYER = "VK_LAYER_KHRONOS_validation"
 ROOT = Path(__file__).resolve().parent
+COMPONENT_LICENSES = ROOT / "vulkan_sdk_licenses"
+MACOS_ONLY_COMPONENTS = {"MoltenVK"}
 
 
 def host_os() -> str:
@@ -197,6 +200,28 @@ def write_manifest(source_manifest: Path, destination_manifest: Path, library_pa
 		file.write("\n")
 
 
+def copy_component_licenses(licences: Path, osname: str, missing: list[str]) -> None:
+	"""Copies the licence of every redistributed component (vulkan_sdk_licenses/, see its README.md): LunarG's notice
+	says the SDK has no licence of its own, each component keeps its own."""
+	if not COMPONENT_LICENSES.is_dir():
+		missing.append(f"the component licences ({COMPONENT_LICENSES})")
+
+		return
+
+	for component in sorted(path for path in COMPONENT_LICENSES.iterdir() if path.is_dir()):
+		if component.name in MACOS_ONLY_COMPONENTS and osname != "macos":
+			continue
+
+		target = licences / component.name
+
+		if target.exists():
+			shutil.rmtree(target)
+
+		shutil.copytree(component, target)
+
+	shutil.copy2(COMPONENT_LICENSES / "README.md", licences / "README.md")
+
+
 def extract(sdk: Path, output: Path, osname: str) -> None:
 	destination = output / "vulkan-sdk"
 	architecture = output_architecture(output)
@@ -282,6 +307,8 @@ def extract(sdk: Path, output: Path, osname: str) -> None:
 	if not any(licences.iterdir()):
 		missing.append("the SDK licence file (LICENSE.txt or Licenses/)")
 
+	copy_component_licenses(licences, osname, missing)
+
 	if missing:
 		shutil.rmtree(destination)
 		sys.exit("Vulkan SDK extraction refused, missing:\n  - " + "\n  - ".join(missing))
@@ -302,7 +329,30 @@ def main() -> None:
 	parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 	parser.add_argument("--sdk", type=Path, default=default_sdk_root(osname), help="the installed SDK root for this OS")
 	parser.add_argument("--output", type=Path, action="append", help="an output/<config> directory (repeatable); default: every output/<host os>.* directory")
+	parser.add_argument("--licenses-only", action="store_true", help="only refresh vulkan-sdk/LICENSES/ of existing outputs from vulkan_sdk_licenses/ (no installed SDK needed)")
 	arguments = parser.parse_args()
+
+	if arguments.licenses_only:
+		outputs = arguments.output or sorted(path for path in (ROOT / "output").glob(f"{osname}.*") if (path / "vulkan-sdk").is_dir())
+
+		if not outputs:
+			sys.exit(f"No output/{osname}.*/vulkan-sdk directory to refresh.")
+
+		for output in outputs:
+			licences = output / "vulkan-sdk" / "LICENSES"
+
+			if not licences.is_dir():
+				sys.exit(f"'{licences}' does not exist: extract the SDK first.")
+
+			missing: list[str] = []
+			copy_component_licenses(licences, osname, missing)
+
+			if missing:
+				sys.exit("Licence refresh refused, missing:\n  - " + "\n  - ".join(missing))
+
+			print(f"{licences}: " + ", ".join(sorted(path.name for path in licences.iterdir())))
+
+		return
 
 	if not arguments.sdk.is_dir():
 		sys.exit(f"The Vulkan SDK {SDK_VERSION} is not at '{arguments.sdk}' (use --sdk).")
