@@ -132,6 +132,12 @@ cmake_options:
 # artifact machine-specific. `Ort::GetAvailableProviders()` therefore reports exactly one.
 
 platforms:
+  linux:
+    # ORT forces COMPILE_WARNING_AS_ERROR ON every target (cmake/CMakeLists.txt:1156, no switch).
+    # GCC 15 (Ubuntu 26.04) then fails Release on a -Wmaybe-uninitialized false positive
+    # inside libstdc++'s own <format> (bits/unicode.h:610, reached via <chrono> from
+    # core/common/common.h); Debug is unaffected (no inlining). Downgraded to a warning only.
+    extra_cxx_flags: "-Wno-error=maybe-uninitialized"
   windows:
     # ⚠️ TWO FETCHCONTENT DEPS OVERWRITE `CMAKE_MSVC_RUNTIME_LIBRARY` — same silent-override
     # family as the `set(CMAKE_CXX_STANDARD …)` cases in AGENTS.md, applied to the CRT. Each
