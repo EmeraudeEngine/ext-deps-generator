@@ -19,6 +19,12 @@ languages: [c, cxx]
 # built with SIMDJSON_EXCEPTIONS=0 / SIMDJSON_THREADS_ENABLED=1, which fastgltf picks up
 # through the package's INTERFACE definitions. Check after a bump: the configure log must
 # say "fastgltf: Found simdjson config", never "downloading".
+#
+# ⚠️ patches/fastgltf.patch (2026-10-18, found by the engine's fuzz_gltf — owner decision: patch here): a data: URI
+# was base64-decoded without checking its length. base64::getPadding() / getOutputSize() ASSERT a non-zero multiple
+# of 4 — compiled out of a release build — and Parser::decodeDataUri() never checked it, so any other length made the
+# decoders write past the output buffer (a heap overflow). The patch refuses such a URI (Error::InvalidURI). Upstream
+# candidate.
 depends_on: [simdjson]
 
 cmake_options:

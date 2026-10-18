@@ -1,0 +1,23 @@
+# target-commit: 705564d4d54500ae88befb0db9e361e447923655
+
+diff --git a/src/fastgltf.cpp b/src/fastgltf.cpp
+index 7e22331..2fc7cb8 100644
+--- a/src/fastgltf.cpp
++++ b/src/fastgltf.cpp
+@@ -681,6 +681,16 @@ fg::Expected<fg::DataSource> fg::Parser::decodeDataUri(const URIView& uri) const
+ 	}
+ 
+ 	auto encodedData = path.substr(encodingEnd + 1);
++
++	// ---- ext-deps-generator patch ----
++	// base64::getPadding() and getOutputSize() ASSERT a length that is a non-zero multiple of 4 — an assert, compiled
++	// out of a release build — and nothing checked it here: a data URI of any other length made the decoders write
++	// past the getOutputSize() bytes they were given (a heap overflow, found by the emeraude-engine's fuzz_gltf).
++	if (encodedData.empty() || encodedData.size() % 4 != 0) {
++		return Error::InvalidURI;
++	}
++	// ---- end of patch ----
++
+ 	if (config.mapCallback != nullptr) {
+ 		// If a map callback is specified, we use a pointer to memory specified by it.
+ 		auto padding = base64::getPadding(encodedData);
