@@ -1,7 +1,7 @@
 # target-commit: c9f177148f7dcddde33f4f8d6e82599f151d8803
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 1001412d5..05162c99c 100644
+index 1001412..05162c9 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -438,7 +438,14 @@ endif()
@@ -86,10 +86,72 @@ index 1001412d5..05162c99c 100644
 +  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/lightusd
 +)
 diff --git a/src/composition.cc b/src/composition.cc
-index 043903a4b..a9b21619a 100644
+index 043903a..b9ed11b 100644
 --- a/src/composition.cc
 +++ b/src/composition.cc
-@@ -4060,12 +4060,36 @@ void RemapPathsInPrimSpecTree(PrimSpec &ps, const NamespaceMapping &mapping) {
+@@ -1366,6 +1366,21 @@ bool CompositeSublayers(AssetResolutionResolver &resolver,
+ namespace {
+ 
+ 
++// ---- ext-deps-generator patch ----
++// An internal arc that targets the prim itself OR ONE OF ITS ANCESTORS is a cycle: the ancestor's
++// subtree holds the arc again, so every expansion copies it once more (exponential — 4 KB of USDA
++// reached 16 GB in 21 s, found by fuzzing). OpenUSD reports such an arc as a composition cycle and
++// drops it; upstream caught only the direct self-reference.
++static bool IsCyclicInternalArc(const std::string &target, const std::string &dst) {
++  if (target == dst) {
++    return true;
++  }
++
++  return dst.size() > target.size() && dst.compare(0, target.size(), target) == 0 &&
++         dst[target.size()] == '/';
++}
++// ---- end of patch ----
++
+ // Visited set for cycle detection in references/payloads.
+ // Tracks (asset_path, prim_path) pairs. Grows only with arc nesting depth (typically < 10).
+ using ArcVisitedSet = std::set<std::pair<std::string, std::string>>;
+@@ -1483,8 +1498,8 @@ bool CompositeReferencesLocal(AssetResolutionResolver &resolver,
+                              "> not found in this layer; skipped.\n";
+                 }
+                 src_ps = nullptr;
+-              } else if (reference.prim_path.prim_part() ==
+-                             dst_prim_path.prim_part() ||
++              } else if (IsCyclicInternalArc(reference.prim_path.prim_part(),
++                                             dst_prim_path.prim_part()) ||
+                          reference.prim_path.prim_part() ==
+                              primspec.name()) {
+                 // Self internal reference (`</A>` on A): a cycle. The external
+@@ -1625,8 +1640,8 @@ bool CompositeReferencesLocal(AssetResolutionResolver &resolver,
+                              "> not found in this layer; skipped.\n";
+                 }
+                 src_ps = nullptr;
+-              } else if (reference.prim_path.prim_part() ==
+-                             dst_prim_path.prim_part() ||
++              } else if (IsCyclicInternalArc(reference.prim_path.prim_part(),
++                                             dst_prim_path.prim_part()) ||
+                          reference.prim_path.prim_part() ==
+                              primspec.name()) {
+                 // Self internal reference (`</A>` on A): a cycle. The external
+@@ -1819,7 +1834,7 @@ bool CompositePayloadLocal(AssetResolutionResolver &resolver,
+               if (!in_layer.find_primspec_at(pl.prim_path, &src_ps, err)) {
+                 return false;
+               }
+-              if (pl.prim_path.prim_part() == dst_prim_path.prim_part() ||
++              if (IsCyclicInternalArc(pl.prim_path.prim_part(), dst_prim_path.prim_part()) ||
+                   pl.prim_path.prim_part() == primspec.name()) {
+                 // Self internal payload: a cycle (the external branch guards
+                 // cycles via `visited`; the internal branch did not). Reject.
+@@ -1934,7 +1949,7 @@ bool CompositePayloadLocal(AssetResolutionResolver &resolver,
+               if (!in_layer.find_primspec_at(pl.prim_path, &src_ps, err)) {
+                 return false;
+               }
+-              if (pl.prim_path.prim_part() == dst_prim_path.prim_part() ||
++              if (IsCyclicInternalArc(pl.prim_path.prim_part(), dst_prim_path.prim_part()) ||
+                   pl.prim_path.prim_part() == primspec.name()) {
+                 // Self internal payload: a cycle (the external branch guards
+                 // cycles via `visited`; the internal branch did not). Reject.
+@@ -4060,12 +4075,36 @@ void RemapPathsInPrimSpecTree(PrimSpec &ps, const NamespaceMapping &mapping) {
              p = mapping.Apply(p);
            }
          }
@@ -128,7 +190,7 @@ index 043903a4b..a9b21619a 100644
  
      // Remap composition arc target paths
 diff --git a/src/io-util.cc b/src/io-util.cc
-index 25c65b960..b24ba492a 100644
+index 25c65b9..b24ba49 100644
 --- a/src/io-util.cc
 +++ b/src/io-util.cc
 @@ -42,8 +42,11 @@
@@ -160,7 +222,7 @@ index 25c65b960..b24ba492a 100644
  #define LIGHTUSD_HAVE_GLOB_FS 1
  #else
 diff --git a/src/nonstd/expected.hpp b/src/nonstd/expected.hpp
-index 5b19bf0d7..b490df12f 100644
+index 5b19bf0..b490df1 100644
 --- a/src/nonstd/expected.hpp
 +++ b/src/nonstd/expected.hpp
 @@ -255,6 +255,24 @@ namespace nonstd {
@@ -188,8 +250,34 @@ index 5b19bf0d7..b490df12f 100644
  #  include <windows.h>   // for ExceptionCodes
  # else
  // already included: <cassert>
+diff --git a/src/stream-reader.hh b/src/stream-reader.hh
+index f22048a..6cc222f 100644
+--- a/src/stream-reader.hh
++++ b/src/stream-reader.hh
+@@ -147,10 +147,18 @@ class StreamReader {
+       return 0;
+     }
+ 
+-    uint64_t len = n;
+-    if ((idx_ + len) > length_) {
+-      len = length_ - uint64_t(idx_);
++    // ---- ext-deps-generator patch ----
++    // A SHORT read returned the bytes it could copy — non-zero, so every caller testing
++    // `if (!read(...))` took a truncated array for a complete one and went on with zeros: a 1 KB
++    // USDC then declared 67 M paths and asked for 4.8 GB (found by fuzzing). All or nothing:
++    // a request the stream cannot satisfy reads nothing and returns 0. Callers comparing the
++    // count (`n != read(...)`) are unchanged.
++    if (n > length_ - uint64_t(idx_)) {
++      return 0;
+     }
++    // ---- end of patch ----
++
++    uint64_t len = n;
+ 
+     if (len > 0) {
+       if (dst_len < len) {
 diff --git a/src/tydra/render-data.cc b/src/tydra/render-data.cc
-index 9f7d65e5d..40f3235b8 100644
+index 9f7d65e..40f3235 100644
 --- a/src/tydra/render-data.cc
 +++ b/src/tydra/render-data.cc
 @@ -1123,12 +1123,23 @@ bool RenderSceneConverter::ConvertVolume(
@@ -217,7 +305,7 @@ index 9f7d65e5d..40f3235b8 100644
  
      // Pick the grid whose name matches the requested field, else the first.
 diff --git a/src/tydra/shape-to-mesh.hh b/src/tydra/shape-to-mesh.hh
-index 0f361f008..96ca4e877 100644
+index 0f361f0..96ca4e8 100644
 --- a/src/tydra/shape-to-mesh.hh
 +++ b/src/tydra/shape-to-mesh.hh
 @@ -11,8 +11,8 @@

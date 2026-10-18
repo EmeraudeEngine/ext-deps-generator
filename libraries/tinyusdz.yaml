@@ -173,6 +173,22 @@ cmake_options:
 # real ones.
 #
 # ─────────────────────────────────────────────────────────────────────────────────────────
+# THE TWO FUZZING FIXES (2026-10-18, the engine's fuzz_usd — owner decision: patch here)
+#
+#  * src/stream-reader.hh — StreamReader::read() returned the bytes it COULD copy on a short
+#    read: non-zero, so every `if (!sr()->read(...))` caller (87 of them in the crate reader) took
+#    a truncated array for a complete one and went on with zeros. A 1 KB USDC then declared 67 M
+#    paths and asked for 4.8 GB. Now all or nothing: a request the stream cannot satisfy returns 0
+#    (callers comparing the count keep working).
+#  * src/composition.cc — an internal reference or payload to the prim ITSELF was refused as a
+#    cycle, one to an ANCESTOR was not: the ancestor's subtree holds the arc again, so every
+#    expansion copied it once more — 4 KB of USDA reached 16 GB in 21 s. IsCyclicInternalArc()
+#    refuses both, at the four sites (prepended / appended references and payloads), as OpenUSD
+#    does.
+# Upstream candidates (lighttransport/tinyusdz). The engine also caps a root layer's parse at
+# max(256 MiB, 16 x the file) through USDLoadOptions::max_memory_limit_in_mb.
+#
+# ─────────────────────────────────────────────────────────────────────────────────────────
 # THE COMPOSITION AND MATERIAL PATCHES OF v0.9.4 (history kept for the next re-verification)
 #
 # From 2026-08-10 to the v1.0.0-rc3 bump, patches/tinyusdz.patch carried seven fixes for
