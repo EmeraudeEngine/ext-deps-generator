@@ -1,10 +1,10 @@
 # target-commit: b9438627eef73a1157e84201b6fa6eb2ffd6d9f0
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 1ec2e73..9030fd7 100644
+index 1ec2e73..59c0ecd 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -1,108 +1,62 @@
+@@ -1,108 +1,66 @@
 -project(bc7enc)
 -
 -cmake_minimum_required(VERSION 2.8)
@@ -105,8 +105,10 @@ index 1ec2e73..9030fd7 100644
 +
 +# Minimal static-library build for the BC7 encoder/decoder core used by
 +# downstream Vulkan engines. The upstream CMakeLists targets the full
-+# `bc7enc` standalone executable + RDO tooling; we only need the two
-+# translation units that expose the public block encoder/decoder API.
++# `bc7enc` standalone executable + RDO tooling; we only need the
++# translation units that expose the public block encoder/decoder API:
++# BC7 (bc7enc, bc7decomp) and BC1-5 (rgbcx: BC4 / BC5 for one- and
++# two-channel textures such as normal maps).
 +
 +include(GNUInstallDirs)
 +include(CMakePackageConfigHelpers)
@@ -114,6 +116,7 @@ index 1ec2e73..9030fd7 100644
 +add_library(bc7enc_rdo STATIC
 +    bc7enc.cpp
 +    bc7decomp.cpp
++    rgbcx.cpp
 +)
 +
 +set_target_properties(bc7enc_rdo PROPERTIES
@@ -154,6 +157,7 @@ index 1ec2e73..9030fd7 100644
 +install(FILES
 +    bc7enc.h
 +    bc7decomp.h
++    rgbcx.h
 +    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/bc7enc_rdo
 +)
 +

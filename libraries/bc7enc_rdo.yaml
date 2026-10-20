@@ -4,8 +4,9 @@ languages: [cxx]
 
 # The upstream CMakeLists targets the standalone `bc7enc` executable +
 # RDO tooling. The patch replaces it with a minimal static-library build
-# exposing only the BC7 encoder/decoder core (`bc7enc.cpp` + `bc7decomp.cpp`),
-# which is all downstream Vulkan engines consume.
+# exposing only the block encoder/decoder cores: BC7 (`bc7enc.cpp` +
+# `bc7decomp.cpp`) and BC1-5 (`rgbcx.cpp`, used for BC4 grey-scale maps and
+# BC5 normal maps), which is all downstream Vulkan engines consume.
 
 cmake_options:
   # ⚠️ DEVIATION from the build policy (AGENTS.md § Build policy) — the C++ standard.

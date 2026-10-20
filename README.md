@@ -49,7 +49,7 @@ tar -xzf "/tmp/libressl-${VER}.tar.gz" -C repositories/libressl --strip-componen
 - Version: master (no upstream releases)
 - Dependencies: None
 - Usage: BC7 texture block encoder/decoder. Required by engines doing GPU-side compressed texture upload.
-- Notes: Upstream targets a standalone `bc7enc` executable with RDO tooling. The patch replaces the CMakeLists with a minimal static-library build exposing only the core encoder/decoder (`bc7enc.cpp` + `bc7decomp.cpp`); the RDO optimizer and lodepng/utils helpers are not needed downstream and are excluded.
+- Notes: Upstream targets a standalone `bc7enc` executable with RDO tooling. The patch replaces the CMakeLists with a minimal static-library build exposing only the core encoders/decoders (`bc7enc.cpp` + `bc7decomp.cpp` for BC7, `rgbcx.cpp` for BC1-5 — BC4 grey-scale maps, BC5 normal maps); the RDO optimizer and lodepng/utils helpers are not needed downstream and are excluded.
 - Warning: **compiled as C++17, not C++20**, in deviation from the build policy: upstream sets
   the `CXX_STANDARD 17` *target property* (CMakeLists.txt:18), which beats the
   `CMAKE_CXX_STANDARD` cache variable, so passing the standard from the YAML would be inert.
