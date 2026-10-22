@@ -204,6 +204,16 @@ class MesonBuilder:
         """Run meson setup (configure)."""
         buildtype = "debug" if self.config.build_type == "Debug" else "release"
 
+        # Windows Debug: debug information inside the objects (/Z7, WindowsPlatform._DEBUG_INFORMATION).
+        # Meson's debug buildtype means /Zi with one compile PDB PER SOURCE (harfbuzz.lib's objects
+        # recorded hb-font.cc.pdb, hb-face.cc.pdb… none of them in the archive), and it has no option
+        # for /Z7: the same unoptimized build is asked as plain + optimization 0, /Z7 by the args.
+        # The debug CRT (and its _DEBUG) still comes from b_vscrt below.
+        debug_information_args = []
+        if self.config.platform_name == "windows" and self.config.build_type == "Debug":
+            buildtype = "plain"
+            debug_information_args = ["/Z7"]
+
         # If a previous setup exists, nuke the build dir entirely. `meson setup
         # --wipe` reuses the previously-saved cmdline args, which means a new
         # --native-file (or any newly-added arg) would be silently ignored.
@@ -226,6 +236,9 @@ class MesonBuilder:
             "--libdir=lib",
         ]
 
+        if debug_information_args:
+            cmd.extend(["-Ddebug=false", "-Doptimization=0"])
+
         # Windows MSVC runtime selection. Meson defaults to /MD, ignoring any
         # /MT we'd pass via CFLAGS; the only honored knob is `b_vscrt`.
         if self.config.platform_name == "windows":
@@ -241,7 +254,7 @@ class MesonBuilder:
         if cross_file:
             cmd.append(f"--cross-file={cross_file}")
         else:
-            remap = " ".join(self.config.path_remap_flags)
+            remap = " ".join([*self.config.path_remap_flags, *debug_information_args])
             cmd.append(f"-Dc_args={remap}")
             cmd.append(f"-Dcpp_args={remap}")
 

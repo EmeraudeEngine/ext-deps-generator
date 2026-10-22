@@ -230,12 +230,12 @@ it replaces compiled the sources of one target serially: `cmake --build --parall
 tinyusdz) kept one core busy. Measured on the 28-thread build box (2026-10-20), CPU at 13-31 % with
 Visual Studio, ~99 % during Ninja compilations:
 
-| Configuration | Visual Studio (v019, existing build trees) | Ninja, from scratch |
-|---|---|---|
-| Release-MD | 2004 s | 1288 s |
-| Debug-MD   | 1607 s | 951 s  |
-| Release-MT | 2056 s | 1347 s |
-| Debug-MT   | 1619 s | 958 s  |
+| Configuration | Visual Studio (v019, existing build trees) | Ninja, from scratch | Ninja + `/Z7` (2026-10-22) |
+|---|---|---|---|
+| Release-MD | 2004 s | 1288 s | 1147 s |
+| Debug-MD   | 1607 s | 951 s  | 858 s  |
+| Release-MT | 2056 s | 1347 s | —      |
+| Debug-MT   | 1619 s | 958 s  | 839 s  |
 
 onnxruntime ~710 s → ~280 s, tinyusdz ~226 s → ~67 s. What remains is mostly the serial configure
 of ~50 libraries (`docs/todo/build-independent-libraries-concurrently.md`).
@@ -254,15 +254,30 @@ What the switch implies — keep it in mind when touching the Windows path:
   generator (7× fewer functions), the Release libraries of the set 1087 → 476 MiB. Code that relied
   on a non-conforming inline (defined in one .cpp, used elsewhere) would fail to link: every
   configuration's `DependenciesTest` links the whole set.
-- **Debug archives carry ~4.5 % more debug information** (`.debug$S`, e.g. SPIRV-Tools-opt.lib
-  270 → 343 MB in Debug-MD; the code sections are identical, the PDBs +9 %). Not explained yet: it
-  is not `/Zc:inline` (the first Ninja build, without it, had the same growth) nor the CRT.
-- **Debug PDBs.** Ninja writes a static library's compile PDB as `CMakeFiles/<target>.dir/<target>.pdb`
-  (named after the *target*: absl's `base.pdb`, glslang's `SPIRV.pdb`), where Visual Studio wrote
-  `<Debug>/<output name>.pdb` (`absl_base.pdb`, `SPIRVd.pdb`). `WindowsPlatform._is_shipped_pdb`
-  takes both layouts. The names changed but they are the ones the objects record: a Debug
-  `DependenciesTest` relinked with the build tree hidden gives 0 LNK4099. Check for duplicate PDB
-  names across libraries after adding one (lib/ is flat; 178 distinct names, 0 collision today).
+- **Debug information lives in the objects: `/Z7`** (owner decision 2026-10-22,
+  `WindowsPlatform._DEBUG_INFORMATION`), on the three Windows paths:
+  CMake (the Debug / RelWithDebInfo flags, plus `CMAKE_MSVC_DEBUG_INFORMATION_FORMAT` =
+  `$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>` with `CMAKE_POLICY_DEFAULT_CMP0141=NEW` for the
+  3.25+ projects), Meson (`plain` + `debug=false` + `optimization=0` + `/Z7` in `c_args`/`cpp_args`;
+  `b_vscrt` keeps the debug CRT) and libvpx's MSBuild (`patches/libvpx.patch`: `DebugInformationFormat`
+  `OldStyle` in Debug, `None` in Release like every other Release library).
+  Why: with `/Zi` every object records the ABSOLUTE path of a compile PDB in the build tree, and the
+  archive misses many of them. On the build machine the link silently finds the build tree; on any
+  other machine a Debug consumer gets LNK4099 and loses those objects' debug information. Measured
+  in the PUBLISHED v019 Debug-MD (Visual Studio): 3710 objects depend on an external PDB, 376 of
+  those references point to a file the archive does not ship (vpxmdd.pdb ×210, tbb12_debug.pdb,
+  harfbuzz's one-PDB-per-source from Meson…). Ninja made it worse: its OBJECT libraries (draco,
+  libwebp, crypto/ssl, …) compile into a `vc140.pdb` per library, all with the same name, never shipped
+  (lib/ is flat). With `/Z7`: 0 object depends on an external PDB in Debug-MD and Debug-MT (3899
+  objects embed their types; the 20 others are ml64 assembler objects, whose `-Zi` means "symbols",
+  not a type server); projet-alpha's Debug build (Emeraude.dll links crypto, ssl, libwebp, harfbuzz,
+  opus, zip) relinked with the ext-deps build tree HIDDEN: 0 LNK4099. The first Ninja claim
+  ("0 LNK4099 with the build tree hidden" from `DependenciesTest`) was wrong: that link did not pull
+  those objects. The check that counts is the type-server scan of every shipped `.lib`.
+  Cost: Debug-MD `.lib` 2316 → 3946 MiB (the types moved inside), `.pdb` 1361 → 949 MiB (only the link
+  PDBs of the DLLs and executables are left: onnxruntime, protoc, flatc, …, still found by
+  `WindowsPlatform._is_shipped_pdb`), folder 3824 → 5042 MiB; Release unchanged (469 MiB of `.lib`).
+  The other generator differences in Debug went with it (the `.debug$S` growth, the target-named PDBs).
 - **Generator-dependent file names.** libzmq tagged its archives with the toolset only under the
   Visual Studio generator (`if(MSVC_IDE)`); `patches/libzmq.patch` keeps `libzmq-v143-mt-s[gd]-4_3_6.lib`
   for every generator, because consumers link that name (the test project, a downstream application).
@@ -445,9 +460,10 @@ Some libraries need modifications to build correctly (e.g., forced C++ standard,
 
 **Examples**:
 - `patches/manifold.patch`: wraps upstream's unguarded `set(CMAKE_CXX_STANDARD 17)` in `if(NOT CMAKE_CXX_STANDARD)`, so `-DCMAKE_CXX_STANDARD=20` stops being silently ignored. The canonical shape of this fix — three lines, no behaviour change when nothing is passed.
-- `patches/libvpx.patch` (two hunks):
+- `patches/libvpx.patch` (three changes):
   1. Replaces `ar` with `libtool -static` on macOS. macOS `ar` creates fat Mach-O archives from cross-arch objects that it cannot update, breaking cross-compilation from ARM to x86_64.
   2. Strips `WholeProgramOptimization` (`/GL`) from the generated Release `.vcxproj` (`gen_msvs_vcxproj.sh`). LTCG objects hide their CRT directives from `dumpbin` (defeating CRT validation) and tie the static lib to the exact producing MSVC toolset — unacceptable for a redistributable archive.
+  3. Sets `DebugInformationFormat` in the same generated `.vcxproj`: `OldStyle` (`/Z7`) in Debug, `None` in Release. MSBuild's default `/Zi` made every object record a `vpx*.pdb` the archive never shipped (§ Windows generator: Ninja, the debug information bullet).
 - `patches/libpng.patch`: `scripts/cmake/genout.cmake.in` pasted `CMAKE_C_FLAGS` unquoted into a
   generated CMake script, so the MSVC `/d1trimfile:<root>\` flag (§ Build-machine paths) broke
   the Windows build with `Invalid character escape '\U'`. The patch reads the flags through a

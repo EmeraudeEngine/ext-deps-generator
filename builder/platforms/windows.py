@@ -272,9 +272,23 @@ class WindowsPlatform(Platform):
             # runtime requested here. Forcing CMP0091=NEW project-wide makes
             # the runtime knob authoritative and keeps CRT validation honest.
             "CMAKE_POLICY_DEFAULT_CMP0091": "NEW",
+            # Debug information embedded in the objects (/Z7), never a compile PDB: see
+            # _DEBUG_INFORMATION. A project at cmake_minimum_required 3.25+ (CMP0141 NEW) takes the
+            # format from this abstraction instead of the flags; forcing the policy makes the older
+            # ones honour it too.
+            "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>",
+            "CMAKE_POLICY_DEFAULT_CMP0141": "NEW",
         }
 
         return options
+
+    # /Z7: the debug information of a Debug archive lives INSIDE each object (2026-10-22, owner
+    # decision). With /Zi every object recorded the absolute path of a compile PDB in the build
+    # tree, and the archive missed many of them: the Ninja OBJECT libraries' vc140.pdb (one per
+    # library, same name — draco, libwebp, crypto/ssl…), harfbuzz's per-source PDBs (Meson),
+    # libvpx's vpxmdd.pdb (MSBuild). On another machine a consumer's Debug link then lost their
+    # debug information (LNK4099); on the build machine it silently found the build tree.
+    _DEBUG_INFORMATION = "/Z7"
 
     # /Zc:inline (C++ conformance, the default of a project created in the Visual Studio IDE,
     # but not of the CMake-generated ones, with either generator): an object no longer carries
@@ -286,7 +300,7 @@ class WindowsPlatform(Platform):
     def get_c_flags(self, config: "BuildConfig") -> str:
         """MSVC-specific C flags, build-machine paths trimmed."""
         if config.build_type == "Debug":
-            flags = f"/{config.runtime_lib}d /Od /Zi /D_DEBUG"
+            flags = f"/{config.runtime_lib}d /Od {self._DEBUG_INFORMATION} /D_DEBUG"
         else:
             flags = f"/{config.runtime_lib} /O2 /DNDEBUG"
         return " ".join([flags, self._VS_PROJECT_DEFAULTS, *config.path_remap_flags])
@@ -294,7 +308,7 @@ class WindowsPlatform(Platform):
     def get_cxx_flags(self, config: "BuildConfig") -> str:
         """MSVC-specific C++ flags (includes /EHsc for exception handling), build-machine paths trimmed."""
         if config.build_type == "Debug":
-            flags = f"/{config.runtime_lib}d /Od /Zi /D_DEBUG /EHsc"
+            flags = f"/{config.runtime_lib}d /Od {self._DEBUG_INFORMATION} /D_DEBUG /EHsc"
         else:
             flags = f"/{config.runtime_lib} /O2 /DNDEBUG /EHsc"
         return " ".join([flags, self._VS_PROJECT_DEFAULTS, *config.path_remap_flags])
@@ -305,14 +319,14 @@ class WindowsPlatform(Platform):
 
         Returns a dict mapping CMAKE_C_FLAGS_<CONFIG> to flag values.
         """
-        debug_flags = f"/{config.runtime_lib}d /Od /Zi /D_DEBUG"
+        debug_flags = f"/{config.runtime_lib}d /Od {self._DEBUG_INFORMATION} /D_DEBUG"
         release_flags = f"/{config.runtime_lib} /O2 /DNDEBUG"
 
         return {
             "CMAKE_C_FLAGS_DEBUG": debug_flags,
             "CMAKE_C_FLAGS_RELEASE": release_flags,
             "CMAKE_C_FLAGS_MINSIZEREL": release_flags,
-            "CMAKE_C_FLAGS_RELWITHDEBINFO": f"/{config.runtime_lib} /O2 /Zi /DNDEBUG",
+            "CMAKE_C_FLAGS_RELWITHDEBINFO": f"/{config.runtime_lib} /O2 {self._DEBUG_INFORMATION} /DNDEBUG",
         }
 
     def get_config_specific_cxx_flags(self, config: "BuildConfig") -> dict[str, str]:
@@ -321,14 +335,14 @@ class WindowsPlatform(Platform):
 
         Returns a dict mapping CMAKE_CXX_FLAGS_<CONFIG> to flag values.
         """
-        debug_flags = f"/{config.runtime_lib}d /Od /Zi /D_DEBUG /EHsc"
+        debug_flags = f"/{config.runtime_lib}d /Od {self._DEBUG_INFORMATION} /D_DEBUG /EHsc"
         release_flags = f"/{config.runtime_lib} /O2 /DNDEBUG /EHsc"
 
         return {
             "CMAKE_CXX_FLAGS_DEBUG": debug_flags,
             "CMAKE_CXX_FLAGS_RELEASE": release_flags,
             "CMAKE_CXX_FLAGS_MINSIZEREL": release_flags,
-            "CMAKE_CXX_FLAGS_RELWITHDEBINFO": f"/{config.runtime_lib} /O2 /Zi /DNDEBUG /EHsc",
+            "CMAKE_CXX_FLAGS_RELWITHDEBINFO": f"/{config.runtime_lib} /O2 {self._DEBUG_INFORMATION} /DNDEBUG /EHsc",
         }
 
     def _get_runtime_library(self, config: "BuildConfig") -> str:
@@ -376,6 +390,9 @@ class WindowsPlatform(Platform):
     def _is_shipped_pdb(pdb: Path, build_dir: Path, config: "BuildConfig") -> bool:
         """Whether a .pdb under a library's build tree belongs in the Debug archive.
 
+        Since /Z7 (_DEBUG_INFORMATION) the objects carry their own debug information, so this
+        finds only the link PDBs of the DLLs and executables (onnxruntime, protoc…); the
+        compile-PDB layouts below stay recognized for a library that still produces one.
         Two layouts, one set of files (a static library's compile PDB, an
         executable's or DLL's link PDB — never a compiler intermediate vcNNN.pdb):
         - multi-config generators (Visual Studio, also what libvpx's msys2 build

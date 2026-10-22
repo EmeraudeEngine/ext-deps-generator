@@ -31,10 +31,10 @@ index 39dff825b..a2a121572 100644
  # Don't use -Wl,-z,defs with Clang's sanitizers.
  #
 diff --git a/build/make/gen_msvs_vcxproj.sh b/build/make/gen_msvs_vcxproj.sh
-index 1e1db05bb..23783f9ec 100755
+index 59281d365..6f7a1310c 100755
 --- a/build/make/gen_msvs_vcxproj.sh
 +++ b/build/make/gen_msvs_vcxproj.sh
-@@ -366,9 +366,10 @@ generate_vcxproj() {
+@@ -369,9 +369,10 @@ generate_vcxproj() {
                  fi
              fi
              tag_content CharacterSet Unicode
@@ -48,3 +48,22 @@ index 1e1db05bb..23783f9ec 100755
              close_tag PropertyGroup
          done
      done
+@@ -425,12 +426,18 @@ generate_vcxproj() {
+                 runtime=$debug_runtime
+                 curlibs=$debug_libs
+                 debug=_DEBUG
++                # ext-deps-generator: debug information inside the objects (/Z7), not a
++                # vpx*d.pdb the archive never ships.
++                tag_content DebugInformationFormat OldStyle
+             else
+                 opt=MaxSpeed
+                 runtime=$release_runtime
+                 curlibs=$libs
+                 tag_content FavorSizeOrSpeed Speed
+                 debug=NDEBUG
++                # ext-deps-generator: no debug information in a Release library, like
++                # every other one of the archive (the default /Zi recorded a vpx*.pdb).
++                tag_content DebugInformationFormat None
+             fi
+             extradefines=";$defines"
+             tag_content Optimization $opt
