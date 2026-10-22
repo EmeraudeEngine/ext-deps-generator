@@ -206,6 +206,11 @@ class Msys2Builder:
         # CMake, etc.) are visible to configure scripts. MSYS2's /usr/bin
         # still takes precedence because /etc/profile prepends it.
         env["MSYS2_PATH_TYPE"] = "inherit"
+        # libvpx's `make` drives msbuild.exe on generated .vcxproj files, which compile the
+        # sources of one project serially (no /MP). MSBuild reads environment variables as
+        # properties: the multi-tool task schedules every source file on all cores instead.
+        env["UseMultiToolTask"] = "true"
+        env["EnforceProcessCountAcrossBuilds"] = "true"
 
         # Build a list of extra directories to inject into MSYS2 PATH
         extra_paths = []

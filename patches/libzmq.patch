@@ -1,0 +1,21 @@
+# target-commit: 46493370217ac135246617fa2f6ac819d8b61bfc
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index ab459c7a..d10f6482 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -676,11 +676,9 @@ if(MSVC)
+     zmq_check_cxx_flag_prepend("/W3")
+   endif()
+ 
+-  if(MSVC_IDE)
+-    set(MSVC_TOOLSET "-${CMAKE_VS_PLATFORM_TOOLSET}")
+-  else()
+-    set(MSVC_TOOLSET "")
+-  endif()
++  # ext-deps-generator patch: the toolset tag in the archive names for every generator (Ninja too),
++  # from MSVC_TOOLSET_VERSION (143 for VS 2022): consumers link libzmq-v143-mt-s[gd]-4_3_6.lib by name.
++  set(MSVC_TOOLSET "-v${MSVC_TOOLSET_VERSION}")
+ else()
+   zmq_check_cxx_flag_prepend("-Wall")
+ endif()

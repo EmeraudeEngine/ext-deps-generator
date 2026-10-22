@@ -222,6 +222,59 @@ Use this when a library expects a path that depends on the build layout — e.g.
 needs `SPIRV-Headers_SOURCE_DIR=${INSTALL_PREFIX}` so it picks up the headers from the
 previously installed `spirv-headers` package without re-adding it as a CMake subdirectory.
 
+### Windows generator: Ninja (since 2026-10-20)
+Every CMake library — and the `DependenciesTest` project — is generated with **Ninja** on Windows,
+as on Linux and macOS (`WindowsPlatform.get_generator()`). The "Visual Studio 17 2022" generator
+it replaces compiled the sources of one target serially: `cmake --build --parallel N` is MSBuild's
+`/m` (N *projects* at a time) and no recipe passed `/MP`, so the large single targets (onnxruntime,
+tinyusdz) kept one core busy. Measured on the 28-thread build box (2026-10-20), CPU at 13-31 % with
+Visual Studio, ~99 % during Ninja compilations:
+
+| Configuration | Visual Studio (v019, existing build trees) | Ninja, from scratch |
+|---|---|---|
+| Release-MD | 2004 s | 1288 s |
+| Debug-MD   | 1607 s | 951 s  |
+| Release-MT | 2056 s | 1347 s |
+| Debug-MT   | 1619 s | 958 s  |
+
+onnxruntime ~710 s → ~280 s, tinyusdz ~226 s → ~67 s. What remains is mostly the serial configure
+of ~50 libraries (`docs/todo/build-independent-libraries-concurrently.md`).
+
+What the switch implies — keep it in mind when touching the Windows path:
+- **cl.exe comes from PATH.** `CMakeBuilder` runs every `cmake` call under
+  `WindowsPlatform.get_msvc_env()` (vcvarsall captured once, like the Meson builder). No `-A`: the
+  architecture is the vcvarsall one.
+- **A build tree of another generator is deleted** before configuring
+  (`CMakeBuilder._discard_build_dir_of_another_generator`): CMake refuses to reconfigure it. The
+  first Ninja build of a library is therefore a full one.
+- **`/Zc:inline` is passed explicitly** (`WindowsPlatform._VS_PROJECT_DEFAULTS`, new with the switch):
+  it is the default of a project created in the IDE, NOT of a CMake-generated `.vcxproj` — the v019
+  archives were built without it. An object then stops carrying the bodies of the inline functions
+  it does not reference: SPIRV-Tools-lint.lib (Release-MD) 4442370 → 856636 bytes with the SAME
+  generator (7× fewer functions), the Release libraries of the set 1087 → 476 MiB. Code that relied
+  on a non-conforming inline (defined in one .cpp, used elsewhere) would fail to link: every
+  configuration's `DependenciesTest` links the whole set.
+- **Debug archives carry ~4.5 % more debug information** (`.debug$S`, e.g. SPIRV-Tools-opt.lib
+  270 → 343 MB in Debug-MD; the code sections are identical, the PDBs +9 %). Not explained yet: it
+  is not `/Zc:inline` (the first Ninja build, without it, had the same growth) nor the CRT.
+- **Debug PDBs.** Ninja writes a static library's compile PDB as `CMakeFiles/<target>.dir/<target>.pdb`
+  (named after the *target*: absl's `base.pdb`, glslang's `SPIRV.pdb`), where Visual Studio wrote
+  `<Debug>/<output name>.pdb` (`absl_base.pdb`, `SPIRVd.pdb`). `WindowsPlatform._is_shipped_pdb`
+  takes both layouts. The names changed but they are the ones the objects record: a Debug
+  `DependenciesTest` relinked with the build tree hidden gives 0 LNK4099. Check for duplicate PDB
+  names across libraries after adding one (lib/ is flat; 178 distinct names, 0 collision today).
+- **Generator-dependent file names.** libzmq tagged its archives with the toolset only under the
+  Visual Studio generator (`if(MSVC_IDE)`); `patches/libzmq.patch` keeps `libzmq-v143-mt-s[gd]-4_3_6.lib`
+  for every generator, because consumers link that name (the test project, a downstream application).
+  After a generator change, compare the produced file list with the previous archive's.
+- **C++20 module scanning.** CMake ≥ 3.28 scans every C++20 source for modules under Ninja. A library
+  whose build makes sources depend on a file produced by another source of the same target (libzmq's
+  MSVC precompiled header) gets a `ninja: error: dependency cycle`; `CMAKE_CXX_SCAN_FOR_MODULES: false`
+  in its YAML is the fix when the library has no module.
+- **libvpx stays on MSBuild** (its configure generates `.vcxproj` files, § MSYS2 Builder); the MSYS2
+  builder sets `UseMultiToolTask` / `EnforceProcessCountAcrossBuilds` in the environment, which MSBuild
+  reads as properties, so its sources compile in parallel too (~125 s → 77 s).
+
 ### Windows CRT Validation
 After each library build, `dumpbin /directives` validates .lib files:
 - MT: only `LIBCMT`
@@ -399,6 +452,10 @@ Some libraries need modifications to build correctly (e.g., forced C++ standard,
   generated CMake script, so the MSVC `/d1trimfile:<root>\` flag (§ Build-machine paths) broke
   the Windows build with `Invalid character escape '\U'`. The patch reads the flags through a
   bracket argument and `separate_arguments(... NATIVE_COMMAND ...)` (2026-10-10).
+- `patches/libzmq.patch`: the MSVC toolset tag in the archive names (`libzmq-v143-…`) came from
+  `CMAKE_VS_PLATFORM_TOOLSET` under the Visual Studio generator only; the patch derives it from
+  `MSVC_TOOLSET_VERSION`, which every generator sets, so the Ninja build keeps the names consumers
+  link (2026-10-20, § Windows generator: Ninja).
 - `patches/hwloc.patch`: a source fix, not a build fix. `hwloc__darwin_build_perflevel_cache_level()` (`hwloc/topology-darwin.c`) restarts at the first CPU after a partial cache group, so a CPU kind whose weight is not a multiple of the cache width (`hw.perflevelN.cpusperl2`) hangs `hwloc_topology_load()` forever. The patch returns once the cpuset is exhausted. Still needed on upstream master; see the header of `libraries/hwloc.yaml` for the 3-core-type Apple silicon story and the master pin.
 - `patches/onnxruntime.patch`: makes MLAS's AVX-NE-CONVERT kernel conditional on the **assembler** instead of the compiler. Upstream gates `x86_64/cvtfp16Avx.S` on `CMAKE_CXX_COMPILER_VERSION >= 13.1`, but `vcvtneeph2ps` / `vcvtneoph2ps` are only known to GNU as from binutils 2.40 — gcc-14 on Ubuntu 22.04 (binutils 2.38) fails with `no such instruction`. See `libraries/onnxruntime.yaml` for the fallback and its consequence.
 
@@ -415,7 +472,9 @@ git checkout .  # Revert changes
 ### MSYS2 Builder (Windows)
 For libraries like libvpx that use their own configure/make system (not CMake, not standard autotools), the `msys2` build system runs the configure script via MSYS2 bash targeting MSVC:
 - Configure uses `--target=x86_64-win64-vs17` to generate `.vcxproj` files
-- `make` invokes `msbuild.exe` internally (requires Windows PATH to be preserved)
+- `make` invokes `msbuild.exe` internally (requires Windows PATH to be preserved); the builder
+  exports `UseMultiToolTask=true` and `EnforceProcessCountAcrossBuilds=true`, so MSBuild compiles
+  the sources of each `.vcxproj` in parallel (it reads environment variables as properties)
 - `--enable-static-msvcrt` is passed for MT runtime builds
 - `--enable-debug-libs` is passed for Debug builds: libvpx's `make` builds BOTH
   msbuild configurations, but `make install` only ships the Release lib

@@ -49,3 +49,9 @@ platforms:
       # VC++ runtime DLLs (vcruntime140, msvcp140*, concrt140 — the debug ones in Debug) into
       # bin/ of a package that is meant to hold static libraries only. Packaging is not used.
       ENABLE_CPACK: false
+      # Ninja (2026-10-20): with C++20, CMake scans every source for modules, and MSVC's
+      # ENABLE_PRECOMPILED makes each .cpp depend on precompiled.hpp, declared an output of
+      # precompiled.cpp.obj — which waits for the scan collation: "ninja: error: dependency
+      # cycle: precompiled.cpp.obj -> CXX.dd -> address.cpp.obj.ddi -> precompiled.hpp".
+      # libzmq has no module, so no scan; the precompiled header stays.
+      CMAKE_CXX_SCAN_FOR_MODULES: false

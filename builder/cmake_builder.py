@@ -2,11 +2,13 @@
 CMake build orchestration.
 """
 
+import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from .config import BuildConfig, Library
 
@@ -185,6 +187,12 @@ class CMakeBuilder:
         self.config = config
         self.platform = platform
         self.patch_manager = PatchManager(config.root_dir)
+        # Windows: the Ninja generator finds cl.exe through PATH only (the Visual
+        # Studio generator located MSVC by itself), so every cmake call runs under
+        # the vcvarsall environment, like the Meson builder.
+        self._env: Optional[dict[str, str]] = None
+        if hasattr(platform, "get_msvc_env"):
+            self._env = platform.get_msvc_env(config) or dict(os.environ)
 
     def build(self, lib: Library) -> bool:
         """Build a single library. Returns True on success."""
@@ -291,7 +299,7 @@ class CMakeBuilder:
             if c_flags:
                 args.append(f"-DCMAKE_C_FLAGS={c_flags}")
 
-            # Config-specific flags for multi-config generators (Visual Studio)
+            # Config-specific flags: they replace CMake's per-configuration defaults
             if hasattr(self.platform, "get_config_specific_c_flags"):
                 for key, value in self.platform.get_config_specific_c_flags(self.config).items():
                     if extra_c_flags:
@@ -305,7 +313,7 @@ class CMakeBuilder:
             if cxx_flags:
                 args.append(f"-DCMAKE_CXX_FLAGS={cxx_flags}")
 
-            # Config-specific flags for multi-config generators (Visual Studio)
+            # Config-specific flags: they replace CMake's per-configuration defaults
             if hasattr(self.platform, "get_config_specific_cxx_flags"):
                 for key, value in self.platform.get_config_specific_cxx_flags(self.config).items():
                     if extra_cxx_flags:
@@ -348,8 +356,33 @@ class CMakeBuilder:
         self, source_dir: Path, build_dir: Path, args: list[str]
     ) -> bool:
         """Run CMake configuration."""
+        self._discard_build_dir_of_another_generator(build_dir, args)
         cmd = ["cmake", "-S", str(source_dir), "-B", str(build_dir)] + args
         return self._run_command(cmd)
+
+    @staticmethod
+    def _discard_build_dir_of_another_generator(build_dir: Path, args: list[str]) -> None:
+        """Delete a build tree configured by a different generator.
+
+        CMake refuses to reconfigure a tree whose cache names another generator
+        ("Does not match the generator used previously"). The tree only holds
+        intermediates (the install prefix is elsewhere), so the switch costs one
+        full build of that library, never a stale mix.
+        """
+        cache = build_dir / "CMakeCache.txt"
+        if "-G" not in args or not cache.is_file():
+            return
+        wanted = args[args.index("-G") + 1]
+        match = re.search(
+            r"^CMAKE_GENERATOR:INTERNAL=(.*)$",
+            cache.read_text(encoding="utf-8", errors="replace"),
+            re.MULTILINE,
+        )
+        if match is None or match.group(1).strip() == wanted:
+            return
+        print(f"  Build tree configured by '{match.group(1).strip()}', now '{wanted}': deleting {build_dir}")
+        shutil.rmtree(build_dir)
+        build_dir.mkdir(parents=True, exist_ok=True)
 
     def _run_cmake_build(self, build_dir: Path) -> bool:
         """Run CMake build."""
@@ -379,7 +412,7 @@ class CMakeBuilder:
         """Run a command and return success status."""
         print(f"Running: {' '.join(cmd)}")
         try:
-            result = subprocess.run(cmd, check=True)
+            result = subprocess.run(cmd, check=True, env=self._env)
             return result.returncode == 0
         except subprocess.CalledProcessError as e:
             print(f"Command failed with return code {e.returncode}", file=sys.stderr)

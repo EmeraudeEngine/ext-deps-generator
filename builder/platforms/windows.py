@@ -241,11 +241,21 @@ class WindowsPlatform(Platform):
             return None
 
     def get_generator(self) -> str:
-        return "Visual Studio 17 2022"
+        """Ninja, like Linux and macOS (2026-10-20).
+
+        The "Visual Studio 17 2022" generator compiled the sources of one target
+        serially: `cmake --build --parallel N` is MSBuild's /m (N projects at a
+        time) and no recipe sets /MP, so a single large target (onnxruntime,
+        tinyusdz) kept one core busy — the whole Windows set used 13-31 % of a
+        28-thread machine and took ~33 min per configuration. Ninja schedules
+        every translation unit of every target on all cores. It needs cl.exe
+        on PATH: the CMake builder runs under get_msvc_env().
+        """
+        return "Ninja"
 
     def get_architecture_arg(self, config: "BuildConfig") -> Optional[str]:
-        """Visual Studio uses -A for architecture selection."""
-        return "ARM64" if config.arch == "arm64" else "x64"
+        """None: Ninja takes the target architecture from the vcvarsall environment (get_msvc_env)."""
+        return None
 
     def get_platform_cmake_options(self, config: "BuildConfig") -> dict:
         """Windows requires MSVC runtime library settings."""
@@ -266,13 +276,20 @@ class WindowsPlatform(Platform):
 
         return options
 
+    # /Zc:inline (C++ conformance, the default of a project created in the Visual Studio IDE,
+    # but not of the CMake-generated ones, with either generator): an object no longer carries
+    # the COMDAT bodies of the inline functions it does not reference. Measured 2026-10-20 on
+    # SPIRV-Tools-lint.lib (Release-MD): 4442370 bytes without it, 856636 with it, 7x fewer
+    # functions; the Release libraries of the whole set went from 1087 to 476 MiB.
+    _VS_PROJECT_DEFAULTS = "/Zc:inline"
+
     def get_c_flags(self, config: "BuildConfig") -> str:
         """MSVC-specific C flags, build-machine paths trimmed."""
         if config.build_type == "Debug":
             flags = f"/{config.runtime_lib}d /Od /Zi /D_DEBUG"
         else:
             flags = f"/{config.runtime_lib} /O2 /DNDEBUG"
-        return " ".join([flags, *config.path_remap_flags])
+        return " ".join([flags, self._VS_PROJECT_DEFAULTS, *config.path_remap_flags])
 
     def get_cxx_flags(self, config: "BuildConfig") -> str:
         """MSVC-specific C++ flags (includes /EHsc for exception handling), build-machine paths trimmed."""
@@ -280,10 +297,11 @@ class WindowsPlatform(Platform):
             flags = f"/{config.runtime_lib}d /Od /Zi /D_DEBUG /EHsc"
         else:
             flags = f"/{config.runtime_lib} /O2 /DNDEBUG /EHsc"
-        return " ".join([flags, *config.path_remap_flags])
+        return " ".join([flags, self._VS_PROJECT_DEFAULTS, *config.path_remap_flags])
 
     def get_config_specific_c_flags(self, config: "BuildConfig") -> dict[str, str]:
-        """Get config-specific C flags for multi-config generators like Visual Studio.
+        """Get config-specific C flags. They replace CMake's per-configuration MSVC defaults
+        (/RTC1, /Ob0...), which every generator — Ninja included — appends to CMAKE_C_FLAGS.
 
         Returns a dict mapping CMAKE_C_FLAGS_<CONFIG> to flag values.
         """
@@ -298,7 +316,8 @@ class WindowsPlatform(Platform):
         }
 
     def get_config_specific_cxx_flags(self, config: "BuildConfig") -> dict[str, str]:
-        """Get config-specific CXX flags for multi-config generators like Visual Studio.
+        """Get config-specific CXX flags. They replace CMake's per-configuration MSVC defaults
+        (/RTC1, /Ob0...), which every generator — Ninja included — appends to CMAKE_CXX_FLAGS.
 
         Returns a dict mapping CMAKE_CXX_FLAGS_<CONFIG> to flag values.
         """
@@ -338,14 +357,8 @@ class WindowsPlatform(Platform):
             print(f"Build directory not found: {build_dir}. Skipping PDB copy.")
             return
 
-        # Different libraries emit their .pdb in different locations under the
-        # build dir (e.g. <build_dir>/Debug for most, <build_dir>/lib/Debug for
-        # libzip). Search recursively for any per-target PDB matching the build
-        # type, skipping compiler intermediate PDBs (vcNNN.pdb).
         pdb_files = [
-            pdb
-            for pdb in build_dir.rglob(f"{config.build_type}/*.pdb")
-            if not re.fullmatch(r"vc\d+\.pdb", pdb.name, re.IGNORECASE)
+            pdb for pdb in build_dir.rglob("*.pdb") if self._is_shipped_pdb(pdb, build_dir, config)
         ]
 
         if not pdb_files:
@@ -358,6 +371,28 @@ class WindowsPlatform(Platform):
             dest_file = pdb_dest_dir / pdb_file.name
             print(f"Copying {pdb_file.name} to {pdb_dest_dir}")
             shutil.copy2(pdb_file, dest_file)
+
+    @staticmethod
+    def _is_shipped_pdb(pdb: Path, build_dir: Path, config: "BuildConfig") -> bool:
+        """Whether a .pdb under a library's build tree belongs in the Debug archive.
+
+        Two layouts, one set of files (a static library's compile PDB, an
+        executable's or DLL's link PDB — never a compiler intermediate vcNNN.pdb):
+        - multi-config generators (Visual Studio, also what libvpx's msys2 build
+          drives through MSBuild): every target PDB sits in a `<build type>/`
+          folder (<build_dir>/Debug for most, <build_dir>/lib/Debug for libzip);
+        - Ninja: a static library `foo` writes its compile PDB as
+          CMakeFiles/foo.dir/foo.pdb, a linked binary its PDB next to itself,
+          outside CMakeFiles (which also holds CMake's own compiler-id probes).
+        """
+        if re.fullmatch(r"vc\d+\.pdb", pdb.name, re.IGNORECASE):
+            return False
+        if pdb.parent.name == config.build_type:
+            return True
+        folders = pdb.relative_to(build_dir).parts[:-1]
+        if "CMakeFiles" in folders:
+            return pdb.parent.name == f"{pdb.stem}.dir"
+        return True
 
     @classmethod
     def _contains_ltcg_objects(cls, lib_file: Path) -> bool:

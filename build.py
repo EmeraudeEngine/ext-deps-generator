@@ -217,8 +217,14 @@ def run_dependencies_test(config: BuildConfig, root_dir: Path) -> int:
         # it (in particular the Linux glibc tag, which CMake cannot know a priori).
         f"-DLIBS_CONFIG={config.build_suffix}",
     ]
+    # Windows: Ninja under the vcvarsall environment, like every library (WindowsPlatform.get_generator()).
+    env = None
     if config.platform_name == "windows":
+        platform = get_platform(config.platform_name)
+        configure_cmd.extend(["-G", platform.get_generator()])
         configure_cmd.append(f"-DRUNTIME_LIB={config.runtime_lib}")
+        env = platform.get_msvc_env(config)
+        CMakeBuilder._discard_build_dir_of_another_generator(build_dir, configure_cmd)
     elif config.platform_name == "macos":
         configure_cmd.append(f"-DMACOS_SDK={config.macos_sdk}")
         # Without this the test compiles for the host arch (arm64 on Apple
@@ -228,7 +234,7 @@ def run_dependencies_test(config: BuildConfig, root_dir: Path) -> int:
 
     print("==================== Configuring test ====================\n")
     print(f"Running: {' '.join(configure_cmd)}\n")
-    if subprocess.run(configure_cmd).returncode != 0:
+    if subprocess.run(configure_cmd, env=env).returncode != 0:
         print("\nError: Test configure failed", file=sys.stderr)
         return 1
 
@@ -237,7 +243,7 @@ def run_dependencies_test(config: BuildConfig, root_dir: Path) -> int:
         build_cmd.extend(["--parallel", str(config.jobs)])
     print("\n==================== Building test ====================\n")
     print(f"Running: {' '.join(build_cmd)}\n")
-    if subprocess.run(build_cmd).returncode != 0:
+    if subprocess.run(build_cmd, env=env).returncode != 0:
         print("\nError: Test build failed", file=sys.stderr)
         return 1
 
