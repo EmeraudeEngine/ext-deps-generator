@@ -550,9 +550,13 @@ python build.py --list                       # List libraries
 
 `--jobs N` caps the compile parallelism of every builder (`cmake --build --parallel N`,
 `meson compile -j N`, `make -jN`, also the MSYS2 `make`). Without it each build system uses its
-own default — Ninja runs nproc + 2 compilers, `make -j` is unbounded — which the Windows
-machine (15 GB, MSVC with `/bigobj`) cannot hold: Meson's harfbuzz got the whole run killed for
-low memory (2026-09-23).
+own default — Ninja runs nproc + 2 compilers, `make -j` is unbounded. A 15 GB Windows machine
+(MSVC with `/bigobj`) could not hold that: Meson's harfbuzz got the whole run killed for low
+memory (2026-09-23). The current Windows build machine (28 threads, 80 GB) runs `--jobs 20`.
+
+Before publishing macOS archives, check every library's minimum OS against the archive's sdk
+tag (`vtool -show-build` or `otool -l <lib>.a | grep minos`; see the Meson builder's deployment
+target note). NASM objects carry no version command, which is normal.
 
 To rebuild **one** configuration from scratch, do not use `--clean` (global, see above): delete
 `builds/<suffix>`, empty `output/<suffix>` (keep the directory: links may point to it), then
@@ -563,10 +567,16 @@ Builds all dependencies then links a test executable. Requires:
 - Windows: `-DRUNTIME_LIB=MD|MT`
 - macOS: `-DMACOS_SDK=12.0`
 
-## Claude Commands
+## Claude Commands, Rules and Skills
+
+`.claude/rules/working-here.md` (always loaded) and the `release-archives` skill
+(`.claude/skills/release-archives/SKILL.md`: build, verify, publish a release) digest this file for AI sessions;
+this file stays authoritative.
 
 ### `/build-library <name>`
-Builds a library for both macOS architectures (ARM64 + x86_64) in Release mode with `--no-deps`. Useful for quick validation after modifying a library config or patch.
+Builds a library for both macOS architectures (ARM64 + x86_64) in Release mode with `--no-deps`, for each published
+deployment target (12.0 and 13.0). Useful for quick validation after modifying a library config or patch; a
+`--no-deps` run skips `DependenciesTest`.
 
 ### `/check-releases`
 Runs `check_releases.py` to compare each submodule's pinned commit against upstream release tags. Read-only: reports which libraries have a newer stable tag, which are on a branch with a tag suggestion, and which have no tags upstream. Does not modify anything.
