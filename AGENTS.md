@@ -510,6 +510,11 @@ For libraries that use Meson as their build system (e.g., harfbuzz). The builder
 - Options from `meson_options` in YAML are passed as `-Doption=value`
 - Uses Meson values directly: features use `enabled`/`disabled`/`auto`, booleans use `true`/`false`
 - For macOS cross-compilation (ARM host -> x86_64 target), generates a Meson cross-file with `[host_machine]` and `[built-in options]` sections
+- ⚠️ macOS deployment target: the cross file covers only the x86_64-on-arm64 case. A NATIVE macOS
+  build passes `-mmacosx-version-min=<--macos-sdk>` through `-Dc_args`/`-Dcpp_args` and
+  `-Dc_link_args`/`-Dcpp_link_args`. Until 2026-10-31 a native arm64 build got none, and clang
+  stamped harfbuzz with the SDK's own version: minos 27.0 in the published `sdk12.0.v019` arm64
+  archives (Release and Debug), corrected the same day. Check with `otool -l <lib>.a | grep minos`.
 - Runs `meson compile` and `meson install`
 - Post-install validation (CRT on Windows, architecture on macOS) runs after install
 - ⚠️ On Windows it runs Meson with `PYTHONUTF8=0`. A localized MSVC (French) prints in the

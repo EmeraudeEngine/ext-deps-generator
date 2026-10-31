@@ -254,7 +254,15 @@ class MesonBuilder:
         if cross_file:
             cmd.append(f"--cross-file={cross_file}")
         else:
-            remap = " ".join([*self.config.path_remap_flags, *debug_information_args])
+            # macOS native build: without a cross file nothing carries the deployment target, and
+            # clang then stamps the objects with the SDK's own version (v019's arm64 harfbuzz came
+            # out minos 27.0 in the sdk12.0 archives).
+            deployment_args = []
+            if self.config.platform_name == "macos":
+                deployment_args = [f"-mmacosx-version-min={self.config.macos_sdk or '12.0'}"]
+                cmd.append(f"-Dc_link_args={' '.join(deployment_args)}")
+                cmd.append(f"-Dcpp_link_args={' '.join(deployment_args)}")
+            remap = " ".join([*deployment_args, *self.config.path_remap_flags, *debug_information_args])
             cmd.append(f"-Dc_args={remap}")
             cmd.append(f"-Dcpp_args={remap}")
 
