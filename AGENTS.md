@@ -745,12 +745,34 @@ python build_cef.py --clean             # remove output/*.cef.* folders (NOT the
   `internal/abi/map_swiss.go: ctrlEmpty redeclared` (old and new `internal/abi`
   compiled together); `mold`, the JDK and `typescript` had stale files too. The same
   check after the update phase now reports them (`STALE` lines): each package's file
-  list is `chromium/.cipd/pkgs/<n>/_current/.cipdpkg/manifest.json` (its directory is
-  `description.json`'s `subdir`), and a file under that directory that no manifest
-  declares is a leftover (`.git`, `__pycache__` and `.DS_Store` ignored; 0 such file
-  on a clean Linux 156 checkout, 31 packages). Move the reported files out of the
+  list is `chromium/.cipd/pkgs/<n>/<instance>/.cipdpkg/manifest.json` — `<instance>`
+  is the `_current` symlink on Linux/macOS, the id written in `_current.txt` on
+  Windows — its directory is `description.json`'s `subdir`, and a file under that
+  directory that no manifest declares and git does not track is a leftover (`.git`,
+  `__pycache__` and `.DS_Store` ignored; 0 such file on a clean Linux 156 checkout,
+  31 packages). A package the check cannot read fails it. ⚠️ Until the fix of
+  2026-11-19 the check only knew `_current` and skipped every Windows package in
+  silence ("no file outside their manifests"): the Windows 156 build then died on
+  the same Go `ctrlEmpty redeclared` (231 Go 1.24-era files per arch in
+  `dawn/tools/golang/windows-*`, left there by the seed), with seed-era Linux
+  binaries (`ninja`, `esbuild`, `siso`, luci-go, `typescript/linux-amd64`) in other
+  package directories. On Windows, `third_party/wtl`, `third_party/webview2` and
+  `lzma_sdk/bin/*` are both CIPD directories and `chromium/src` sources. Move the reported files out of the
   checkout keeping their paths (the 156 ones are in
   `<download-dir>/stale-cipd-2026-11-19/`), then resume the build.
+  ⚠️ **An EMPTY dependency directory breaks `gclient revert`** (the first step of
+  every update phase, `--force-update` included). `revert` clones a dependency whose
+  directory is absent ("is missing, syncing instead"), but runs its git commands
+  inside one that exists — and in an empty directory without `.git`, git climbs to
+  `chromium/src`: the parallel jobs then fetch `chromium/src` concurrently and die on
+  `cannot lock ref 'refs/remotes/origin/main'`, reported against the dependency
+  (`… failed in …\third_party\jsoncpp\src`). If a revision had resolved there, `revert`
+  would even `reset --hard` + `clean -f -d` `chromium/src` itself. Seen on the
+  Windows 156 run (2026-11-19, `CEF-WIN`): `jsoncpp/src`, `jetstream/v3.0`, `tink/src`,
+  `openscreen/src/third_party/simple_dns/src` were empty. Cure: for every path of
+  `gclient revinfo --ignore-dep-type=cipd` that exists, has no `.git` and is empty,
+  `rmdir` it (never a recursive delete), then re-run. Not a transient error:
+  re-running alone races again.
 - **Linux build target is `cefsimple`, not `cefclient`**: automate-git.py defaults
   to building the `cefclient` sample, but on Linux its sources
   (`cefclient_sources_linux` in `cef_paths2.gypi`) unconditionally `#include
@@ -815,8 +837,9 @@ python build_cef.py --clean             # remove output/*.cef.* folders (NOT the
      bullet above). The first run still downloads a few GB of host-OS hook
      artifacts (clang, GCS/CIPD objects) — normal.
   3. Windows prerequisites for CEF (distinct from the static-libs list in
-     § Prerequisites): Visual Studio 2022 and a recent Windows 11 SDK
-     (Chromium 150 requires 10.0.26100+); `build_cef.py` already sets
+     § Prerequisites): Visual Studio 2022 and the exact Windows 11 SDK the
+     branch names, with its Debugging Tools (Chromium 150: 10.0.26100; 156:
+     10.0.28000, § Publishing a CEF archive); `build_cef.py` already sets
      `DEPOT_TOOLS_WIN_TOOLCHAIN=0` / `GYP_MSVS_VERSION=2022`. No MSYS2 needed
      for CEF. macOS: full Xcode (not just the Command Line Tools).
      **Windows CRLF gotcha**: the seeded checkout is all-LF (tarred on Linux),
@@ -826,10 +849,32 @@ python build_cef.py --clean             # remove output/*.cef.* folders (NOT the
      the user's git config: export the `GIT_CONFIG_*` env override before
      running `build_cef.py` (inherited by every git spawned by gclient/depot_tools):
      ```powershell
-     $env:GIT_CONFIG_COUNT='2'
+     $env:GIT_CONFIG_COUNT='4'
      $env:GIT_CONFIG_KEY_0='core.autocrlf';  $env:GIT_CONFIG_VALUE_0='false'
      $env:GIT_CONFIG_KEY_1='core.filemode';  $env:GIT_CONFIG_VALUE_1='false'
+     $env:GIT_CONFIG_KEY_2='safe.directory'; $env:GIT_CONFIG_VALUE_2='*'
+     $env:GIT_CONFIG_KEY_3='core.ignorecase'; $env:GIT_CONFIG_VALUE_3='true'
      ```
+     The fourth entry: git sets `core.ignorecase=true` when it CREATES a repository
+     on NTFS, but every repository of the seeded checkout was cloned on Linux and
+     carries none (false). A path renamed only in case between two revisions then
+     breaks the checkout: git does not see that `libxnvctrl/BUILD.gn` on disk is the
+     tracked `libXNVCtrl/BUILD.gn`, calls it untracked and refuses with "untracked
+     working tree files would be overwritten by checkout". Hit on the Windows 156 run
+     (2026-11-19): `gclient revert` puts every dependency on its `main` first, ANGLE's
+     `main` has `src/third_party/libxnvctrl`, 156's ANGLE (f10470c) `libXNVCtrl`.
+     Proven with a dry `read-tree -n -m -u HEAD f10470c…` in ANGLE: exit 128 with
+     `ignorecase=false`, 0 with `true`. Not a residue to move away: those files are
+     tracked by the current HEAD.
+     The third entry answers **"detected dubious ownership"**: NTFS records the
+     owner as a SID local to the machine that wrote the files, so on the
+     external `CEF-WIN` partition every repository belongs to the PC that seeded
+     it and git refuses them all on any other Windows PC (seen 2026-11-19, owner
+     shown as "(inconvertible) S-1-5-21-…"). git honours `safe.directory` only
+     from protected configuration — system, global or the command scope — and
+     `GIT_CONFIG_*` is the command scope, so the override lives for this run only
+     and writes nothing. The alternatives (a global `safe.directory`, or
+     `takeown`/`icacls` over ~100 GB) are permanent.
      (The companion pitfall — `patches/chromium/*.patch` themselves getting
      CRLF-converted in *this* repo's working tree and refusing to apply — is
      fixed for good by `.gitattributes` (`*.patch -text`); re-checkout the
@@ -877,16 +922,31 @@ two platform floors moved upstream:
   using this CEF drops macOS 12. ⚠️ `--macos-sdk` only sets `MACOSX_DEPLOYMENT_TARGET`
   in automate-git's environment; Chromium's compile flags come from the GN value, so
   passing 12.0 would not produce a macOS 12 build, only a misleading command line.
+  CEF's branch table gives the build system for 8078: macOS 26.6+ with the 27.0 base
+  SDK (Xcode 27.0).
+- **ANGLE is inside libcef**: the 156 Linux distribution ships no `libEGL.so` /
+  `libGLESv2.so` any more and its `libcef.so` carries the ANGLE code
+  (`EGL_ANGLE_platform_*` strings); 150's `cmake/cef_variables.cmake` listed
+  `libEGL.so`, `libGLESv2.so`, `libEGL.dll`, `libGLESv2.dll`, 156's lists none, so
+  Windows should match (check its distribution; macOS keeps its libraries inside the
+  framework, not in that file — check too). A consumer that copies those files
+  by name, or a symbol dump that expects them, must drop them; the ANGLE patch now
+  reaches the binary through libcef.
 - **Windows SDK 10.0.28000** (was 10.0.26100): `build/toolchain/win/setup_toolchain.py`
   hands `SDK_VERSION = '10.0.28000.0'` to `vcvarsall.bat` explicitly, so that exact
   SDK must be installed, with its "Debugging Tools for Windows" feature
   (`build/vs_toolchain.py` copies `dbghelp.dll` from it). VS 2022 is still accepted
-  (`MSVS_VERSIONS`).
+  (`MSVS_VERSIONS`), even though Chromium's `docs/windows_build_instructions.md` says
+  "requires Visual Studio 2026": that is Google's packaged toolchain, not a check in the
+  code. CEF's own branch table (chromiumembedded.github.io/cef/branches_and_building)
+  gives for 8078 "VS2022 17.13.4, Win 10.0.28000.2270 SDK" — the toolchain CEF and the
+  Spotify CDN build with. The SDK is installed with its standalone installer: the VS 2022
+  installer does not offer 10.0.28000.
 
 | Archive | State |
 |---|---|
-| `linux64` | building (Linux main, 2026-11-19) |
-| `windows64` | to build |
+| `linux64` | on `v019` with its `_breakpad_symbols.zip` (Linux main, 2026-11-19; `.tar.bz2` 873195349 bytes, SHA-256 `b032236ea8ef27f7e3f5e7b2e75407a6a949f6366a181437116841572712d365`) |
+| `windows64` | building (WIN-LONDNOIR, 2026-11-19, VS 2022 17.14 + SDK 10.0.28000.2957) |
 | `macosx64` | to build |
 | `macosarm64` | to build |
 

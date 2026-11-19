@@ -28,6 +28,12 @@ dxcompiler, bootstrap); `…_macosarm64_breakpad_symbols.zip` (63 MB) and `…_m
 Chromium Embedded Framework, libEGL, libGLESv2, libvk_swiftshader, libcef_sandbox (each binary/dSYM pair checked by
 UUID, and the arm64 framework of a Lychee package = the distribution's).
 
+Done by hand for **CEF 156.0.31+ge603d97 linux64 in v019** (2026-11-19, `dump_syms` 2.3.9 on the unstripped
+`output/…_linux64/Release/`): `…_linux64_breakpad_symbols.zip` (38.7 MB) holds `libcef.so` (id
+`BC8E100537A78FDA3D5DA9FBE8832FC30`, = the stripped copy's; 9 s, 3.7 GB RAM, 694 MB `.sym`: 7 339 FUNC, 679 775 PUBLIC,
+13.3 M STACK CFI) and `libvk_swiftshader.so`. No `libEGL`/`libGLESv2` any more: since 156 ANGLE is linked inside
+libcef (`AGENTS.md` § Publishing a CEF archive). windows64, macosarm64, macosx64: to do when their builds land.
+
 ## What remains
 
 - `build_cef.py`, after the distribution is made (or a separate step before publishing): run `dump_syms` on every

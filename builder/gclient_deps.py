@@ -20,10 +20,15 @@ new one is installed over the old directory and nothing removes what it no longe
 (`internal/abi/map_swiss.go: ctrlEmpty redeclared`, old and new sources compiled together);
 mold, the JDK and typescript had leftovers too. So every CIPD package of the gclient root
 (`chromium/.cipd/pkgs/<n>/`: `description.json` gives its directory, `_current` its installed
-instance, `.cipdpkg/manifest.json` its file list) is checked for files that no manifest
-declares. Ignored: `.git` directories, `__pycache__` directories (regenerated Python bytecode)
-and `.DS_Store` (written by the macOS Finder). Measured on a clean Linux 156 checkout: 31
-packages, 0 such file, so the check has no false positive there.
+instance — a symlink on Linux/macOS, a `_current.txt` holding the instance id on Windows —
+and `.cipdpkg/manifest.json` its file list) is checked for files that no manifest declares.
+Ignored: `.git` directories, `__pycache__` directories (regenerated Python bytecode),
+`.DS_Store` (written by the macOS Finder), and files git tracks (on Windows `third_party/wtl`,
+`third_party/webview2` and `lzma_sdk/bin/*` are both CIPD directories and `chromium/src`
+sources). Measured on a clean Linux 156 checkout: 31 packages, 0 such file. The Windows 156
+run (2026-11-19) found the Go toolchain leftovers again (231 files per arch) once the
+`_current.txt` layout was read: before that fix every Windows package was skipped silently,
+so a package that cannot be read now fails the check.
 """
 
 import json
@@ -38,36 +43,83 @@ _IGNORED_DIRS = {".git", "__pycache__"}
 _IGNORED_FILES = {".DS_Store"}
 
 
-def _stale_cipd_files(chromium_dir: Path) -> dict[str, list[str]]:
-    """Files under a CIPD package directory that no installed manifest declares, per directory."""
+def _norm(path: str) -> str:
+    """Comparable form of a relative path (separators, and case on Windows)."""
+    return os.path.normcase(os.path.normpath(path))
+
+
+def _installed_manifest(pkg: Path) -> Path | None:
+    """The manifest of the instance a CIPD package directory has installed.
+
+    `_current` is a symlink to the instance directory on Linux and macOS; on Windows CIPD
+    writes `_current.txt` instead, holding the instance id (the directory's name).
+    """
+    current = pkg / "_current"
+    if not current.is_dir():
+        pointer = pkg / "_current.txt"
+        if not pointer.is_file():
+            return None
+        current = pkg / pointer.read_text().strip()
+    manifest = current / ".cipdpkg" / "manifest.json"
+    return manifest if manifest.is_file() else None
+
+
+def _git_tracked(directory: Path) -> set[str] | None:
+    """Files git tracks under `directory`, relative to it; None when it is in no repository."""
+    result = subprocess.run(
+        ["git", "-C", str(directory), "ls-files", "-z"], capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        return None
+    return {_norm(name) for name in result.stdout.split("\0") if name}
+
+
+def _stale_cipd_files(chromium_dir: Path) -> tuple[dict[str, list[str]], int, list[str]]:
+    """Files under a CIPD package directory that no installed manifest declares, per directory.
+
+    Also returns how many packages were read and the package directories that could not be
+    (a silent skip once hid every package on Windows). Files git tracks are not leftovers:
+    on Windows some package directories are shared with sources of `chromium/src`
+    (`third_party/wtl`, `third_party/webview2`).
+    """
     packages: list[tuple[str, set[str]]] = []
+    unreadable: list[str] = []
     for pkg in sorted((chromium_dir / ".cipd" / "pkgs").glob("*")):
-        description = pkg / "description.json"
-        manifest = pkg / "_current" / ".cipdpkg" / "manifest.json"
-        if not description.is_file() or not manifest.is_file():
+        if not pkg.is_dir():
             continue
-        subdir = os.path.normpath(json.loads(description.read_text())["subdir"])
+        description = pkg / "description.json"
+        manifest = _installed_manifest(pkg)
+        if not description.is_file() or manifest is None:
+            unreadable.append(pkg.name)
+            continue
+        subdir = _norm(json.loads(description.read_text())["subdir"])
         names = {f["name"] for f in json.loads(manifest.read_text())["files"]}
         packages.append((subdir, names))
 
     # Several packages may share a directory, and one may sit inside another's.
-    declared = {os.path.normpath(os.path.join(sub, name)) for sub, names in packages for name in names}
+    declared = {_norm(os.path.join(sub, name)) for sub, names in packages for name in names}
     subdirs = {sub for sub, _ in packages}
 
     stale: dict[str, list[str]] = {}
     for subdir in sorted(subdirs):
+        candidates: list[str] = []
         for dirpath, dirnames, filenames in os.walk(chromium_dir / subdir):
             rel_dir = os.path.relpath(dirpath, chromium_dir)
             # A nested package directory is walked on its own turn.
             dirnames[:] = [
                 d for d in dirnames
-                if d not in _IGNORED_DIRS and os.path.normpath(os.path.join(rel_dir, d)) not in subdirs
+                if d not in _IGNORED_DIRS and _norm(os.path.join(rel_dir, d)) not in subdirs
             ]
             for name in filenames:
-                rel = os.path.normpath(os.path.join(rel_dir, name))
+                rel = _norm(os.path.join(rel_dir, name))
                 if name not in _IGNORED_FILES and rel not in declared:
-                    stale.setdefault(subdir, []).append(rel)
-    return stale
+                    candidates.append(rel)
+        if candidates:
+            tracked = _git_tracked(chromium_dir / subdir) or set()
+            left = [rel for rel in candidates if _norm(os.path.relpath(rel, subdir)) not in tracked]
+            if left:
+                stale[subdir] = left
+    return stale, len(packages), unreadable
 
 
 def verify_gclient_deps(download_dir: Path, env: dict[str, str], dry_run: bool = False) -> bool:
@@ -128,9 +180,16 @@ def verify_gclient_deps(download_dir: Path, env: dict[str, str], dry_run: bool =
             "  `src` is on the right commit. Re-run with --force-update."
         )
 
-    stale = _stale_cipd_files(chromium_dir)
+    stale, read, unreadable = _stale_cipd_files(chromium_dir)
+    if unreadable:
+        ok = False
+        print(
+            f"  CIPD packages: {len(unreadable)} under .cipd/pkgs without a readable description.json or\n"
+            f"  installed manifest ({', '.join(unreadable)}): unknown CIPD layout, the check cannot\n"
+            "  vouch for them."
+        )
     if not stale:
-        print("  CIPD packages: no file outside their manifests.")
+        print(f"  CIPD packages: {read} read, no file outside their manifests.")
     else:
         ok = False
         for subdir, files in stale.items():
