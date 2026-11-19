@@ -1,8 +1,10 @@
 # target-dir: third_party/angle
-# target-commit: 8d3c5a8caebd836b99fa32062951a401910eba33
+# target-commit: f10470c77e4810ece55cbe8e08469a31610e92f4
 # description: ANGLE: raise the per-resource texture allocation ceiling from 1 GiB to 2 GiB
 #
-# Authored against ANGLE at chromium/7871_114 (Chromium 150.0.7871.115, CEF 150.0.11+gb887805).
+# Authored against ANGLE at chromium/7871_114 (Chromium 150.0.7871.115, CEF 150.0.11+gb887805);
+# regenerated against ANGLE f10470c77e48 (Chromium 156.0.8078.100, CEF 156.0.31+ge603d97), same
+# values, the Caps.h hunk rebased on upstream's 1.25 GiB line.
 #
 # WHY
 # ANGLE refuses any single texture/renderbuffer allocation whose computed size exceeds
@@ -21,7 +23,7 @@
 # (1.20 GiB total), which rules out VRAM pressure. Bisection put the boundary at exactly 2^30.
 #
 # NO RUNTIME LEVER EXISTS
-# Verified exhaustively on chromium/7871: a plain C++ member initializer, absent from BUILD.gn,
+# Verified exhaustively on chromium/7871, re-checked on Chromium 156: a plain C++ member initializer, absent from BUILD.gn,
 # angle.gni and src/libANGLE/BUILD.gn; no preprocessor define; no EGL attribute; no Chromium
 # switch. Context::initCaps() reads native limitations plus exactly two frontend features,
 # limitMaxBufferBytesTo1MB and limitMaxTextureBytesTo1MB -- both of which only LOWER the value,
@@ -49,13 +51,15 @@
 # CheckedNumeric<GLuint> and returns false on overflow, raising the same clean
 # GL_INVALID_OPERATION with no memory corruption.
 #
-# UPSTREAM STATUS (checked 2026-08-22 -- a version bump is NOT a substitute for this patch)
+# UPSTREAM STATUS (checked 2026-11-19 on Chromium 156.0.8078.100 -- a version bump is NOT a
+# substitute for this patch)
 # The 1 -> 1.25 GiB bump (ANGLE commit 8e69854ca6, 2026-07-01) first appears in branch
-# chromium/7926: it missed the M151 branch point (7922) by four revisions. M152
-# (chromium/7977) does carry 1.25 GiB in Caps.h -- but kMemoryAllocationSizeLimit is STILL
-# 1 GiB there, so on M152 the effective ceiling is 1.25 GiB on Windows/macOS and an unchanged
-# 1 GiB on Linux. 1.25 GiB clears the 1.19 GiB field case with 4.85% margin (a surface 2.4%
-# larger in each dimension puts it back over) and does not clear a 16K plate at all.
+# chromium/7926 (it missed the M151 branch point by four revisions), so Chromium 156 carries
+# 1.25 GiB in Caps.h -- but kMemoryAllocationSizeLimit (vk_renderer.cpp) is STILL 1 GiB, and
+# vk_caps_utils.cpp still overwrites maxTextureBytes with it. Unpatched, the effective ceiling on
+# 156 is therefore 1.25 GiB on Windows/macOS and an unchanged 1 GiB on Linux. 1.25 GiB clears
+# the 1.19 GiB field case with 4.85% margin (a surface 2.4% larger in each dimension puts it
+# back over) and does not clear a 16K plate at all.
 #
 # LONGER TERM
 # 2 GiB covers the largest printer supported today (1.76 GiB) with 13.8% headroom, so it is a
@@ -71,41 +75,41 @@
 # changes nothing in the output, provided every pass with a spatial kernel (the blur) stays
 # full-frame.
 diff --git src/libANGLE/Caps.h src/libANGLE/Caps.h
-index b79a856..1284308 100644
+index ab70456ca4..51e4fbb035 100644
 --- src/libANGLE/Caps.h
 +++ src/libANGLE/Caps.h
-@@ -173,9 +173,17 @@ struct Limitations
+@@ -162,9 +162,17 @@ struct Limitations
      size_t maxBufferBytes = std::numeric_limits<GLsizeiptr>::max();
  
      // Maximum texture allocation size. Calculated by multiplying texture dimensions by
--    // bytes-per-pixel. 1Gb is chosen as a conservative limit to allow for backends to expand
--    // textures formats up to 4x and still stay within 32-bit sizes.
--    size_t maxTextureBytes = 1 * 1024 * 1024 * 1024;
+-    // bytes-per-pixel. 1.25Gb is chosen as a conservative limit to allow for backends to expand
+-    // textures formats up to 3x and still stay within 32-bit sizes.
+-    size_t maxTextureBytes = 1280 * 1024 * 1024;
 +    // bytes-per-pixel. 2Gb is chosen as a conservative limit to allow for backends to expand
 +    // textures formats up to 2x and still stay within 32-bit sizes.
 +    //
-+    // LOCAL PATCH (Mango3D, patches/chromium/angle-max-texture-bytes.patch): upstream ships
-+    // 1Gb here (4x expansion headroom), and ANGLE main has since moved to 1.25Gb (3x); neither
-+    // covers the single RGBA16F 4x-MSAA surface the slicer's HD AA path allocates over a full
-+    // 16K build area (1.76Gb). The invariant being preserved is
++    // LOCAL PATCH (patches/chromium/angle-max-texture-bytes.patch): upstream ships 1.25Gb here
++    // (3x expansion headroom) and the Vulkan backend still caps it at 1Gb; neither covers the
++    // single RGBA16F 4x-MSAA surface the slicer's HD AA path allocates over a full 16K build
++    // area (1.76Gb). The invariant being preserved is
 +    // `maxTextureBytes * max_format_expansion <= 2^32` -- 2Gb asserts a 2x ceiling, and every
 +    // format this application uses (RGBA16F, RGBA8) is native on D3D11, Metal and Vulkan
 +    // alike, with no expansion at all. Rationale and re-verification: see the patch preamble.
 +    size_t maxTextureBytes = 2ull * 1024 * 1024 * 1024;
- };
  
- struct TypePrecision
+     // Workaround for PowerVR Rogue drivers that round up 3D texture dimensions to POT internally.
+     bool roundUp3DTextureSizeToPOTForLimit = false;
 diff --git src/libANGLE/renderer/vulkan/vk_renderer.cpp src/libANGLE/renderer/vulkan/vk_renderer.cpp
-index 5067f32..458c2f1 100644
+index 12dd70e17c..a0405d8079 100644
 --- src/libANGLE/renderer/vulkan/vk_renderer.cpp
 +++ src/libANGLE/renderer/vulkan/vk_renderer.cpp
-@@ -167,7 +167,14 @@ constexpr size_t kAllocationCountThresholdForDynamicVertexDataSize = 4096;
+@@ -178,7 +178,14 @@ constexpr size_t kAllocationCountThresholdForDynamicVertexDataSize = 4096;
  constexpr size_t kImageSizeThresholdForDedicatedMemoryAllocation = 8 * 1024 * 1024;
  
  // Maximum size for an allocated memory for a single object.
 -constexpr VkDeviceSize kMemoryAllocationSizeLimit = 1 * 1024 * 1024 * 1024;
 +//
-+// LOCAL PATCH (Mango3D, patches/chromium/angle-max-texture-bytes.patch): raised from 1Gb to
++// LOCAL PATCH (patches/chromium/angle-max-texture-bytes.patch): raised from 1Gb to
 +// match Limitations::maxTextureBytes in Caps.h. The Vulkan backend overwrites that frontend
 +// default unconditionally (vk_caps_utils.cpp: maxTextureBytes = mMaxMemoryAllocationSize =
 +// min(maintenance3.maxMemoryAllocationSize, this limit)), so without this line Linux keeps the

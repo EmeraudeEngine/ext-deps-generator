@@ -26,9 +26,11 @@ Why we build CEF ourselves (both reasons require a from-source build):
      upstream but still disable-able at build time — which is why we can stay
      current AND keep zero-copy, as long as the flag survives upstream.
 
-     IMPORTANT: disabling the sandbox REQUIRES also disabling pointer
-     compression (three flags below, kept together). Cost: uncompressed 64-bit
-     pointers = a bit more RAM per renderer. Negligible for us.
+     Pointer compression stays ON (since CEF 156): only the sandbox forbids
+     external backing stores, compression does not. The ordinary JS objects of
+     a renderer process live in a 4 GB cage (multi-cage mode, owner decision
+     2026-11-19); ArrayBuffer contents are not in the cage. See the comment on
+     the V8 entries of BASE_GN_DEFINES below for the source references.
 
 Staying current: bump DEFAULT_CEF_BRANCH + DEFAULT_CEF_CHECKOUT (below) every
 2-3 months to the current Spotify-CDN stable, re-run this script per platform,
@@ -42,8 +44,8 @@ version pins do.
 Usage:
     python build_cef.py                                  # host platform, Release, x86_64
     python build_cef.py --branch 6478                    # target a specific CEF branch
-    python build_cef.py --arch arm64 --macos-sdk 12.0    # macOS arm64
-    python build_cef.py --arch both --macos-sdk 12.0     # macOS: arm64 THEN x86_64 (two distributions)
+    python build_cef.py --arch arm64 --macos-sdk 13.0    # macOS arm64
+    python build_cef.py --arch both --macos-sdk 13.0     # macOS: arm64 THEN x86_64 (two distributions)
     python build_cef.py --build-type Debug               # debug distribution
     python build_cef.py --build-type Both                # Release + Debug in one run
     python build_cef.py --sync-only                      # update the checkout, build nothing
@@ -74,6 +76,7 @@ from pathlib import Path
 
 from builder.chromium_patches import apply_all as apply_chromium_patches
 from builder.chromium_patches import discover_patches as discover_chromium_patches
+from builder.gclient_deps import verify_gclient_deps
 from builder.config import BuildConfig
 
 
@@ -82,19 +85,20 @@ from builder.config import BuildConfig
 # ---------------------------------------------------------------------------
 # Bump BOTH to the current Spotify-CDN stable on each refresh cycle (see the
 # URLs in the module docstring). From a CDN version string such as
-# `150.0.11+gb887805+chromium-150.0.7871.115`:
-#   branch   = 3rd component of the Chromium version -> 7871
-#   checkout = the CEF commit after '+g'             -> b887805
+# `156.0.31+ge603d97+chromium-156.0.8078.100`:
+#   branch   = 3rd component of the Chromium version -> 8078
+#   checkout = the CEF commit after '+g'             -> e603d97
 # Override per-run with --branch / --checkout.
-#   7871 @ b887805 == CEF 150.0.11 / Chromium 150.0.7871.115 (CDN stable, 2026-07)
+#   8078 @ e603d97 == CEF 156.0.31 / Chromium 156.0.8078.100 (CDN stable, 2026-11)
+#   7871 @ b887805 == CEF 150.0.11 / Chromium 150.0.7871.115 (previous anchor, 2026-07)
 #   7827           == CEF 149 / Chromium 149 (previous anchor)
 #   6478           == CEF 126 / Chromium 126 (mid-2024 anchor, kept for reference)
-DEFAULT_CEF_BRANCH = "7871"
+DEFAULT_CEF_BRANCH = "8078"
 # Exact CEF commit within DEFAULT_CEF_BRANCH: pins the produced version string
 # to the Spotify CDN artifact (the branch HEAD may have moved past it, which
 # would yield a different cef_binary_<version> name). Only applied while
 # --branch is left at its default; `--checkout head` unpins.
-DEFAULT_CEF_CHECKOUT = "b887805"
+DEFAULT_CEF_CHECKOUT = "e603d97"
 
 # automate-git.py is fetched from the CEF repo (kept out of the checkout so a
 # --force-clean of the Chromium tree never deletes our tooling).
@@ -148,11 +152,37 @@ BASE_GN_DEFINES: dict[str, str] = {
     "ffmpeg_branding": "Chrome",
 
     # --- Goal 2: disable the V8 sandbox (mandatory for zero-copy ArrayBuffers) ---
-    # These THREE must stay together: disabling the sandbox without also
-    # disabling pointer compression is an unsupported combination that fails to
-    # build / run.
+    # Only the sandbox forbids an ArrayBuffer over external memory, and only
+    # the sandbox is turned off:
+    #   - CefV8Value::CreateArrayBuffer(void*, ...) is compiled out under
+    #     V8_ENABLE_SANDBOX alone (cef/libcef/renderer/v8_impl.cc);
+    #   - v8::ArrayBuffer::NewBackingStore(void* data, ...) checks that `data`
+    #     lies in the sandbox under V8_ENABLE_SANDBOX alone (v8/src/api/api.cc);
+    #   - the ArrayBuffer size limit depends on the sandbox only: 2^53-1 bytes
+    #     without it, compressed pointers or not (v8/include/v8-array-buffer.h);
+    #   - no GN assert in V8 or Chromium ties the sandbox to compression.
+    #
+    # Pointer compression is ON (owner decision 2026-11-19, CEF 156): tagged
+    # fields take 4 bytes instead of 8, so the V8 heap shrinks substantially
+    # (CEF <= 150 shipped it OFF, on the wrong belief that a sandbox-free build
+    # required it). The cost is a 4 GB cage holding the ordinary JS objects;
+    # ArrayBuffer contents are NOT in it.
+    #
+    # Multi-cage (shared_cage=false, owner decision 2026-11-19). It does NOT
+    # mean one cage per isolate: the cage belongs to an IsolateGroup, and every
+    # isolate created without a group lands in the default one
+    # (v8/include/v8-isolate.h, class IsolateGroup; Isolate::New in
+    # v8/src/api/api.cc). Neither Chromium nor CEF 156 creates a group, so a
+    # renderer process still holds ONE 4 GB cage shared by its main thread and
+    # workers -- the same limit as the shared cage. What differs from the shared
+    # cage: the cage base is not a process-wide constant, and it is not the mode
+    # Chrome ships. (V8's partition_alloc, which multi-cage forbids, is off in
+    # any Chromium build anyway: v8/BUILD.gn asserts it.) Set explicitly:
+    # V8 would otherwise default the shared cage to the value of
+    # v8_enable_pointer_compression.
+    # Trying the shared cage is planned: docs/todo/cef-v8-shared-cage-trial.md.
     "v8_enable_sandbox": "false",
-    "v8_enable_pointer_compression": "false",
+    "v8_enable_pointer_compression": "true",
     "v8_enable_pointer_compression_shared_cage": "false",
 }
 
@@ -225,7 +255,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--macos-sdk",
         metavar="VERSION",
-        help="macOS deployment target (required on macOS, e.g. 12.0).",
+        help=(
+            "macOS deployment target (required on macOS, e.g. 13.0). Only sets "
+            "MACOSX_DEPLOYMENT_TARGET for automate-git: Chromium's compile flags come from "
+            "its own mac_deployment_target GN value (13.0 since Chromium 156), so pass "
+            "that value."
+        ),
     )
     parser.add_argument(
         "--download-dir",
@@ -240,6 +275,16 @@ def parse_args() -> argparse.Namespace:
         "--force-clean",
         action="store_true",
         help="Pass --force-clean to automate-git.py (wipe & re-fetch the Chromium tree).",
+    )
+    parser.add_argument(
+        "--force-update",
+        action="store_true",
+        help=(
+            "Pass --force-update to automate-git.py (update phase only): gclient revert, "
+            "gclient sync and runhooks even though the Chromium commit did not change. "
+            "The recovery after a sync that died part-way, which the dependency check "
+            "reports; src/out is kept (automate-git moves it aside and back)."
+        ),
     )
     parser.add_argument(
         "--force-build",
@@ -562,6 +607,11 @@ def automate_git_command(
     if args.force_clean and phase != "build":
         cmd.append("--force-clean")
 
+    # --force-update likewise: it re-runs gclient revert + sync, which in a
+    # build-only run would wipe the patches applied after the update phase.
+    if args.force_update and phase != "build" and not subsequent:
+        cmd.append("--force-update")
+
     if args.force_build or subsequent or phase == "build":
         cmd.append("--force-build")
 
@@ -777,6 +827,17 @@ def main() -> int:
             # Patch between the two phases: the update phase's `gclient revert`
             # wipes local modifications, so anything applied before it is gone.
             if phase == "update" or args.sync_only:
+                # Dependencies first: automate-git re-syncs only when the src commit
+                # changes, so a sync that died part-way goes unnoticed on every later
+                # run -- and a dependency left on an old commit would otherwise show
+                # up below as a misleading patch-guard mismatch.
+                if not verify_gclient_deps(download_dir, env, dry_run=args.dry_run):
+                    print(
+                        "\nError: the Chromium checkout is not fully synced — refusing to build.",
+                        file=sys.stderr,
+                    )
+                    return 1
+
                 if not apply_chromium_patches(root_dir, download_dir, dry_run=args.dry_run):
                     print(
                         "\nError: a local Chromium patch did not apply — refusing to build.\n"

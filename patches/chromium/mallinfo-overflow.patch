@@ -1,8 +1,9 @@
 # target-dir: .
-# target-commit: 25f5b661e5b08141ec24b17d1ce96c5ceb5828da
+# target-commit: 46876a0c2df3492ed67a8846950ba6d37170b58c
 # description: mallinfo: saturate instead of CHECK-failing past 2 GiB of heap (silent SIGILL)
 #
-# Authored against Chromium 150.0.7871.115 (CEF 150.0.11+gb887805).
+# Authored against Chromium 150.0.7871.115 (CEF 150.0.11+gb887805); re-verified unchanged on
+# Chromium 156.0.8078.100 (CEF 156.0.31+ge603d97), where the diff applies as is.
 #
 # Linux-only by construction: CEF's own tools/gn_args.py forces
 # use_partition_alloc_as_malloc=false on Linux (CEF issues #3061, #3095), which
@@ -16,9 +17,12 @@
 # Windows and macOS are unaffected: they take ReportWinHeapStats() /
 # ReportAppleAllocStats() and never reach this code.
 #
-# Upstream still uses checked_cast here. Re-verify on every CEF bump: if the
-# target-commit guard fires, check whether the code still needs the fix before
-# refreshing the SHA.
+# Upstream still uses checked_cast here (156). It now also reads mallinfo2()
+# (size_t fields) -- but only under __GLIBC_PREREQ(2, 33), and Chromium 156
+# still links against the bullseye sysroot (glibc 2.31), so the legacy struct is
+# still what gets compiled. Re-verify on every CEF bump: if the target-commit
+# guard fires, check whether the code still needs the fix before refreshing the
+# SHA -- a newer sysroot (glibc >= 2.33) would make this patch dead code.
 #
 # Verify the shipped binary -- no `ud2` may remain in the function
 # (ReportMallinfoStats is inlined into OnMemoryDump, which is why field

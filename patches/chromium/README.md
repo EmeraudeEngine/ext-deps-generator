@@ -100,9 +100,15 @@ git diff --no-prefix -- src/libANGLE/Caps.h \
 
 Upstream is moving on this, so expect the guard to fire on a CEF bump: the
 1 -> 1.25 GiB bump (ANGLE `8e69854ca6`) first appears in `chromium/7926`, missing
-the M151 branch point by four revisions, and it raises **only** `Caps.h`. On M152
-(`chromium/7977`) the effective ceiling is therefore 1.25 GiB on Windows/macOS
+the M151 branch point by four revisions, and it raises **only** `Caps.h`. Still
+true on Chromium 156 (checked 2026-11-19, when the patch was regenerated with the
+same 2 GiB values): the effective unpatched ceiling is 1.25 GiB on Windows/macOS
 and an unchanged 1 GiB on Linux — which clears neither a 16K plate nor, with any
 real margin, the case that surfaced this. Re-verify, do not assume the bump fixed
 it. The patch preamble carries the full reasoning, including why 2 GiB and not
 more.
+
+On a regeneration, the Vulkan hunk usually still applies and only the `Caps.h`
+hunk needs rebasing: `git apply -p0 --include=<file>` applies one hunk of the old
+patch, then edit `Caps.h` by hand, take the `git diff --no-prefix`, and reverse it
+(`git apply -p0 -R`) so the checkout is left as gclient expects it.

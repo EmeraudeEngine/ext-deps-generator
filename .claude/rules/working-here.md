@@ -10,6 +10,8 @@
   `source config_ubuntu22.sh`); when the box is not local, make the fix committable and reason about it instead.
 - **macOS deployment targets: both 12.0 and 13.0 are published.** A downstream application still requires 12.0;
   the 12.0 archives stay available until the owner retires them. Never drop a target on your own.
+  That is the static libraries: **CEF 156+ requires macOS 13.0** (Chromium's own floor, followed by owner decision
+  2026-11-19), so `build_cef.py` runs with `--macos-sdk 13.0` (`AGENTS.md` § Publishing a CEF archive).
 - **Two CEF consumers pin differently, on purpose — never "align" them.** projet-alpha uses the vanilla Spotify CDN
   build (free to track a newer branch); a downstream application uses this repository's patched build (H.264, V8
   sandbox off, `patches/chromium/`) pinned to the branch in `build_cef.py`. A CEF archive is an annex asset on the

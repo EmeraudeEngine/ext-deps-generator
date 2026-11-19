@@ -620,17 +620,32 @@ standalone script.
 1. **H.264 / proprietary codecs**: official builds ship `proprietary_codecs=false`.
 2. **No V8 sandbox**: app_system's zero-copy ArrayBuffer bridge is incompatible
    with the V8 sandbox (external backing stores must live inside the sandbox
-   cage). The sandbox is default-ON upstream but still disable-able at build time
-   — which requires **also** disabling pointer compression (three flags kept
-   together in `BASE_GN_DEFINES`).
+   cage). The sandbox is default-ON upstream but still disable-able at build time.
+   **Pointer compression is ON** (since CEF 156, owner decision 2026-11-19):
+   only the sandbox forbids external backing stores, compression does not — CEF
+   compiles `CefV8Value::CreateArrayBuffer(void*, …)` out under `V8_ENABLE_SANDBOX`
+   alone, V8's `NewBackingStore` check and the 2^53−1 ArrayBuffer size limit depend
+   on the sandbox alone, and no GN assert ties the two. CEF ≤ 150 shipped it OFF on
+   the wrong belief that a sandbox-free build needed it. Cage mode: **multi-cage**
+   (`v8_enable_pointer_compression_shared_cage=false`, set explicitly — V8 would
+   default it to the compression value). ⚠️ Multi-cage does NOT mean a cage per
+   isolate: the cage belongs to an `IsolateGroup`, every isolate created without one
+   lands in the default group, and neither Chromium nor CEF 156 creates any — so a
+   renderer process keeps ONE 4 GB cage of ordinary JS objects for its main thread
+   and workers, exactly like the shared cage; ArrayBuffer contents stay outside it.
+   Versus the shared cage it costs a non-constant cage base, and it is not the mode
+   Chrome ships (V8's own partition_alloc, which multi-cage forbids, is off in every
+   Chromium build anyway); a shared-cage
+   trial is planned (`docs/todo/cef-v8-shared-cage-trial.md`). Source references in
+   `BASE_GN_DEFINES`.
 
 **Staying current**: bump `DEFAULT_CEF_BRANCH` + `DEFAULT_CEF_CHECKOUT` in
 `build_cef.py` every 2-3 months to the current Spotify-CDN stable (from a CDN
-version `150.0.11+gb887805+chromium-150.0.7871.115`: branch = `7871`, checkout =
-`b887805` — the exact-commit pin makes the produced `cef_binary_<version>` name
+version `156.0.31+ge603d97+chromium-156.0.8078.100`: branch = `8078`, checkout =
+`e603d97` — the exact-commit pin makes the produced `cef_binary_<version>` name
 match the CDN artifact instead of the moving branch HEAD), re-run per platform,
-publish the archive. The GN args never change across versions — only the
-version pins do. This works as long
+publish the archive. The GN args do not change with a version bump — only the
+version pins do (pointer compression changed at 156 as a deliberate decision). This works as long
 as `v8_enable_sandbox=false` survives upstream (unsupported config → guard the
 zero-copy in CI after each bump).
 
@@ -685,14 +700,15 @@ matters when *running* a build:
 ```bash
 python build_cef.py                     # host platform, Release, x86_64
 python build_cef.py --branch 7827       # target another CEF branch (drops the exact-commit pin)
-python build_cef.py --arch arm64 --macos-sdk 12.0
-python build_cef.py --arch both --macos-sdk 12.0   # macOS only: arm64 THEN x86_64 (two Spotify distributions)
+python build_cef.py --arch arm64 --macos-sdk 13.0
+python build_cef.py --arch both --macos-sdk 13.0   # macOS only: arm64 THEN x86_64 (two Spotify distributions)
 python build_cef.py --build-type Both   # Release + Debug in ONE run (complete Spotify layout)
 python build_cef.py --sync-only         # update the checkout to the pinned version, build nothing
 python build_cef.py --distrib minimal   # ship-ready, smaller
 python build_cef.py --archive           # also zip the dist folder for publishing
 python build_cef.py --dry-run           # print plan (env, GN_DEFINES, command), build nothing
 python build_cef.py --force-build       # compile an already-synced tree (see note below)
+python build_cef.py --force-update      # re-run gclient revert + sync + runhooks (half-synced checkout, see below)
 python build_cef.py --clean             # remove output/*.cef.* folders (NOT the Chromium checkout)
 ```
 
@@ -707,6 +723,34 @@ python build_cef.py --clean             # remove output/*.cef.* folders (NOT the
   only to wipe and re-fetch the whole tree from scratch.
   **Moot while `patches/chromium/` is non-empty**: the split run already passes
   `--force-build` on its build phase, so an unchanged checkout still compiles.
+- **`--force-update` (a sync that died part-way)**: automate-git.py runs
+  `gclient sync` only when the commit of `src` changes. When the sync dies in the
+  middle (HTTP 429 from `chromium.googlesource.com`, a half-cloned dependency
+  reported as "You have uncommitted changes"), `src` is already on the new tag and
+  **every later run skips the sync**, leaving the dependencies on the previous
+  version. CEF 156 bump, 2026-11-19: 45 dependencies (v8, skia, webrtc, vulkan-*, …)
+  on 150-era or wrong commits and one missing, while `src` and ANGLE were right;
+  CEF's own `v8_build.patch` failing to apply was the only symptom. `build_cef.py`
+  now checks every dependency against `DEPS` after the update phase
+  (`builder/gclient_deps.py`: `gclient revinfo` vs each `git rev-parse HEAD`) and
+  refuses to build, naming them; `--force-update` is the cure (update phase only;
+  automate-git moves `src/out` aside and back, so an existing build survives).
+  A half-cloned dependency must be moved out of the way first (gclient refuses to
+  touch it): move it, do not delete it, and let the sync re-clone it.
+  ⚠️ **CIPD packages can keep files of their previous version** after such a sync:
+  the new version is installed over the old directory and nothing removes what it
+  no longer ships. Same 156 bump: the Go toolchain of Dawn
+  (`third_party/dawn/tools/golang/linux-*`) kept 834 Go 1.24-era files, and the build
+  died 25 s in, in `//third_party/dawn/src/tint:generate_sources`, on
+  `internal/abi/map_swiss.go: ctrlEmpty redeclared` (old and new `internal/abi`
+  compiled together); `mold`, the JDK and `typescript` had stale files too. The same
+  check after the update phase now reports them (`STALE` lines): each package's file
+  list is `chromium/.cipd/pkgs/<n>/_current/.cipdpkg/manifest.json` (its directory is
+  `description.json`'s `subdir`), and a file under that directory that no manifest
+  declares is a leftover (`.git`, `__pycache__` and `.DS_Store` ignored; 0 such file
+  on a clean Linux 156 checkout, 31 packages). Move the reported files out of the
+  checkout keeping their paths (the 156 ones are in
+  `<download-dir>/stale-cipd-2026-11-19/`), then resume the build.
 - **Linux build target is `cefsimple`, not `cefclient`**: automate-git.py defaults
   to building the `cefclient` sample, but on Linux its sources
   (`cefclient_sources_linux` in `cef_paths2.gypi`) unconditionally `#include
@@ -798,7 +842,7 @@ python build_cef.py --clean             # remove output/*.cef.* folders (NOT the
 - **Output — matches the Spotify CDN exactly**: the produced distribution is
   copied into `output/` keeping its verbatim official name
   `cef_binary_<version>_<token>[_<flavor>]/` (e.g.
-  `output/cef_binary_150.0.11+gb887805+chromium-150.0.7871.115_linux64/`). The platform
+  `output/cef_binary_156.0.31+ge603d97+chromium-156.0.8078.100_linux64/`). The platform
   `<token>` is the Spotify one — `linux64`, `linuxarm64`, `windows64`,
   `windowsarm64`, `macosx64`, `macosarm64`. **Why identical to Spotify**: the
   app_system consumer keeps working unchanged — only its CEF **download base URL**
@@ -813,39 +857,55 @@ python build_cef.py --clean             # remove output/*.cef.* folders (NOT the
   also produce `output/cef_binary_<version>_<token>.tar.bz2` (the Spotify archive
   format) for upload as a GitHub release asset.
 
-### Publishing a CEF archive (and the patched-150 rollout)
+### Publishing a CEF archive (and the CEF 156 rollout)
 
 **CEF does not follow the ext-deps release numbering.** The static-lib zips are
 versioned `vNNN` and re-cut together; a CEF archive is just an *annex asset* that
-rides along on the current deps release tag. The patched CEF 150 set therefore
-goes onto **`v014`** (which already holds the 12 static-lib zips), not onto a tag
-of its own.
+rides along on a deps release tag. The CEF 156 set goes onto **`v019`** (owner
+decision 2026-11-19), next to its static-lib zips. History: the patched CEF 150 set
+went onto `v014` (2026-08-24/26), replacing the unpatched 150 archives of `v013`
+under the same file names.
 
-**Why a rebuild is needed at all**: both `patches/chromium/` fixes landed *after*
-the 150 archives were published, so the four CEF archives on release `v013` are
-**unpatched**. Same version string, same filename, different content — the
-`150.0.11+gb887805+chromium-150.0.7871.115` name cannot distinguish them.
+**What changes in CEF 156 (`156.0.31+ge603d97+chromium-156.0.8078.100`) besides the
+version**: V8 pointer compression is ON (multi-cage, § CEF "Why build CEF ourselves"),
+both `patches/chromium/` patches were re-verified and the ANGLE one regenerated, and
+two platform floors moved upstream:
+- **macOS 13.0** (was 12.0 in 150): Chromium sets `mac_deployment_target` and
+  `mac_min_system_version` to `"13.0"` in `build/config/mac/mac_sdk.gni`, and CEF's
+  `cmake/cef_variables.cmake.in` says `CEF_TARGET_SDK "13.0"`, exactly like the
+  Spotify CDN build. Owner decision 2026-11-19: follow it — a downstream application
+  using this CEF drops macOS 12. ⚠️ `--macos-sdk` only sets `MACOSX_DEPLOYMENT_TARGET`
+  in automate-git's environment; Chromium's compile flags come from the GN value, so
+  passing 12.0 would not produce a macOS 12 build, only a misleading command line.
+- **Windows SDK 10.0.28000** (was 10.0.26100): `build/toolchain/win/setup_toolchain.py`
+  hands `SDK_VERSION = '10.0.28000.0'` to `vcvarsall.bat` explicitly, so that exact
+  SDK must be installed, with its "Debugging Tools for Windows" feature
+  (`build/vs_toolchain.py` copies `dbghelp.dll` from it). VS 2022 is still accepted
+  (`MSVS_VERSIONS`).
 
 | Archive | State |
 |---|---|
-| `linux64` | **done — patched 2026-08-24 and uploaded to `v014`** (180 ANGLE objects recompiled per config, `libcef.so` relinked, glibc floor 2.25) |
-| `windows64` | **done — patched 2026-08-25 and uploaded to `v014`** (232 ANGLE objects recompiled per config, `libcef.dll` relinked in both) |
-| `macosx64` | **done — patched 2026-08-25 and uploaded to `v014`** (454 ANGLE objects recompiled per config, both frameworks relinked, `lipo -archs` = x86_64) |
-| `macosarm64` | **done — patched 2026-08-26 and uploaded to `v014`** (454 ANGLE objects per config, both frameworks relinked, `lipo -archs` = arm64) |
+| `linux64` | building (Linux main, 2026-11-19) |
+| `windows64` | to build |
+| `macosx64` | to build |
+| `macosarm64` | to build |
 
-**The four patched archives are complete on `v014`** — `app_system` can now flip its
-`CEF_DOWNLOAD_BASE_URL` from `…/download/v013` to `…/download/v014`.
-
-Per-OS command (same pins everywhere — `DEFAULT_CEF_BRANCH=7871`,
-`DEFAULT_CEF_CHECKOUT=b887805`; both patch guards match a checkout seeded at that
-version, and `mallinfo-overflow` is inert outside glibc):
+Per-OS command (same pins everywhere — `DEFAULT_CEF_BRANCH=8078`,
+`DEFAULT_CEF_CHECKOUT=e603d97`; `mallinfo-overflow` is inert outside glibc):
 
 ```bash
-# Windows (VS 2022 + Win11 SDK 10.0.26100+)
+# Linux (sysroot: glibc floor fixed by Chromium, see above)
+python build_cef.py --build-type Both --archive --download-dir <CEF-LINUX>/cef-chromium
+# Windows (VS 2022 + Windows SDK 10.0.28000 with the Debugging Tools)
 python build_cef.py --build-type Both --archive --download-dir <CEF-WIN>/cef-chromium
-# macOS (full Xcode) — arm64 then x86_64 from the same checkout
-python build_cef.py --arch both --macos-sdk 12.0 --build-type Both --archive --download-dir <CEF-MACOS>/cef-chromium
+# macOS (full Xcode) — one arch per run, arm64 first
+python build_cef.py --arch arm64 --macos-sdk 13.0 --build-type Both --archive --download-dir <CEF-MACOS>/cef-chromium
+python build_cef.py --arch x86_64 --macos-sdk 13.0 --build-type Both --archive --download-dir <CEF-MACOS>/cef-chromium
 ```
+
+A sync that stops part-way (an HTTP 429 is common on a branch change: hundreds of
+dependencies are fetched at once) is reported by the dependency check after the
+update phase; re-run with `--force-update` (§ CEF, the `--force-update` bullet).
 
 **macOS re-build lessons (2026-08-25/26 patched-150 run)** — a *patch* rebuild is
 cheap on Linux (~180 ANGLE objects) but was ~full on macOS, twice over:
@@ -859,7 +919,9 @@ cheap on Linux (~180 ANGLE objects) but was ~full on macOS, twice over:
   `echo 'kernel void k(){}' | xcrun metal -x metal -c - -o /tmp/t.air`.
 - **Deleting `out/*_GN_<arch>` to free disk costs a full rebuild of that arch later.**
   With the x64 archive published, the partition had room for all four `out/` dirs
-  (~86 GiB free after both) — keep them if another patch is plausible.
+  (~86 GiB free after both) — keep them if another patch is plausible. On a branch
+  change automate-git moves the previous `out/` to `<download-dir>/out_<old-branch>`
+  (`out_7871` for 150): it stays on the partition until someone deletes it.
 - **Run one arch at a time, not `--arch both`, when you need one archive early**:
   `--arch both` does arm64 first, so the Intel archive would have waited a full
   arm64 build. Two sequential single-arch runs give the same result, first archive
@@ -869,25 +931,20 @@ cheap on Linux (~180 ANGLE objects) but was ~full on macOS, twice over:
   `nohup python build_cef.py … & disown` plus `caffeinate -ims -w <pid>`. Kills are
   recoverable — ninja resumes incrementally — but each costs hours of wall clock.
 
-Then upload the produced `.tar.bz2` alongside the existing v014 assets:
+Then upload the produced `.tar.bz2` alongside the existing assets:
 
 ```bash
-gh release upload v014 "output/cef_binary_<version>_<token>.tar.bz2"
+gh release upload v019 "output/cef_binary_<version>_<token>.tar.bz2"
 ```
 
-**`app_system` flips only once all four are uploaded.** It has a single
-`CEF_DOWNLOAD_BASE_URL` for every platform (`cmake/InstallCEF.cmake`), so a
-partial v014 would 404 the missing platforms — caught by its bzip2-magic check,
-but still a hard configure failure. When the moment comes, change
-`…/releases/download/v013` → `…/releases/download/v014` there.
-
-*Switch-time caveat (known, disappears on the next custom CEF, which will carry a
-higher version string):* `InstallCEF.cmake` only tests whether the archive file
-*exists*, and the filename is byte-identical to the v013 one. A stale
-`app_system/vendors/cef_binary_150.….tar.bz2` — and its extracted `CEF_ROOT` —
-must be deleted by hand, otherwise the unpatched binary silently wins. The WebGL
-texture-ceiling probe page in app_system's `dev-check` is the runtime check that
-the patched build is really the one loaded.
+**A consumer flips only once all four are uploaded.** A downstream application with a
+single CEF download base URL for every platform would 404 the missing platforms of a
+partial set — a hard configure failure. With a new version string (156 after 150),
+the stale-archive trap of the 150 re-publication does not apply: the consumer's
+cached `cef_binary_150.…` archive has a different name. Re-publishing an archive
+under an EXISTING name (a patch rebuild, a GN-arg change without a version bump)
+brings that trap back: the consumer only tests whether the file exists, so its
+cached archive and extracted tree must be deleted by hand.
 
 ## Common Issues
 
