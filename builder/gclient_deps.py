@@ -92,16 +92,18 @@ def _stale_cipd_files(chromium_dir: Path) -> tuple[dict[str, list[str]], int, li
         if not description.is_file() or manifest is None:
             unreadable.append(pkg.name)
             continue
-        subdir = _norm(json.loads(description.read_text())["subdir"])
+        subdir = os.path.normpath(json.loads(description.read_text())["subdir"])
         names = {f["name"] for f in json.loads(manifest.read_text())["files"]}
         packages.append((subdir, names))
 
-    # Several packages may share a directory, and one may sit inside another's.
+    # Paths keep their real case for the report (the files are moved by hand) and are
+    # compared through _norm. Several packages may share a directory, and one may sit
+    # inside another's.
     declared = {_norm(os.path.join(sub, name)) for sub, names in packages for name in names}
-    subdirs = {sub for sub, _ in packages}
+    subdirs = {_norm(sub): sub for sub, _ in packages}
 
     stale: dict[str, list[str]] = {}
-    for subdir in sorted(subdirs):
+    for subdir in sorted(set(subdirs.values())):
         candidates: list[str] = []
         for dirpath, dirnames, filenames in os.walk(chromium_dir / subdir):
             rel_dir = os.path.relpath(dirpath, chromium_dir)
@@ -111,8 +113,8 @@ def _stale_cipd_files(chromium_dir: Path) -> tuple[dict[str, list[str]], int, li
                 if d not in _IGNORED_DIRS and _norm(os.path.join(rel_dir, d)) not in subdirs
             ]
             for name in filenames:
-                rel = _norm(os.path.join(rel_dir, name))
-                if name not in _IGNORED_FILES and rel not in declared:
+                rel = os.path.normpath(os.path.join(rel_dir, name))
+                if name not in _IGNORED_FILES and _norm(rel) not in declared:
                     candidates.append(rel)
         if candidates:
             tracked = _git_tracked(chromium_dir / subdir) or set()

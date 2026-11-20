@@ -895,4 +895,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # A build is followed through its log file: without this, Python block-buffers a
+    # redirected stdout and our own lines (the dependency check, the patch report) only
+    # reach the file when the multi-hour run ends.
+    sys.stdout.reconfigure(line_buffering=True)
     sys.exit(main())

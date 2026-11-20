@@ -759,7 +759,8 @@ python build_cef.py --clean             # remove output/*.cef.* folders (NOT the
   package directories. On Windows, `third_party/wtl`, `third_party/webview2` and
   `lzma_sdk/bin/*` are both CIPD directories and `chromium/src` sources. Move the reported files out of the
   checkout keeping their paths (the 156 ones are in
-  `<download-dir>/stale-cipd-2026-11-19/`), then resume the build.
+  `<download-dir>/stale-cipd-2026-11-19/` on `CEF-LINUX`, `stale-win-2026-11-19/` on
+  `CEF-WIN`), then resume the build.
   ⚠️ **An EMPTY dependency directory breaks `gclient revert`** (the first step of
   every update phase, `--force-update` included). `revert` clones a dependency whose
   directory is absent ("is missing, syncing instead"), but runs its git commands
@@ -946,7 +947,7 @@ two platform floors moved upstream:
 | Archive | State |
 |---|---|
 | `linux64` | on `v019` with its `_breakpad_symbols.zip` (Linux main, 2026-11-19; `.tar.bz2` 873195349 bytes, SHA-256 `b032236ea8ef27f7e3f5e7b2e75407a6a949f6366a181437116841572712d365`) |
-| `windows64` | building (WIN-LONDNOIR, 2026-11-19, VS 2022 17.14 + SDK 10.0.28000.2957) |
+| `windows64` | on `v019` with its `_breakpad_symbols.zip` (WIN-LONDNOIR, 2026-11-20, VS 2022 17.14 + SDK 10.0.28000.2957, 7 h 16 min for Debug + Release; `.tar.bz2` 371960940 bytes, SHA-256 `a388e4cfa1c6093a6f7aa67ec29c3f25f6ab85082596b76dbfa57a62dfa76a36`; no `libEGL.dll` / `libGLESv2.dll`, ANGLE is inside `libcef.dll` as on Linux) |
 | `macosx64` | to build |
 | `macosarm64` | to build |
 

@@ -32,7 +32,15 @@ Done by hand for **CEF 156.0.31+ge603d97 linux64 in v019** (2026-11-19, `dump_sy
 `output/…_linux64/Release/`): `…_linux64_breakpad_symbols.zip` (38.7 MB) holds `libcef.so` (id
 `BC8E100537A78FDA3D5DA9FBE8832FC30`, = the stripped copy's; 9 s, 3.7 GB RAM, 694 MB `.sym`: 7 339 FUNC, 679 775 PUBLIC,
 13.3 M STACK CFI) and `libvk_swiftshader.so`. No `libEGL`/`libGLESv2` any more: since 156 ANGLE is linked inside
-libcef (`AGENTS.md` § Publishing a CEF archive). windows64, macosarm64, macosx64: to do when their builds land.
+libcef (`AGENTS.md` § Publishing a CEF archive).
+
+Done for **CEF 156.0.31+ge603d97 windows64 in v019** (2026-11-20, on the Windows build machine, `dump_syms` 2.3.9):
+`…_windows64_breakpad_symbols.zip` (64.7 MB) holds libcef.dll (id `30796557A1FB71BA4C4C44205044422E1`, code id
+`6AF37C981346D000`, checked against the shipped DLL's CodeView record; 348.9 MB `.sym`: 644 094 FUNC, 21 585 PUBLIC,
+556 227 STACK CFI INIT), chrome_elf.dll, dxcompiler.dll, vk_swiftshader.dll, vulkan-1.dll, bootstrap.exe,
+bootstrapc.exe. Each **binary** was dumped with its PDB beside it (see Traps). The `*_release_symbols.zip` and
+`*_debug_symbols.zip` made by automate-git are kept in `C:\cef156-symbols` on that machine (they live only in
+`<download-dir>/chromium/src/cef/binary_distrib/`, not in `output/`). macosarm64, macosx64: to do when their builds land.
 
 ## What remains
 
@@ -52,8 +60,16 @@ libcef (`AGENTS.md` § Publishing a CEF archive). windows64, macosarm64, macosx6
   (`B59A74285D32579DD178F6D9A7B447BA0` for 150.0.11): **no GNU Build ID** in libcef, the id comes from the text
   section — check the ids match before publishing. 8 s, 3.2 GB RAM, a 592 MB `.sym` (6 068 FUNC, 647 196 PUBLIC,
   10 M STACK CFI).
-- **Windows**: dump the PDBs of `cef_binary_<version>_windows64_release_symbols/` (`libcef.dll.pdb` 2.4 GB: 24 s,
-  5 GB RAM, a 263 MB `.sym`); module = `<name>.pdb`, id = PDB GUID + age.
+- **Windows**: dump the **binary** of the distribution with its PDB (from
+  `cef_binary_<version>_windows64_release_symbols/`) copied beside it: `dump_syms <dir>/libcef.dll`. The PDB alone
+  gives the same FUNC/PUBLIC and the same module id but **no unwind table** (STACK CFI = 0: x64 unwind data is the
+  PE's `.pdata`, not in the PDB) and no `INFO CODE_ID`; measured on 156 libcef: 0 vs 556 227 STACK CFI INIT, 278 vs
+  349 MB `.sym`, ~40 s each. The 150 set (v014) was dumped from the PDBs alone (`libcef.dll.pdb` 2.4 GB: 24 s,
+  5 GB RAM, a 263 MB `.sym`): its published libcef `.sym` has 607 780 FUNC, 0 STACK CFI and no `INFO CODE_ID`
+  (re-read from the v014 asset 2026-11-20). Redoing it needs the 150 `libcef.dll` (any copy of the published
+  archive) and its `libcef.dll.pdb` (`*_release_symbols`, if still kept). Module = `<name>.pdb`, id = PDB GUID + age (lld's
+  deterministic link: every GUID ends in `4C4C44205044422E`, "LLD PDB."). `dump_syms --store <dir> <binary>` writes
+  the store layout; zip it with Python `zipfile` (PowerShell 5.1's `Compress-Archive` writes `\` in entry names).
 - **macOS**: `dump_syms <the .dSYM> <the binary>` in ONE call (`-a arm64|x86_64` for a fat binary). The dSYM alone
   names the module `<name>.dSYM` (a minidump looks for `<name>`: nothing found) and carries no unwind table (STACK CFI
   = 0); the binary alone has no FUNC/line. `release_symbols` holds 5 dSYMs per arch (Chromium Embedded Framework,
