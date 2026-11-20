@@ -75,6 +75,7 @@ resulting archive is published, is tracked in
 | File | Target | Platform | Summary |
 |---|---|---|---|
 | `mallinfo-overflow.patch` | `.` (Chromium) | Linux only | Legacy glibc `struct mallinfo` has `int` fields; past 2 GiB of renderer heap they wrap negative and `checked_cast<size_t>` CHECK-fails on a bare `ud2` — a silent SIGILL with no log line in an official build. Saturate instead. |
+| `blink-bindings-pool-size.patch` | `.` (Chromium) | all (inert unless `BLINK_BINDINGS_POOL_SIZE` is set) | Blink's bindings generator opens one worker per core, each reloading the ~225 MiB Web IDL database; several actions at once exhausted a 16 GB Mac (two watchdog kernel panics). The env var caps the pool; `build_cef.py` sets it on RAM-bound machines (`AGENTS.md` § CEF, "Memory-bound machines"). |
 | `angle-max-texture-bytes.patch` | `third_party/angle` | all | ANGLE refuses any *single* texture/renderbuffer allocation over `Limitations::maxTextureBytes` (1 GiB) with `GL_INVALID_OPERATION` while every declared capability still reports support. The slicer's HD AA path crosses it (1.19 GiB, 1.76 GiB on a 16K plate), every layer renders black and an empty print file is written. Raised to 2 GiB. |
 
 ## Regenerating the ANGLE patch

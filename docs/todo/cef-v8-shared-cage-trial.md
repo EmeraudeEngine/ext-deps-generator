@@ -28,10 +28,17 @@ What changes with `v8_enable_pointer_compression_shared_cage=true` (sandbox stil
   Chromium build (`build_with_v8_embedder = build_with_chromium`), so it stays off either way.
 - The zero-copy bridge is unaffected: external backing stores depend on the sandbox alone.
 
+## Already decided on macOS (2026-11-20)
+
+The macOS archives of CEF 156 are built with the shared cage: multi-cage without the
+sandbox cannot run on Apple silicon (code range in a cage reserved without `MAP_JIT`,
+`AGENTS.md` § CEF, the macOS exception). So the trial's first data point is the
+macOS build; Linux and Windows stay multi-cage until this item is decided.
+
 ## What remains
 
-1. Build with `v8_enable_pointer_compression_shared_cage=true` (one platform is enough for the
-   trial), read the effective `args.gn` back.
+1. macOS is already shared cage (above). For Linux or Windows: build with
+   `v8_enable_pointer_compression_shared_cage=true`, read the effective `args.gn` back.
 2. The downstream application runs its zero-copy bridge and its heaviest scene, with workers,
    and compares performance and memory against the multi-cage build (the 4 GB per-process
    limit is the same in both modes).

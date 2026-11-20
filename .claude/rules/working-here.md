@@ -18,6 +18,9 @@
   current deps release, not a release of its own (`AGENTS.md` § Publishing a CEF archive).
 - **A single-library run (`--library X --no-deps`) skips `DependenciesTest`**: run the test project by hand before
   any publish. On Apple Silicon the x86_64 `DependenciesTest` runs under Rosetta 2 (installed).
+- **CEF on the 16 GB Mac is RAM-bound**: `build_cef.py` caps siso and Blink's bindings pool on its own
+  (`Memory limits :` line of the launch summary); never launch it with a larger `SISO_LIMITS`. A frozen Mac
+  that reboots is a memory exhaustion, not a hardware fault (`AGENTS.md` § CEF, "Memory-bound machines").
 - `--jobs N`: Windows box (28 threads, 80 GB) → `--jobs 20`; elsewhere the machine's full parallelism.
 - `python build.py --clean` is GLOBAL (wipes every configuration and extracted CEF): to rebuild one configuration,
   delete `builds/<suffix>` and empty `output/<suffix>` (keep the directory: links point to it).

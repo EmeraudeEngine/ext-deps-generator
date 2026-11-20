@@ -638,6 +638,24 @@ standalone script.
    Chromium build anyway); a shared-cage
    trial is planned (`docs/todo/cef-v8-shared-cage-trial.md`). Source references in
    `BASE_GN_DEFINES`.
+   ⚠️ **macOS is the exception: shared cage** (`PLATFORM_GN_DEFINES["macos"]`, owner
+   decision 2026-11-20). Multi-cage without the sandbox cannot run on Apple silicon:
+   V8 turns the external code space on only with the shared cage
+   (`v8_enable_external_code_space` default in `v8/BUILD.gn`), so in multi-cage the
+   code range is carved out of the 4 GB compression cage, which
+   `PtrComprCageReservationParams` (`v8/src/init/isolate-group.cc`) reserves
+   without `MAP_JIT` — it handles that case for Fuchsia only. The `mprotect` to RWX
+   then fails with `EACCES` and V8 aborts: `Check failed: 12 == (*__error()) (12 vs.
+   13)` in `OS::SetPermissions` (`platform-posix.cc`), from
+   `CodeRange::InitReservation`. Seen in `mksnapshot` (CEF 156 arm64 build,
+   2026-11-20); every renderer would die the same way at run time. Linux and Windows
+   have no `MAP_JIT` and are unaffected, Chrome ships sandbox + shared cage, so
+   nobody upstream runs this combination. With the shared cage the code range is its
+   own `MAP_JIT` reservation. `linux64` and `windows64` on `v019` stay multi-cage.
+   How it was found: a `DYLD_INSERT_LIBRARIES` interposer logging `mmap` /
+   `mprotect` showed the failing range inside a 4 GiB-aligned reservation made with
+   flags `0x1042` (no `MAP_JIT` = `0x800`); a minimal C test proved `MAP_JIT` + RWX
+   still works on macOS 27.2.
 
 **Staying current**: bump `DEFAULT_CEF_BRANCH` + `DEFAULT_CEF_CHECKOUT` in
 `build_cef.py` every 2-3 months to the current Spotify-CDN stable (from a CDN
@@ -785,6 +803,23 @@ python build_cef.py --clean             # remove output/*.cef.* folders (NOT the
   Override with `--build-target` if you truly need cefclient (then you must make GTK3
   resolvable, e.g. `cef_use_gtk=true` + GTK `.pc` files reachable by the sysroot
   pkg-config). Windows/macOS keep automate-git.py's `cefclient` default.
+- **Memory-bound machines (the 16 GB Mac mini)**: RAM, not CPU, limits a Chromium
+  build there. siso runs one local job per core, and Blink's bindings generator
+  (`third_party/blink/renderer/bindings/scripts/generate_bindings.py`, 11 actions)
+  opens a `multiprocessing.Pool(cpu_count())` per action whose `spawn`ed workers each
+  reload `web_idl_database.pickle` (~225 MiB, nothing shared). 2026-11-20, CEF 156
+  arm64: two kernel panics, `watchdog timeout: no checkins from watchdogd` — free
+  memory 0, compressor segments exhausted; the second with siso already capped at 6
+  local jobs, 5 bindings actions × 13 processes = 14.5 GiB. Nothing in a log: the Mac
+  just reboots, the reports are in `/Library/Logs/DiagnosticReports/Retired/panic-full-*`
+  (their `processByPid` gives each process's parent and resident size).
+  `build_cef.py` now applies `apply_memory_limits()` wherever RAM / 2.5 GiB < cores:
+  `SISO_LIMITS=local=<RAM/2.5>` (6 on 16 GB) and `BLINK_BINDINGS_POOL_SIZE=2`, read by
+  `patches/chromium/blink-bindings-pool-size.patch`. Inert on the Linux (128 GB) and
+  Windows (80 GB) machines; a value already in the environment wins; the launch
+  summary prints them (`Memory limits :`). The `gclient sync` of a version bump is the
+  other memory peak there (up to 51 `git` processes, jetsam kills, no panic):
+  `docs/todo/cef-gclient-sync-memory-macos.md`.
 - **Cannot cross-compile** Chromium (except macOS x86_64/arm64 on Apple Silicon):
   run on a native machine per target OS.
 - **Checkout location**: `--download-dir` > `$CEF_DOWNLOAD_DIR` >
@@ -913,8 +948,10 @@ went onto `v014` (2026-08-24/26), replacing the unpatched 150 archives of `v013`
 under the same file names.
 
 **What changes in CEF 156 (`156.0.31+ge603d97+chromium-156.0.8078.100`) besides the
-version**: V8 pointer compression is ON (multi-cage, § CEF "Why build CEF ourselves"),
-both `patches/chromium/` patches were re-verified and the ANGLE one regenerated, and
+version**: V8 pointer compression is ON (multi-cage on Linux and Windows, shared cage on
+macOS, § CEF "Why build CEF ourselves"), both pre-existing `patches/chromium/` patches were
+re-verified and the ANGLE one regenerated, a third one bounds the Blink bindings pool on
+RAM-bound machines (§ CEF, "Memory-bound machines"), and
 two platform floors moved upstream:
 - **macOS 13.0** (was 12.0 in 150): Chromium sets `mac_deployment_target` and
   `mac_min_system_version` to `"13.0"` in `build/config/mac/mac_sdk.gni`, and CEF's

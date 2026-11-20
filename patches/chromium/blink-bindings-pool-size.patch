@@ -1,0 +1,56 @@
+# target-dir: .
+# target-commit: 46876a0c2df3492ed67a8846950ba6d37170b58c
+# description: Blink bindings generator: pool size capped by BLINK_BINDINGS_POOL_SIZE (RAM, not CPU)
+#
+# Authored against Chromium 156.0.8078.100 (CEF 156.0.31+ge603d97), 2026-11-20.
+#
+# WHY
+# third_party/blink/renderer/bindings/scripts/generate_bindings.py runs its tasks
+# through bind_gen.TaskQueue, which opens multiprocessing.Pool(cpu_count()). The
+# Python Chromium bundles (3.11) starts workers with 'spawn' on macOS, so nothing is
+# shared: every worker re-imports the generator and reloads
+# web_idl_database.pickle, ~225 MiB resident each. The build has 11 such actions
+# and siso runs as many of them at once as it has local jobs. On a 12-core, 16 GB
+# Mac mini: 5 actions x (1 + 12 workers) = 65 processes, 14.5 GiB, plus siso
+# (3.5 GiB) and the compilers -> free memory 0, compressor segments exhausted,
+# "watchdog timeout: no checkins from watchdogd" kernel panic. Twice on
+# 2026-11-20 (09:47 and 09:59), the second time with siso already capped at 6
+# local jobs. Invisible on the 128 GB Linux and 80 GB Windows build machines.
+#
+# No GN argument reaches the pool (--single_process is never passed), and
+# PYTHON_CPU_COUNT only exists from Python 3.13.
+#
+# WHAT
+# When BLINK_BINDINGS_POOL_SIZE is set, the pool is min(cpu_count, that value).
+# Unset (the default), nothing changes: inert on every machine that does not set
+# it. build_cef.py sets it on macOS (see AGENTS.md, section CEF, macOS memory).
+#
+# RE-VERIFY on a CEF bump: the pool is still created in TaskQueue.__init__ from
+# cpu_count(); during the build, `ps -axo ppid,rss,command | grep generate_bindings`
+# shows each action with at most BLINK_BINDINGS_POOL_SIZE worker children.
+diff --git third_party/blink/renderer/bindings/scripts/bind_gen/task_queue.py third_party/blink/renderer/bindings/scripts/bind_gen/task_queue.py
+index 39e7f5eefa7da..40d8e4821e00d 100644
+--- third_party/blink/renderer/bindings/scripts/bind_gen/task_queue.py
++++ third_party/blink/renderer/bindings/scripts/bind_gen/task_queue.py
+@@ -5,6 +5,7 @@
+ import dataclasses
+ import functools
+ import multiprocessing
++import os
+ import sys
+ import typing
+ 
+@@ -39,6 +40,13 @@ class TaskQueue(object):
+         else:
+             self._single_process = False
+             self._pool_size = multiprocessing.cpu_count()
++            # Local patch (ext-deps-generator): every worker is a spawned
++            # process that reloads the whole Web IDL database (~225 MiB), and
++            # the build runs several of these actions at once. Cap the pool
++            # where RAM, not CPU, is the limit.
++            pool_cap = os.environ.get('BLINK_BINDINGS_POOL_SIZE')
++            if pool_cap:
++                self._pool_size = max(1, min(self._pool_size, int(pool_cap)))
+             if sys.platform == 'win32':
+                 # TODO(crbug.com/1190269) - we can't use more than 56
+                 # cores on Windows or Python3 may hang.

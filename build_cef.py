@@ -194,7 +194,22 @@ PLATFORM_GN_DEFINES: dict[str, dict[str, str]] = {
         "use_sysroot": "true",
     },
     "windows": {},
-    "macos": {},
+    "macos": {
+        # Shared cage on macOS (owner decision 2026-11-20): multi-cage without
+        # the sandbox cannot run on Apple silicon. V8 enables the external code
+        # space only with the shared cage (v8/BUILD.gn, the
+        # v8_enable_external_code_space default), so in multi-cage the code range
+        # is carved out of the 4 GB pointer-compression cage, which
+        # PtrComprCageReservationParams reserves without MAP_JIT
+        # (v8/src/init/isolate-group.cc handles that case for Fuchsia only). The
+        # mprotect to RWX then fails with EACCES and V8 dies in
+        # OS::SetPermissions -- mksnapshot during the build, and every renderer
+        # at run time. With the shared cage the code range is its own MAP_JIT
+        # reservation, the path Chrome ships. Same 4 GB cage per renderer and
+        # same zero-copy behaviour (docs/todo/cef-v8-shared-cage-trial.md);
+        # linux64 and windows64 stay multi-cage.
+        "v8_enable_pointer_compression_shared_cage": "true",
+    },
 }
 
 
@@ -494,7 +509,38 @@ def build_environment(config: BuildConfig, gn_defines: str) -> dict[str, str]:
         env.setdefault("GN_OUT_CONFIGS", f"Debug_GN_{cpu},Release_GN_{cpu}")
         env.setdefault("CEF_ENABLE_ARM64" if cpu == "arm64" else "CEF_ENABLE_AMD64", "1")
 
+    apply_memory_limits(env)
     return env
+
+
+# RAM a Chromium build needs per local job. siso defaults to one job per core,
+# which a 12-core 16 GB Mac cannot hold: two "watchdog timeout" kernel panics on
+# 2026-11-20 (AGENTS.md, section CEF, "Memory-bound machines").
+GIB_PER_LOCAL_JOB = 2.5
+# Workers per Blink bindings action once RAM-bound (patches/chromium/
+# blink-bindings-pool-size.patch): each one is ~225 MiB, and siso runs several
+# of these actions at once.
+BLINK_BINDINGS_POOL_SIZE = 2
+
+
+def host_memory_gib() -> float:
+    return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 2**30
+
+
+def apply_memory_limits(env: dict[str, str]) -> None:
+    """Cap siso's local jobs and the Blink bindings pool where RAM, not CPU, is the limit.
+
+    Inert on a machine with GIB_PER_LOCAL_JOB of RAM per core or more (the Linux
+    and Windows build machines). A value already in the environment wins.
+    """
+    if _platform.system() == "Windows":
+        return  # os.sysconf does not exist there; the Windows box has 80 GB anyway
+    cores = os.cpu_count() or 1
+    jobs = max(2, int(host_memory_gib() // GIB_PER_LOCAL_JOB))
+    if jobs >= cores:
+        return
+    env.setdefault("SISO_LIMITS", f"local={jobs}")
+    env.setdefault("BLINK_BINDINGS_POOL_SIZE", str(BLINK_BINDINGS_POOL_SIZE))
 
 
 def ensure_depot_tools(download_dir: Path, env: dict[str, str], dry_run: bool) -> Path:
@@ -794,6 +840,12 @@ def main() -> int:
     print(f"  Build type    : {build_type_display}")
     print(f"  Distribution  : {args.distrib}")
     print(f"  Download dir  : {download_dir}")
+    if "SISO_LIMITS" in env or "BLINK_BINDINGS_POOL_SIZE" in env:
+        print(
+            f"  Memory limits : SISO_LIMITS={env.get('SISO_LIMITS', '-')} "
+            f"BLINK_BINDINGS_POOL_SIZE={env.get('BLINK_BINDINGS_POOL_SIZE', '-')} "
+            f"({host_memory_gib():.0f} GiB RAM, {os.cpu_count()} cores)"
+        )
     if chromium_patches:
         print(f"  Local patches : {len(chromium_patches)} (patches/chromium/)")
         for patch in chromium_patches:
