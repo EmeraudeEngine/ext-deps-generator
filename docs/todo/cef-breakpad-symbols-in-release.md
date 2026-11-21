@@ -40,7 +40,16 @@ Done for **CEF 156.0.31+ge603d97 windows64 in v019** (2026-11-20, on the Windows
 556 227 STACK CFI INIT), chrome_elf.dll, dxcompiler.dll, vk_swiftshader.dll, vulkan-1.dll, bootstrap.exe,
 bootstrapc.exe. Each **binary** was dumped with its PDB beside it (see Traps). The `*_release_symbols.zip` and
 `*_debug_symbols.zip` made by automate-git are kept in `C:\cef156-symbols` on that machine (they live only in
-`<download-dir>/chromium/src/cef/binary_distrib/`, not in `output/`). macosarm64, macosx64: to do when their builds land.
+`<download-dir>/chromium/src/cef/binary_distrib/`, not in `output/`).
+
+Done for **CEF 156.0.31+ge603d97 macosarm64 and macosx64 in v019** (2026-11-21, on the Mac mini, `dump_syms` 2.3.9,
+`dump_syms --store <dir> <name>.dSYM <binary>` per module, each binary/dSYM pair checked by UUID first):
+`…_macosarm64_breakpad_symbols.zip` (65.1 MB) and `…_macosx64_breakpad_symbols.zip` (63.8 MB), each holding
+Chromium Embedded Framework, libcef_sandbox.dylib and libvk_swiftshader.dylib (156 has no libEGL / libGLESv2 dSYM:
+ANGLE is inside the framework). Framework: arm64 id `4C4C446055553144A1576FDA046E52240` (418.7 MB `.sym`:
+707 443 FUNC, 698 919 STACK CFI INIT, 21 s, 3.5 GB RAM), x86_64 id `4C4C443F55553144A12BB98CB4EE0FA00` (376.9 MB:
+733 383 FUNC, 459 297 STACK CFI INIT, 18 s, 3.6 GB RAM). The dSYMs stay in
+`<download-dir>/chromium/src/cef/binary_distrib/*_release_symbols` on `CEF-MACOS`.
 
 ## What remains
 
@@ -73,7 +82,10 @@ bootstrapc.exe. Each **binary** was dumped with its PDB beside it (see Traps). T
 - **macOS**: `dump_syms <the .dSYM> <the binary>` in ONE call (`-a arm64|x86_64` for a fat binary). The dSYM alone
   names the module `<name>.dSYM` (a minidump looks for `<name>`: nothing found) and carries no unwind table (STACK CFI
   = 0); the binary alone has no FUNC/line. `release_symbols` holds 5 dSYMs per arch (Chromium Embedded Framework,
-  libEGL, libGLESv2, libvk_swiftshader, libcef_sandbox); the distribution's binaries match them by UUID.
+  libEGL, libGLESv2, libvk_swiftshader, libcef_sandbox; 3 since 156); the distribution's binaries match them by UUID.
+  `dump_syms` 2.3.9 logs one `CFI: CfiError { kind: BadDebugInfo, … UnexpectedEof … }` per module on most of them
+  and still exits 0: harmless, the CFI coverage equals the published 150 set's (arm64 framework 98.8 % of FUNC with
+  a STACK CFI INIT in both, x86_64 63 % in both — compact unwind covers most x86_64 functions).
 - `dump_syms` is a development tool (Mozilla, https://github.com/mozilla/dump_syms), never shipped.
 
 ## References

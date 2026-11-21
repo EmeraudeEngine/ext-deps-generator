@@ -985,8 +985,8 @@ two platform floors moved upstream:
 |---|---|
 | `linux64` | on `v019` with its `_breakpad_symbols.zip` (Linux main, 2026-11-19; `.tar.bz2` 873195349 bytes, SHA-256 `b032236ea8ef27f7e3f5e7b2e75407a6a949f6366a181437116841572712d365`) |
 | `windows64` | on `v019` with its `_breakpad_symbols.zip` (WIN-LONDNOIR, 2026-11-20, VS 2022 17.14 + SDK 10.0.28000.2957, 7 h 16 min for Debug + Release; `.tar.bz2` 371960940 bytes, SHA-256 `a388e4cfa1c6093a6f7aa67ec29c3f25f6ab85082596b76dbfa57a62dfa76a36`; no `libEGL.dll` / `libGLESv2.dll`, ANGLE is inside `libcef.dll` as on Linux) |
-| `macosx64` | paused part-way through Debug (2026-11-20 16:29, owner request); resume with the same command, siso continues incrementally |
-| `macosarm64` | on `v019`, no Breakpad symbols yet (Mac mini M6 16 GB, macOS 27.2.1, 2026-11-20, shared V8 cage, `SISO_LIMITS=local=6`, Debug + Release ~6 h after the cage switch; `.tar.bz2` 320365948 bytes, SHA-256 `b6c94f6bd0792c5f024974343db9d5c6a7f8053ca8957d4751a3664b2698c07a`; `minos 13.0`; no `libEGL` / `libGLESv2`, ANGLE is inside the framework) |
+| `macosx64` | on `v019` with its `_breakpad_symbols.zip` (Mac mini M6 16 GB, cross-built on arm64, shared V8 cage, `SISO_LIMITS=local=6`; paused 2026-11-20 16:29 part-way through Debug, resumed 18:38, done 2026-11-21 00:52: Debug remainder ~3 h, Release from scratch ~3 h; `.tar.bz2` 369505398 bytes, SHA-256 `bb990467c799e82d75fa8a71d5292d55d9b93d29feea5eda94304f291da9da87`; `minos 13.0`; no `libEGL` / `libGLESv2`) |
+| `macosarm64` | on `v019` with its `_breakpad_symbols.zip` (Mac mini M6 16 GB, macOS 27.2.1, 2026-11-20, shared V8 cage, `SISO_LIMITS=local=6`, Debug + Release ~6 h after the cage switch; `.tar.bz2` 320365948 bytes, SHA-256 `b6c94f6bd0792c5f024974343db9d5c6a7f8053ca8957d4751a3664b2698c07a`; `minos 13.0`; no `libEGL` / `libGLESv2`, ANGLE is inside the framework; renderer verified: a downstream application ran on it, owner, 2026-11-21 — the first run of the shared cage outside `mksnapshot`) |
 
 Per-OS command (same pins everywhere — `DEFAULT_CEF_BRANCH=8078`,
 `DEFAULT_CEF_CHECKOUT=e603d97`; `mallinfo-overflow` is inert outside glibc):
